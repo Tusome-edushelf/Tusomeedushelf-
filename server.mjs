@@ -81,35 +81,155 @@ function localStudyAssistant({ subject, grade, mode, focus, prompt }) {
   const subj = subject || 'General';
   const g = grade || 'General';
   const low = q.toLowerCase();
+  const selectedMode = mode || 'answer';
   const cbe = focus ? `\nCBE focus: ${focus}` : '';
-  const header = `Tusome EduShelf Local Study Assistant\nSubject: ${subj} | Grade: ${g}\nMode: ${mode || 'answer'}${cbe}\n\n`;
-  let body = '';
+  const header = `Tusome EduShelf Local Study Assistant\nSubject: ${subj} | Grade: ${g}\nMode: ${selectedMode}${cbe}\n\n`;
 
-  const has = (...words) => words.some(w => low.includes(w));
-  if (has('linear equation','linear equations')) {
-    body = `Linear equations are equations in which the variable has a power of 1.\n\nExample:\n2x + 3 = 11\n2x = 11 - 3\n2x = 8\nx = 4\n\nCheck: 2(4) + 3 = 11, so x = 4.\n\nTip: Keep the equation balanced by doing the same operation to both sides.`;
-  } else if (has('fraction','fractions')) {
-    body = `A fraction represents part of a whole and is written as numerator/denominator.\n\nExample: 3/4 means 3 equal parts out of 4.\nTo add fractions with the same denominator, add the numerators and keep the denominator: 2/7 + 3/7 = 5/7.`;
-  } else if (has('magnification')) {
-    body = `Magnification compares the size of an image with the actual size of the object.\n\nFormula:\nMagnification = image size ÷ actual size.\n\nMake sure both measurements use the same units before calculating.`;
-  } else if (has('photosynthesis')) {
-    body = `Photosynthesis is the process by which green plants make food using light energy. The main raw materials are carbon dioxide and water. Chlorophyll absorbs light energy, and glucose and oxygen are produced.`;
-  } else if (has('atom','atoms','molecule','molecules')) {
-    body = `An atom is the smallest unit of an element that retains the element's chemical properties. A molecule is made when two or more atoms are chemically joined. For example, a water molecule contains hydrogen and oxygen atoms.`;
-  } else if (has('pythagoras','pythagorean')) {
-    body = `For a right-angled triangle, the Pythagorean relationship is a² + b² = c², where c is the longest side (the hypotenuse).\n\nExample: if a = 3 and b = 4, then c² = 9 + 16 = 25, so c = 5.`;
-  } else if (has('speed','distance','time')) {
-    body = `For motion problems:\nSpeed = Distance ÷ Time\nDistance = Speed × Time\nTime = Distance ÷ Speed\n\nAlways check that your units are consistent.`;
+  const pack = (title, definition, concepts, steps, example, realLife, mistakes, check, diagram) => ({title, definition, concepts, steps, example, realLife, mistakes, check, diagram});
+  let lesson;
+
+  if (/linear equation/.test(low)) {
+    lesson = pack(
+      'Linear Equations',
+      'A linear equation is an equation in which the highest power of the variable is 1. The goal is to find the value of the unknown while keeping both sides equal.',
+      ['Variable: the unknown value, often represented by x or y.', 'Coefficient: the number multiplying a variable.', 'Constant: a number without a variable.', 'Equality sign (=): shows that the two sides have the same value.'],
+      ['Simplify each side if necessary.', 'Use the same operation on both sides of the equation.', 'Move the constant term away from the variable.', 'Divide or multiply to make the variable stand alone.', 'Substitute the answer back into the original equation to check it.'],
+      'Solve 2x + 3 = 11:\n1. Subtract 3 from both sides: 2x = 8.\n2. Divide both sides by 2: x = 4.\n3. Check: 2(4) + 3 = 11 ✓',
+      'If a taxi charges a fixed booking fee of KSh 3 and KSh 2 per kilometre, a total of KSh 11 can be represented by 2x + 3 = 11, where x is the number of kilometres.',
+      ['Changing only one side of an equation.', 'Forgetting the negative sign when moving a term.', 'Dividing one term instead of the whole side.', 'Not checking the final answer.'],
+      'Substitute the value of the variable into the original equation. If both sides have the same value, the solution is correct.',
+      'balance'
+    );
+  } else if (/linear function/.test(low)) {
+    lesson = pack(
+      'Linear Functions',
+      'A linear function is commonly written as y = mx + c, where m is the gradient (slope) and c is the y-intercept.',
+      ['Gradient tells how much y changes when x increases by 1.', 'Y-intercept is the value of y when x = 0.', 'The graph of a linear function is a straight line.'],
+      ['Identify m and c.', 'Choose several x-values.', 'Calculate the corresponding y-values.', 'Plot the ordered pairs (x, y).', 'Join the points with a straight line.'],
+      'For y = 2x + 1:\nx = 0 → y = 1\nx = 1 → y = 3\nx = 2 → y = 5.\nThe points lie on one straight line.',
+      'A savings plan that increases by the same amount every week can be represented by a linear function.',
+      ['Confusing gradient with intercept.', 'Using inconsistent scales on a graph.', 'Plotting (x,y) in the wrong order.'],
+      'Pick one plotted point and substitute its x-value into the equation. The calculated y-value should match the graph.',
+      'graph'
+    );
+  } else if (/fraction/.test(low)) {
+    lesson = pack(
+      'Fractions',
+      'A fraction represents a part of a whole or a number divided by another number. In a/b, a is the numerator and b is the denominator, with b ≠ 0.',
+      ['Numerator: parts being considered.', 'Denominator: equal parts making the whole.', 'Proper fraction: numerator is smaller than denominator.', 'Equivalent fractions have the same value.'],
+      ['For addition/subtraction, find a common denominator when denominators differ.', 'Convert to equivalent fractions.', 'Perform the operation on the numerators.', 'Simplify the result where possible.'],
+      'Add 2/7 + 3/7:\nThe denominators are already equal.\n2/7 + 3/7 = 5/7.',
+      'If 2 out of 7 equal pieces of a cake are eaten and another 3 out of 7 are eaten, 5/7 of the cake has been eaten.',
+      ['Adding denominators when adding fractions.', 'Forgetting to find a common denominator.', 'Failing to simplify the final answer.'],
+      'Estimate whether the fraction is reasonable. For example, adding two positive fractions should not produce a negative answer.',
+      'fraction'
+    );
+  } else if (/magnification/.test(low)) {
+    lesson = pack(
+      'Magnification',
+      'Magnification compares the size of an image with the actual size of the object.',
+      ['Magnification has no unit.', 'Image size and actual size must be in the same units before dividing.', 'A magnification greater than 1 means the image is larger than the actual object.'],
+      ['Write the formula: Magnification = image size ÷ actual size.', 'Convert both measurements to the same unit.', 'Substitute the values.', 'Calculate and state the magnification.'],
+      'If an image is 30 mm long and the actual object is 5 mm long:\nMagnification = 30 ÷ 5 = 6×.',
+      'Microscopes produce enlarged images so that small biological structures can be observed more easily.',
+      ['Mixing centimetres and millimetres.', 'Reversing image size and actual size.', 'Adding the two measurements instead of dividing.'],
+      'Multiply actual size by magnification. The result should equal the image size.',
+      'magnification'
+    );
+  } else if (/photosynthesis/.test(low)) {
+    lesson = pack(
+      'Photosynthesis',
+      'Photosynthesis is the process by which green plants use light energy to make glucose from carbon dioxide and water. Chlorophyll captures light energy, and oxygen is released.',
+      ['Raw materials: carbon dioxide and water.', 'Energy source: light.', 'Pigment: chlorophyll.', 'Main food product: glucose.', 'Oxygen is released as a by-product.'],
+      ['Light is absorbed by chlorophyll.', 'Roots absorb water.', 'Carbon dioxide enters mainly through stomata.', 'The plant uses light energy to form glucose.', 'Oxygen is released.'],
+      'Word equation:\nCarbon dioxide + water —light/chlorophyll→ glucose + oxygen.',
+      'Photosynthesis provides food for plants and is the starting point for much of the energy available in food chains.',
+      ['Saying plants obtain food from the soil.', 'Leaving out light or chlorophyll.', 'Confusing respiration with photosynthesis.'],
+      'Ask: What are the raw materials, what provides energy, and what products are formed?',
+      'photosynthesis'
+    );
+  } else if (/\b(atom|molecule)s?\b/.test(low)) {
+    lesson = pack(
+      'Atoms and Molecules',
+      'An atom is the smallest unit of an element that retains the chemical identity of that element. A molecule consists of two or more atoms chemically joined together.',
+      ['Atoms contain protons, neutrons and electrons.', 'Elements contain one type of atom.', 'A molecule may contain atoms of the same element or different elements.', 'Water (H₂O) contains hydrogen and oxygen atoms.'],
+      ['Identify the element or compound.', 'Count the atoms shown in a formula.', 'Distinguish individual atoms from chemically joined groups.', 'Use the chemical formula to communicate composition.'],
+      'H₂O has 2 hydrogen atoms and 1 oxygen atom in each molecule.',
+      'Understanding atoms and molecules helps explain materials, chemical reactions and everyday substances such as water, oxygen and carbon dioxide.',
+      ['Calling a molecule a single atom.', 'Ignoring the small number (subscript) in a chemical formula.', 'Assuming every molecule is a compound.'],
+      'Count the symbols and subscripts in the formula and check whether the description matches.',
+      'atoms'
+    );
+  } else if (/pythagoras|pythagorean/.test(low)) {
+    lesson = pack(
+      'Pythagorean Relationship',
+      'In a right-angled triangle, the square of the hypotenuse equals the sum of the squares of the other two sides: a² + b² = c².',
+      ['Hypotenuse: longest side, opposite the right angle.', 'The relationship applies to right-angled triangles.', 'The side c represents the hypotenuse in the standard formula.'],
+      ['Identify the right angle.', 'Identify the hypotenuse.', 'Write a² + b² = c².', 'Substitute known lengths.', 'Solve for the unknown and check that the answer is positive.'],
+      'If a = 3 and b = 4:\nc² = 3² + 4² = 9 + 16 = 25\nc = 5.',
+      'The relationship can be used to calculate a missing distance when two sides of a right-angled triangle are known.',
+      ['Using the wrong side as the hypotenuse.', 'Forgetting to square the lengths.', 'Stopping at c² instead of finding c.'],
+      'Check that the longest side is the hypotenuse and that a² + b² equals c².',
+      'pythagoras'
+    );
+  } else if (/speed|distance|time/.test(low)) {
+    lesson = pack(
+      'Speed, Distance and Time',
+      'Speed describes how quickly distance is covered. The basic relationship is speed = distance ÷ time.',
+      ['Speed = distance ÷ time.', 'Distance = speed × time.', 'Time = distance ÷ speed.', 'Units must be consistent.'],
+      ['Identify what is known and what is required.', 'Choose the correct formula.', 'Convert units if necessary.', 'Substitute the values.', 'Calculate and include the correct unit.'],
+      'A car travels 120 km in 2 hours:\nSpeed = 120 ÷ 2 = 60 km/h.',
+      'Speed calculations are used in transport, athletics, travel planning and estimating arrival times.',
+      ['Mixing minutes and hours.', 'Using the wrong formula.', 'Leaving out units.'],
+      'Check using the related formula. For example, speed × time should give distance.',
+      'speed'
+    );
+  } else if (/area of (a )?circle|circle/.test(low)) {
+    lesson = pack(
+      'Circles and Area',
+      'The area of a circle is the amount of surface enclosed by the circle. The formula is A = πr², where r is the radius.',
+      ['Radius: distance from the centre to the circumference.', 'Diameter: distance across the circle through its centre.', 'Diameter = 2 × radius.', 'Use the value of π required by the question, commonly 22/7 or 3.142.'],
+      ['Identify the radius.', 'If diameter is given, divide it by 2.', 'Use A = πr².', 'Substitute and calculate.', 'Give the answer in square units.'],
+      'If r = 7 cm:\nA = 22/7 × 7² = 154 cm².',
+      'Area of a circle is useful when finding the surface covered by round objects such as circular gardens, plates or tanks.',
+      ['Using diameter as r.', 'Forgetting to square the radius.', 'Writing cm instead of cm².'],
+      'Check that the final unit is squared and compare the size with the circle radius.',
+      'circle'
+    );
   } else {
-    body = `Here is a simple study guide for your question:\n\n1. Identify the key idea in the question.\n2. Write down the relevant definition, rule, or formula.\n3. Work through a small example step by step.\n4. Check your answer and explain why it makes sense.\n\nYour question was: “${q}”\n\nFor a more specific answer, include the exact topic, exercise, or calculation you are working on.`;
+    lesson = pack(
+      q,
+      `This topic should be understood by connecting the main idea to a definition, key concepts, an example and an application. For this local assistant, a topic-specific explanation is available when the topic matches its built-in study guides.`,
+      ['Identify the important terms in the question.', 'Separate facts, rules, formulas and examples.', 'Connect the concept to something familiar.', 'Use practice to test understanding.'],
+      ['Read the question carefully.', 'Identify what is being asked.', 'Recall the relevant rule or concept.', 'Work through an example step by step.', 'Check the result and explain it in your own words.'],
+      `Study example:\nStart with a simple example related to “${q}”, then change one value or condition and solve again.`,
+      'Try to connect the topic to an everyday situation, school activity or observation.',
+      ['Memorising without understanding.', 'Skipping working in calculations.', 'Not checking whether the final answer is reasonable.'],
+      'Explain the idea in one or two sentences without looking at your notes, then solve a new example.',
+      'study'
+    );
   }
 
-  if (mode === 'notes') body += `\n\nRevision notes:\n• Learn the key definition.\n• Memorise the relevant formula or rule.\n• Practise one worked example.\n• Try a new example without looking at the solution.`;
-  if (mode === 'practice') body += `\n\nPractice questions:\n1. Define the main term in your own words.\n2. Give one example.\n3. Solve a similar problem and show your working.\n4. Explain how you checked your answer.`;
-  if (mode === 'summary') body = `Summary — ${q}\n\n${body}\n\nKey point: Focus on the definition, method, example, and final check.`;
+  let body = `📘 ${lesson.title}\n\nDEFINITION / MAIN IDEA\n${lesson.definition}\n\nKEY CONCEPTS\n${lesson.concepts.map((x,i)=>`${i+1}. ${x}`).join('\n')}\n\nSTEP-BY-STEP METHOD\n${lesson.steps.map((x,i)=>`${i+1}. ${x}`).join('\n')}\n\nWORKED EXAMPLE\n${lesson.example}\n\nREAL-LIFE APPLICATION\n${lesson.realLife}\n\nCOMMON MISTAKES TO AVOID\n${lesson.mistakes.map(x=>'• '+x).join('\n')}\n\nCHECK YOUR UNDERSTANDING\n${lesson.check}\n\n[DIAGRAM:${lesson.diagram}]\n\nQUICK SUMMARY\nRemember the definition, the main steps, the worked example and how to check your answer.`;
+
+  if (selectedMode === 'notes') {
+    body += `\n\nREVISION NOTES\n• Learn the definition and key terms.\n• Write the main formula or process from memory.\n• Review the worked example.\n• Create one example of your own.\n• Explain the topic aloud in simple words.`;
+  } else if (selectedMode === 'practice') {
+    body += `\n\nPRACTICE QUESTIONS\n1. Define the main concept in your own words.\n2. State two important facts or rules about it.\n3. Solve or explain a similar example.\n4. Give one real-life application.\n5. Explain how you would check your answer.\n\nTry the questions before asking for the answers.`;
+  } else if (selectedMode === 'summary') {
+    body = `📌 SUMMARY — ${lesson.title}\n\n${lesson.definition}\n\nKEY POINTS\n${lesson.concepts.slice(0,4).map(x=>'• '+x).join('\n')}\n\nMETHOD\n${lesson.steps.slice(0,4).map((x,i)=>`${i+1}. ${x}`).join('\n')}\n\nEXAMPLE\n${lesson.example}\n\n[DIAGRAM:${lesson.diagram}]\n\nKEY TAKEAWAY\n${lesson.check}`;
+  } else if (selectedMode === 'lesson') {
+    body += `\n\nTEACHING / CBE EXTENSION\n• Learning intention: Learners explain and apply the concept.\n• Suggested inquiry: What changes when one value or condition changes?\n• Learner activity: Work in pairs, explain the method, then compare solutions.\n• Assessment: Observe working, questioning, explanation and application.\n• Differentiation: Give guided examples to learners who need support and extension problems to fast learners.`;
+  } else if (selectedMode === 'assessment') {
+    body += `\n\nASSESSMENT IDEAS\n1. Recall: define the key concept.\n2. Application: solve a new example.\n3. Reasoning: explain why the method works.\n4. Transfer: apply the idea to a real-life situation.\n\nSimple 4-level rubric:\n4 — Accurate, clear and independently explained.\n3 — Mostly accurate with minor errors.\n2 — Partial understanding; needs guidance.\n1 — Beginning understanding; needs substantial support.`;
+  } else if (selectedMode === 'inquiry') {
+    body += `\n\nINQUIRY ACTIVITY\nAsk: What pattern or relationship can you discover?\nPredict: Learners make a prediction before calculating or observing.\nInvestigate: Test at least three examples.\nExplain: Describe the pattern using evidence.\nApply: Create a new example and solve it.`;
+  } else if (selectedMode === 'remediation') {
+    body += `\n\nREMEDIAL SUPPORT\n1. Revisit the key vocabulary.\n2. Use a simpler example with small numbers or familiar situations.\n3. Model one step at a time.\n4. Let the learner explain each step before moving on.\n5. Give two similar questions before increasing difficulty.`;
+  }
+
   return header + body;
 }
-
 app.post('/api/ai', async (req, res) => {
   try {
     const answer = localStudyAssistant(req.body || {});

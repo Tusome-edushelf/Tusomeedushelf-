@@ -11,9 +11,13 @@ app.use(express.json({ limit: '1mb' }));
 const PORT = Number(process.env.PORT || 3000);
 const DATA_DIR = path.join(__dirname, 'data');
 const TX_FILE = path.join(DATA_DIR, 'transactions.json');
+const NOTES_FILE = path.join(DATA_DIR, 'notes.json');
+const NOTES_DIR = path.join(DATA_DIR, 'notes');
 
 await fs.mkdir(DATA_DIR, { recursive: true });
+await fs.mkdir(NOTES_DIR, { recursive: true });
 try { await fs.access(TX_FILE); } catch { await fs.writeFile(TX_FILE, '[]', 'utf8'); }
+try { await fs.access(NOTES_FILE); } catch { await fs.writeFile(NOTES_FILE, '[]', 'utf8'); }
 
 async function readTx() {
   try { return JSON.parse(await fs.readFile(TX_FILE, 'utf8')); }
@@ -82,8 +86,9 @@ function localStudyAssistant({ subject, grade, mode, focus, prompt }) {
   const g = grade || 'General';
   const low = q.toLowerCase();
   const selectedMode = mode || 'answer';
+  const curriculum = curriculumContext(subj, g, focus);
   const cbe = focus ? `\nCBE focus: ${focus}` : '';
-  const header = `Tusome EduShelf Local Study Assistant\nSubject: ${subj} | Grade: ${g}\nMode: ${selectedMode}${cbe}\n\n`;
+  const header = `Tusome EduShelf Local Study Assistant\nSubject: ${subj} | Grade: ${g}\nMode: ${selectedMode}${cbe}\n\n${curriculum ? 'CURRICULUM ALIGNMENT\n'+curriculum+'\n\n' : ''}`;
 
   const pack = (title, definition, concepts, steps, example, realLife, mistakes, check, diagram) => ({title, definition, concepts, steps, example, realLife, mistakes, check, diagram});
   let lesson;
@@ -253,6 +258,95 @@ app.get('/api/health', async (_req, res) => {
     missing,
     ai: { configured: aiConfigured, provider: 'local', model: 'built-in-local-study-assistant' }
   });
+});
+
+
+async function readNotes() {
+  try { return JSON.parse(await fs.readFile(NOTES_FILE, 'utf8')); }
+  catch { return []; }
+}
+async function writeNotes(items) {
+  await fs.writeFile(NOTES_FILE, JSON.stringify(items, null, 2), 'utf8');
+}
+function safeName(value='note') { return String(value).replace(/[^a-z0-9_-]+/gi, '_').slice(0,80) || 'note'; }
+function makeNoteId() { return 'NOTE_' + Date.now() + '_' + Math.random().toString(36).slice(2,8); }
+function pdfEscape(text) { return String(text).replace(/\\/g,'\\\\').replace(/\(/g,'\\(').replace(/\)/g,'\\)'); }
+function makeSimplePdf(title, meta, content) {
+  const lines=[];
+  const addWrapped=(text,max=88)=>{String(text||'').split(/\r?\n/).forEach(raw=>{if(!raw.trim()){lines.push('');return;}let s=raw.trim();while(s.length>max){let cut=s.lastIndexOf(' ',max);if(cut<20)cut=max;lines.push(s.slice(0,cut));s=s.slice(cut).trim();}lines.push(s);});};
+  lines.push(title); lines.push(meta); lines.push(''); addWrapped('CBE / KICD-aligned supplementary learning note'); lines.push(''); addWrapped(content,88);
+  const pages=[]; const perPage=46; for(let i=0;i<lines.length;i+=perPage) pages.push(lines.slice(i,i+perPage));
+  const objects=[]; const add=o=>{objects.push(o);return objects.length;};
+  const catalog=add(null), pagesObj=add(null), font=add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
+  const pageIds=[];
+  for(const pageLines of pages){let stream='BT\n/F1 11 Tf\n50 790 Td\n'; for(const line of pageLines){stream+=`(${pdfEscape(line)}) Tj\n0 -15 Td\n`;} stream+='ET'; const contentId=add(`<< /Length ${Buffer.byteLength(stream,'latin1')} >>\nstream\n${stream}\nendstream`); const pageId=add(`<< /Type /Page /Parent ${pagesObj} 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 ${font} 0 R >> >> /Contents ${contentId} 0 R >>`); pageIds.push(pageId);}
+  objects[catalog-1]=`<< /Type /Catalog /Pages ${pagesObj} 0 R >>`;
+  objects[pagesObj-1]=`<< /Type /Pages /Kids [${pageIds.map(id=>id+' 0 R').join(' ')}] /Count ${pageIds.length} >>`;
+  let pdf='%PDF-1.4\n'; const offsets=[0]; for(let i=0;i<objects.length;i++){offsets[i+1]=Buffer.byteLength(pdf,'latin1'); pdf+=`${i+1} 0 obj\n${objects[i]}\nendobj\n`;}
+  const xref=Buffer.byteLength(pdf,'latin1'); pdf+=`xref\n0 ${objects.length+1}\n0000000000 65535 f \n`; for(let i=1;i<offsets.length;i++) pdf+=String(offsets[i]).padStart(10,'0')+' 00000 n \n'; pdf+=`trailer\n<< /Size ${objects.length+1} /Root ${catalog} 0 R >>\nstartxref\n${xref}\n%%EOF`;
+  return Buffer.from(pdf,'latin1');
+}
+async function createPdfNote({title, subject, grade, strand, substrand, topic, description, content, source='Tusome EduShelf'}) {
+  const id = makeNoteId(); const filename = `${safeName(title)}_${id}.pdf`; const filepath = path.join(NOTES_DIR, filename);
+  const meta=[subject,grade,topic].filter(Boolean).join(' • ');
+  const full=[strand?`Strand: ${strand}`:'',substrand?`Sub-strand: ${substrand}`:'',description||'',`Prepared by ${source}. This is original supplementary material aligned to the selected curriculum focus; check it against the current official KICD curriculum design.`].filter(Boolean).join('\n');
+  await fs.writeFile(filepath,makeSimplePdf(title||'Learning Notes',meta,full+'\n\n'+String(content||'')));
+  return { id, filename, filepath };
+}
+
+app.get('/api/notes', async (req,res) => {
+  const notes = await readNotes();
+  const status = String(req.query.status || 'approved');
+  res.json({ ok:true, notes: notes.filter(n => status === 'all' ? true : n.status === status).map(({filepath, ...n}) => n) });
+});
+
+app.post('/api/notes/generate', async (req,res) => {
+  try {
+    const b=req.body||{};
+    if(!b.title||!b.subject||!b.grade||!b.topic||!b.content) return res.status(400).json({error:'Title, subject, grade, topic and content are required.'});
+    const pdf=await createPdfNote(b);
+    const notes=await readNotes();
+    const item={id:pdf.id,title:b.title,subject:b.subject,grade:b.grade,strand:b.strand||'',substrand:b.substrand||'',topic:b.topic,description:b.description||'',price:Number(b.price||0),teacher:b.teacher||'System generated',sourceType:'generated',status:'pending',fileName:pdf.filename,filepath:pdf.filepath,createdAt:new Date().toISOString()};
+    notes.unshift(item); await writeNotes(notes);
+    res.json({ok:true,note:{...item,filepath:undefined},message:'Note generated and submitted for administrator approval.'});
+  } catch(e){ console.error(e); res.status(500).json({error:'Could not generate PDF note.'}); }
+});
+
+app.post('/api/notes/upload', async (req,res) => {
+  try {
+    const b=req.body||{};
+    if(!b.title||!b.subject||!b.grade||!b.topic||!b.fileBase64) return res.status(400).json({error:'Title, subject, grade, topic and PDF file are required.'});
+    const id=makeNoteId(); const filename=`${safeName(b.fileName||b.title)}_${id}.pdf`;
+    const filepath=path.join(NOTES_DIR,filename);
+    const base64=String(b.fileBase64).replace(/^data:application\/pdf;base64,/,'');
+    await fs.writeFile(filepath,Buffer.from(base64,'base64'));
+    const notes=await readNotes();
+    const item={id,title:b.title,subject:b.subject,grade:b.grade,strand:b.strand||'',substrand:b.substrand||'',topic:b.topic,description:b.description||'',price:Number(b.price||0),teacher:b.teacher||'Teacher',sourceType:'uploaded',status:'pending',fileName:filename,filepath,createdAt:new Date().toISOString()};
+    notes.unshift(item); await writeNotes(notes);
+    res.json({ok:true,note:{...item,filepath:undefined},message:'PDF uploaded and submitted for administrator approval.'});
+  } catch(e){ console.error(e); res.status(500).json({error:'Could not upload PDF note.'}); }
+});
+
+app.post('/api/notes/:id/approve', async (req,res) => {
+  const notes=await readNotes(); const item=notes.find(n=>n.id===req.params.id);
+  if(!item) return res.status(404).json({error:'Note not found.'});
+  item.status='approved'; item.approvedAt=new Date().toISOString(); await writeNotes(notes);
+  res.json({ok:true,note:{...item,filepath:undefined}});
+});
+app.post('/api/notes/:id/reject', async (req,res) => {
+  const notes=await readNotes(); const item=notes.find(n=>n.id===req.params.id);
+  if(!item) return res.status(404).json({error:'Note not found.'});
+  item.status='rejected'; item.rejectedAt=new Date().toISOString(); await writeNotes(notes);
+  res.json({ok:true,note:{...item,filepath:undefined}});
+});
+app.delete('/api/notes/:id', async (req,res) => {
+  const notes=await readNotes(); const item=notes.find(n=>n.id===req.params.id); if(!item)return res.status(404).json({error:'Note not found.'});
+  notes.splice(notes.indexOf(item),1); await writeNotes(notes); try{await fs.unlink(item.filepath)}catch{} res.json({ok:true});
+});
+app.get('/api/notes/:id/download', async (req,res) => {
+  const notes=await readNotes(); const item=notes.find(n=>n.id===req.params.id);
+  if(!item || item.status!=='approved') return res.status(404).json({error:'Approved note not found.'});
+  res.download(item.filepath,item.fileName);
 });
 
 app.post('/api/payments/stkpush', async (req, res) => {

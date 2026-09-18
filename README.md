@@ -51,3 +51,31 @@ Open `/api/health` to see whether Daraja and AI are configured. The response nev
 
 ## Free/local AI
 This version uses a built-in local educational assistant on your Render server. It does not call OpenAI and does not require API credits or an OPENAI_API_KEY. It provides deterministic explanations, examples, revision notes and practice prompts. It is not a full generative model.
+
+## Enhanced Local Study Assistant
+
+This version upgrades the built-in local Study Assistant to produce fuller learner-friendly responses with:
+- Definition/main idea
+- Key concepts and vocabulary
+- Step-by-step method
+- Worked examples
+- Real-life applications
+- Common mistakes to avoid
+- Answer-checking guidance
+- Quick summaries
+- Mode-specific notes, practice, lesson, assessment, inquiry and remediation sections
+- Built-in educational SVG diagrams for selected topics such as linear equations, linear functions, fractions, magnification, photosynthesis, atoms/molecules, Pythagorean relationship, speed/distance/time and circles
+
+The diagrams are generated in the webpage, so no image API or OpenAI credits are required.
+
+The assistant remains a built-in local study system rather than a cloud generative AI model. Topic-specific guides are used where available; for unsupported topics it provides a structured study framework instead of pretending to know an unverified curriculum-specific answer.
+
+## CBE Notes Library and PDF workflow
+- Learners have a **Notes Library** showing approved notes by subject and grade.
+- Teachers can upload a PDF note; it is stored as **pending** until an administrator approves it.
+- The system can generate original learner notes from the local study assistant and turn them into PDF files; generated notes also require administrator approval.
+- Administrators can approve or reject notes and remove them.
+- Approved notes can be free or have a KES price. Paid notes are unlocked after a confirmed payment in the prototype payment flow.
+- PDF notes are designed as original supplementary learning material aligned to selected CBE/KICD curriculum focus. The system should not copy or redistribute KICD textbooks or other copyrighted books.
+- The official KICD curriculum designs should be treated as the curriculum reference. See https://kicd.ac.ke/cbc-materials/curriculum-designs/ and the Grade 8 designs at https://kicd.ac.ke/cbc-materials/curriculum-designs/grade-eight-designs/.
+- The current prototype stores note metadata/files on the server filesystem. Render's free filesystem is not a permanent database/storage layer, so production deployment should later use persistent object storage and a database.

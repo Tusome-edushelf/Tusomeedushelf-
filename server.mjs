@@ -50,6 +50,17 @@ function cfg(name) {
   if (!v) throw new Error(`Missing ${name} in .env`);
   return v;
 }
+function requireAdmin(req,res,next) {
+  if (String(req.get('x-user-role') || '').toLowerCase() !== 'admin') {
+    return res.status(403).json({error:'Administrator access required.'});
+  }
+  next();
+}
+
+function positivePrice(value) {
+  const n = Number(value);
+  return Number.isInteger(n) && n >= 1 ? n : null;
+}
 
 async function getAccessToken() {
   const key = cfg('MPESA_CONSUMER_KEY');
@@ -300,46 +311,67 @@ app.get('/api/notes', async (req,res) => {
   res.json({ ok:true, notes: notes.filter(n => status === 'all' ? true : n.status === status).map(({filepath, ...n}) => n) });
 });
 
-app.post('/api/notes/generate', async (req,res) => {
+app.post('/api/notes/generate', requireAdmin, async (req,res) => {
   try {
     const b=req.body||{};
     if(!b.title||!b.subject||!b.grade||!b.topic||!b.content) return res.status(400).json({error:'Title, subject, grade, topic and content are required.'});
     const pdf=await createPdfNote(b);
     const notes=await readNotes();
-    const item={id:pdf.id,title:b.title,subject:b.subject,grade:b.grade,strand:b.strand||'',substrand:b.substrand||'',topic:b.topic,description:b.description||'',price:Number(b.price||0),teacher:b.teacher||'System generated',sourceType:'generated',status:'pending',fileName:pdf.filename,filepath:pdf.filepath,createdAt:new Date().toISOString()};
+    const item={id:pdf.id,title:b.title,subject:b.subject,grade:b.grade,strand:b.strand||'',substrand:b.substrand||'',topic:b.topic,description:b.description||'',price:0,teacher:'Tusome EduShelf system',sourceType:'generated',status:'pending',fileName:pdf.filename,filepath:pdf.filepath,createdAt:new Date().toISOString()};
     notes.unshift(item); await writeNotes(notes);
     res.json({ok:true,note:{...item,filepath:undefined},message:'Note generated and submitted for administrator approval.'});
   } catch(e){ console.error(e); res.status(500).json({error:'Could not generate PDF note.'}); }
 });
 
-app.post('/api/notes/upload', async (req,res) => {
+app.post('/api/notes/upload', (req,res,next) => {
+  if (!['teacher','admin'].includes(String(req.get('x-user-role') || '').toLowerCase())) return res.status(403).json({error:'Teacher access required to upload notes.'});
+  next();
+}, async (req,res) => {
   try {
     const b=req.body||{};
     if(!b.title||!b.subject||!b.grade||!b.topic||!b.fileBase64) return res.status(400).json({error:'Title, subject, grade, topic and PDF file are required.'});
+    const price=positivePrice(b.price);
+    if(price===null) return res.status(400).json({error:'Teacher-uploaded notes must have a whole-number selling price of at least KES 1.'});
     const id=makeNoteId(); const filename=`${safeName(b.fileName||b.title)}_${id}.pdf`;
     const filepath=path.join(NOTES_DIR,filename);
     const base64=String(b.fileBase64).replace(/^data:application\/pdf;base64,/,'');
     await fs.writeFile(filepath,Buffer.from(base64,'base64'));
     const notes=await readNotes();
-    const item={id,title:b.title,subject:b.subject,grade:b.grade,strand:b.strand||'',substrand:b.substrand||'',topic:b.topic,description:b.description||'',price:Number(b.price||0),teacher:b.teacher||'Teacher',sourceType:'uploaded',status:'pending',fileName:filename,filepath,createdAt:new Date().toISOString()};
+    const item={id,title:b.title,subject:b.subject,grade:b.grade,strand:b.strand||'',substrand:b.substrand||'',topic:b.topic,description:b.description||'',price,priceSetBy:'Teacher',priceSetAt:new Date().toISOString(),teacher:b.teacher||'Teacher',sourceType:'uploaded',status:'pending',fileName:filename,filepath,createdAt:new Date().toISOString()};
     notes.unshift(item); await writeNotes(notes);
     res.json({ok:true,note:{...item,filepath:undefined},message:'PDF uploaded and submitted for administrator approval.'});
   } catch(e){ console.error(e); res.status(500).json({error:'Could not upload PDF note.'}); }
 });
 
-app.post('/api/notes/:id/approve', async (req,res) => {
+app.post('/api/notes/:id/price', requireAdmin, async (req,res) => {
+  const notes=await readNotes();
+  const item=notes.find(n=>n.id===req.params.id);
+  if(!item) return res.status(404).json({error:'Note not found.'});
+  if(item.sourceType!=='generated') return res.status(400).json({error:'Administrator pricing is allowed only for system-generated notes. Teacher-uploaded notes keep the price set by the teacher.'});
+  const price=positivePrice(req.body?.price);
+  if(price===null) return res.status(400).json({error:'Selling price must be a whole number of at least KES 1.'});
+  item.price=price;
+  item.priceSetBy='Administrator';
+  item.priceSetAt=new Date().toISOString();
+  await writeNotes(notes);
+  res.json({ok:true,note:{...item,filepath:undefined}});
+});
+
+app.post('/api/notes/:id/approve', requireAdmin, async (req,res) => {
   const notes=await readNotes(); const item=notes.find(n=>n.id===req.params.id);
   if(!item) return res.status(404).json({error:'Note not found.'});
+  if(item.sourceType==='generated' && positivePrice(item.price)===null) return res.status(400).json({error:'Set a selling price before approving this system-generated note.'});
+  if(item.sourceType==='uploaded' && positivePrice(item.price)===null) return res.status(400).json({error:'Teacher-uploaded note must have a valid teacher-set selling price before approval.'});
   item.status='approved'; item.approvedAt=new Date().toISOString(); await writeNotes(notes);
   res.json({ok:true,note:{...item,filepath:undefined}});
 });
-app.post('/api/notes/:id/reject', async (req,res) => {
+app.post('/api/notes/:id/reject', requireAdmin, async (req,res) => {
   const notes=await readNotes(); const item=notes.find(n=>n.id===req.params.id);
   if(!item) return res.status(404).json({error:'Note not found.'});
   item.status='rejected'; item.rejectedAt=new Date().toISOString(); await writeNotes(notes);
   res.json({ok:true,note:{...item,filepath:undefined}});
 });
-app.delete('/api/notes/:id', async (req,res) => {
+app.delete('/api/notes/:id', requireAdmin, async (req,res) => {
   const notes=await readNotes(); const item=notes.find(n=>n.id===req.params.id); if(!item)return res.status(404).json({error:'Note not found.'});
   notes.splice(notes.indexOf(item),1); await writeNotes(notes); try{await fs.unlink(item.filepath)}catch{} res.json({ok:true});
 });
@@ -352,9 +384,14 @@ app.get('/api/notes/:id/download', async (req,res) => {
 app.post('/api/payments/stkpush', async (req, res) => {
   try {
     const { materialId, title, amount, phone } = req.body || {};
-    const numericAmount = Math.round(Number(amount));
-    if (!materialId || !title || !Number.isFinite(numericAmount) || numericAmount < 1)
-      return res.status(400).json({ error: 'Invalid material or amount.' });
+    if (!materialId || !title) return res.status(400).json({ error: 'Material and title are required.' });
+    const noteId=String(materialId).replace(/^NOTE_/,'');
+    const notes=await readNotes();
+    const note=notes.find(n=>String(n.id)===noteId);
+    if(!note || note.status!=='approved') return res.status(404).json({error:'Approved note not found.'});
+    const numericAmount=Number(note.price);
+    if(positivePrice(numericAmount)===null) return res.status(400).json({error:'This note has no valid administrator-set price.'});
+    if(Number(amount)!==numericAmount) return res.status(400).json({error:'Payment amount does not match the administrator-set note price.'});
 
     const normalizedPhone = normalizePhone(phone);
     const shortcode = cfg('MPESA_SHORTCODE');

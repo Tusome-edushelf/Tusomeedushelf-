@@ -75,45 +75,44 @@ function curriculumContext(subject, grade, focus) {
   return [base, f ? `Requested CBE focus: ${f}` : ''].filter(Boolean).join('\\n');
 }
 
-async function callOpenAI({ subject, grade, mode, focus, prompt }) {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) throw new Error('OPENAI_API_KEY is not configured on the server.');
-  const model = process.env.OPENAI_MODEL || 'gpt-5.6-luna';
-  const curriculum = curriculumContext(subject, grade, focus);
-  const system = `You are Tusome EduShelf AI Study Assistant for Kenyan learners and teachers.\n\n` +
-    `Give clear, age-appropriate educational help. Respect the selected grade and subject. ` +
-    `When CBE/KICD context is supplied, use it as grounding and do not invent official KICD wording. ` +
-    `If exact curriculum information is not supplied, clearly distinguish general teaching guidance from official curriculum facts. ` +
-    `Mode: ${mode || 'answer'}.\nSubject: ${subject || 'General'}.\nGrade: ${grade || 'General'}.\n` +
-    (curriculum ? `Curriculum context:\n${curriculum}\n` : '');
-  const user = String(prompt || '').trim();
-  if (!user) throw new Error('Enter a question or topic first.');
+function localStudyAssistant({ subject, grade, mode, focus, prompt }) {
+  const q = String(prompt || '').trim();
+  if (!q) throw new Error('Enter a question or topic first.');
+  const subj = subject || 'General';
+  const g = grade || 'General';
+  const low = q.toLowerCase();
+  const cbe = focus ? `\nCBE focus: ${focus}` : '';
+  const header = `Tusome EduShelf Local Study Assistant\nSubject: ${subj} | Grade: ${g}\nMode: ${mode || 'answer'}${cbe}\n\n`;
+  let body = '';
 
-  const response = await fetch('https://api.openai.com/v1/responses', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      model,
-      instructions: system,
-      input: user,
-      max_output_tokens: 1200
-    })
-  });
-  const raw = await response.text();
-  let data;
-  try { data = JSON.parse(raw); } catch { throw new Error(`OpenAI returned a non-JSON response (${response.status}).`); }
-  if (!response.ok) throw new Error(data?.error?.message || `OpenAI request failed (${response.status}).`);
-  const answer = data.output_text || (data.output || []).flatMap(x => x.content || []).map(x => x.text || '').join('\\n').trim();
-  if (!answer) throw new Error('OpenAI returned no text response.');
-  return answer;
+  const has = (...words) => words.some(w => low.includes(w));
+  if (has('linear equation','linear equations')) {
+    body = `Linear equations are equations in which the variable has a power of 1.\n\nExample:\n2x + 3 = 11\n2x = 11 - 3\n2x = 8\nx = 4\n\nCheck: 2(4) + 3 = 11, so x = 4.\n\nTip: Keep the equation balanced by doing the same operation to both sides.`;
+  } else if (has('fraction','fractions')) {
+    body = `A fraction represents part of a whole and is written as numerator/denominator.\n\nExample: 3/4 means 3 equal parts out of 4.\nTo add fractions with the same denominator, add the numerators and keep the denominator: 2/7 + 3/7 = 5/7.`;
+  } else if (has('magnification')) {
+    body = `Magnification compares the size of an image with the actual size of the object.\n\nFormula:\nMagnification = image size ÷ actual size.\n\nMake sure both measurements use the same units before calculating.`;
+  } else if (has('photosynthesis')) {
+    body = `Photosynthesis is the process by which green plants make food using light energy. The main raw materials are carbon dioxide and water. Chlorophyll absorbs light energy, and glucose and oxygen are produced.`;
+  } else if (has('atom','atoms','molecule','molecules')) {
+    body = `An atom is the smallest unit of an element that retains the element's chemical properties. A molecule is made when two or more atoms are chemically joined. For example, a water molecule contains hydrogen and oxygen atoms.`;
+  } else if (has('pythagoras','pythagorean')) {
+    body = `For a right-angled triangle, the Pythagorean relationship is a² + b² = c², where c is the longest side (the hypotenuse).\n\nExample: if a = 3 and b = 4, then c² = 9 + 16 = 25, so c = 5.`;
+  } else if (has('speed','distance','time')) {
+    body = `For motion problems:\nSpeed = Distance ÷ Time\nDistance = Speed × Time\nTime = Distance ÷ Speed\n\nAlways check that your units are consistent.`;
+  } else {
+    body = `Here is a simple study guide for your question:\n\n1. Identify the key idea in the question.\n2. Write down the relevant definition, rule, or formula.\n3. Work through a small example step by step.\n4. Check your answer and explain why it makes sense.\n\nYour question was: “${q}”\n\nFor a more specific answer, include the exact topic, exercise, or calculation you are working on.`;
+  }
+
+  if (mode === 'notes') body += `\n\nRevision notes:\n• Learn the key definition.\n• Memorise the relevant formula or rule.\n• Practise one worked example.\n• Try a new example without looking at the solution.`;
+  if (mode === 'practice') body += `\n\nPractice questions:\n1. Define the main term in your own words.\n2. Give one example.\n3. Solve a similar problem and show your working.\n4. Explain how you checked your answer.`;
+  if (mode === 'summary') body = `Summary — ${q}\n\n${body}\n\nKey point: Focus on the definition, method, example, and final check.`;
+  return header + body;
 }
 
 app.post('/api/ai', async (req, res) => {
   try {
-    const answer = await callOpenAI(req.body || {});
+    const answer = localStudyAssistant(req.body || {});
     res.json({ ok: true, answer });
   } catch (e) {
     console.error('AI error:', e);
@@ -125,14 +124,14 @@ app.post('/api/ai', async (req, res) => {
 
 app.get('/api/health', async (_req, res) => {
   const required = ['MPESA_CONSUMER_KEY','MPESA_CONSUMER_SECRET','MPESA_SHORTCODE','MPESA_PASSKEY','MPESA_CALLBACK_URL'];
-  const aiConfigured = Boolean(process.env.OPENAI_API_KEY);
+  const aiConfigured = true;
   const missing = required.filter(name => !process.env[name]);
   res.json({
     ok: true,
     daraja: process.env.MPESA_ENV || 'sandbox',
     configured: missing.length === 0,
     missing,
-    ai: { configured: aiConfigured, model: process.env.OPENAI_MODEL || 'gpt-5.6-luna' }
+    ai: { configured: aiConfigured, provider: 'local', model: 'built-in-local-study-assistant' }
   });
 });
 

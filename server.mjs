@@ -141,35 +141,40 @@ function directQuestionAnswer(q, subject='General'){
 }
 function splitPaperSubquestions(text){
   const s=cleanQuestionText(text);
-  const matches=[...s.matchAll(/(?:^|\s)([a-z])\)\s*/gi)];
+  // Only treat a)/b)/c) as sub-question markers when they occur after punctuation/space,
+  // avoiding false matches inside words and OCR noise.
+  const matches=[...s.matchAll(/(?:^|[.;:])\s*([a-d])\)\s*/gi)];
   if(!matches.length) return [{label:'',text:s}];
   const parts=[];
-  let last=0;
   for(let i=0;i<matches.length;i++){
-    const start=matches[i].index + matches[i][0].lastIndexOf(matches[i][1]);
-    if(start>last){
-      const chunk=s.slice(last,start).trim(); if(chunk) parts.push({label:'',text:chunk.replace(/^\s*[a-z]\)\s*/i,'').trim()});
-    }
+    const marker=matches[i];
+    const start=marker.index + marker[0].lastIndexOf(marker[1]);
     const next=(i+1<matches.length)?matches[i+1].index:s.length;
     const body=s.slice(start+2,next).trim();
-    parts.push({label:matches[i][1].toLowerCase()+')',text:body});
-    last=next;
+    if(body) parts.push({label:marker[1].toLowerCase()+')',text:body});
   }
-  return parts.filter(x=>x.text);
+  return parts.length ? parts : [{label:'',text:s}];
+}
+function extractNumberedQuestions(text){
+  const s=cleanQuestionText(text);
+  // OCR often collapses the whole paper into one line. Detect question numbers globally.
+  const re=/(?:^|\s)(?:question\s*)?(\d{1,3})\s*[).:-]\s*/gi;
+  const matches=[...s.matchAll(re)];
+  const qs=[];
+  for(let i=0;i<matches.length;i++){
+    const n=matches[i][1];
+    const start=matches[i].index + matches[i][0].lastIndexOf(matches[i][1]) + n.length;
+    const next=i+1<matches.length ? matches[i+1].index : s.length;
+    const body=s.slice(start,next).trim();
+    if(body) qs.push({n,text:body});
+  }
+  return qs;
 }
 function solveUploadedPaperDirect({subject, grade, prompt}){
   const marker='EXTRACTED QUESTION PAPER:';
   const raw=String(prompt||'');
   const paper=raw.includes(marker)?raw.split(marker).slice(1).join(marker).trim():raw;
-  const lines=paper.split(/\n+/).map(cleanQuestionText).filter(Boolean);
-  const qs=[]; let current=null;
-  for(const line of lines){
-    const m=line.match(/^(?:question\s*)?(\d{1,3})\s*[).:-]\s*(.*)$/i);
-    if(m){if(current)qs.push(current); current={n:m[1],text:m[2]};}
-    else if(current) current.text+=' '+line;
-    else if(/^(?:q\.?\s*\d+)/i.test(line)) { const z=line.match(/(?:q\.?\s*)(\d+)\s*[).:-]?\s*(.*)/i); if(z){if(current)qs.push(current);current={n:z[1],text:z[2]};}}
-  }
-  if(current)qs.push(current);
+  const qs=extractNumberedQuestions(paper);
   if(!qs.length) return 'I could not detect numbered questions. Please upload a clearer paper.';
   const out=[];
   for(const q of qs){
@@ -180,7 +185,9 @@ function solveUploadedPaperDirect({subject, grade, prompt}){
     } else {
       out.push(`${q.n}.`);
       for(const sub of subs){
-        const ans=directQuestionAnswer(sub.text,subject);
+        // Include the parent question so sub-parts retain shared values such as r and h.
+        const combined=q.text+' '+sub.text;
+        const ans=directQuestionAnswer(combined,subject);
         out.push(`   ${sub.label} ${ans || 'Answer could not be read or solved confidently. Please upload a clearer image of this question.'}`);
       }
     }

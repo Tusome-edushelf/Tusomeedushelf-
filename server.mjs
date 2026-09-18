@@ -78,57 +78,90 @@ function curriculumContext(subject, grade, focus) {
 async function callGemini({ subject, grade, mode, focus, prompt, file }) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('GEMINI_API_KEY is not configured on the server.');
+
+  // Stable multimodal models that are currently listed by Google.
   const primaryModel = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
   const fallbackModels = (process.env.GEMINI_FALLBACK_MODELS || 'gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash')
     .split(',').map(x => x.trim()).filter(Boolean);
   const models = [...new Set([primaryModel, ...fallbackModels])];
-  const curriculum = curriculumContext(subject, grade, focus);
+
   const paperMode = mode === 'paper';
-  const answerMode = !mode || mode === 'answer' || paperMode;
-  const system = `You are Tusome EduShelf AI Study Assistant.
-` +
-    `Your highest priority is to answer the learner's actual question correctly, clearly, and completely. ` +
-    `Do NOT force CBE, KICD, curriculum, strand, sub-strand, learning outcomes, or grade-specific teaching language into an answer unless the learner explicitly asks for it. ` +
-    `The selected grade is context only; never change, simplify, reinterpret, or replace the question because of the grade. ` +
-    `If the question is mathematically or scientifically advanced, solve the actual problem as written. ` +
-    `For calculations, present the working neatly in a logical vertical order, show necessary formulas/substitutions, and finish with a clearly labelled final answer. ` +
-    `For theory questions, give the direct correct answer. For definitions, give the definition directly. For multiple choice, give the option and answer. ` +
-    `For essays, provide a complete well-organized answer. ` +
-    `Avoid unnecessary introductions, teaching notes, parent/teacher notes, curriculum commentary, main-idea sections, tips, common mistakes, or summaries unless requested. ` +
-    `Use clean plain-text formatting that remains readable on a phone. For calculations, prefer layouts such as:
-` +
-    `Given: ...
-Formula: ...
-Substitution: ...
-Calculation: ...
-Answer: ...
-` +
-    `Use one step per line and keep equals signs aligned where practical. Do not wrap equations in LaTeX delimiters such as $$, \( \), or \[ \]. ` +
-    (paperMode ? `\nQUESTION-PAPER SOLVER RULES:\n` +
-      `Solve the uploaded question paper directly. Preserve the original numbering exactly as visible. ` +
-      `For theory/short-answer questions, give the direct answer. For calculations, show only the necessary working and final answer. ` +
-      `For multiple choice, give the correct option and answer. For definitions, give a direct definition. ` +
-      `For essay questions, give a complete answer. ` +
-      `Do not add CBE/curriculum explanations or extra teaching sections unless requested. ` +
-      `If a question or sub-question is unreadable, identify exactly which number is unreadable rather than guessing. ` : '') +
-    `\nSelected subject: ${subject || 'General'}. Selected grade: ${grade || 'General'}. Mode: ${mode || 'answer'}.`;
-  const userPrompt = String(prompt || '').trim() || (paperMode ? 'Solve the uploaded question paper.' : '');
+  const system = `You are the main academic question-answering engine for Tusome EduShelf.
+Your job is to answer the EXACT question or uploaded question paper correctly.
+
+CORE RULES:
+- Ignore the selected grade as a restriction on what you can solve. The grade is only optional context.
+- Do NOT force CBC, KICD, CBE, strands, sub-strands, learning outcomes, competencies, values, or teacher/parent notes into ordinary answers unless the user explicitly asks for curriculum alignment.
+- Never replace an algebraic question with a simpler "mystery number" or another grade-level version.
+- Never change the numbers, symbols, units, wording, or requested operation in the question.
+- Do not invent missing information. If part of a question cannot be read, identify the exact question/sub-question and say it cannot be read clearly.
+- Internally check every calculation before giving the final answer.
+- Use the same units as the question and convert units only when necessary.
+- Keep answers concise but complete. Do not add motivational text, tips, summaries, common mistakes, or unrelated explanations unless requested.
+
+CALCULATION FORMAT:
+Use a clean arrangement such as:
+Given:
+...
+
+Formula:
+...
+
+Substitution:
+...
+
+Calculation:
+...
+
+Answer:
+...
+Use only the sections that are useful. For simple calculations, omit unnecessary sections.
+Show one mathematical step per line. Keep operations in a natural order and make the final answer unmistakable.
+Do not use LaTeX delimiters such as $$, \\( \\), or \\[ \\]. Plain text math is preferred for phone readability.
+
+THEORY:
+Give the direct correct answer. For definitions, give the definition directly.
+
+MULTIPLE CHOICE:
+Give the option letter/number and the answer. Do not list all options unless needed.
+
+ESSAYS:
+Give a complete, well-organized answer appropriate to the question.
+
+${paperMode ? `UPLOADED QUESTION-PAPER MODE:
+1. Read the entire uploaded paper carefully, including every visible page, diagram, table, graph, formula, and handwritten/printed sub-question.
+2. Solve ALL readable questions unless the user asks for a specific number.
+3. Preserve the original question numbering and sub-question labels exactly as shown (for example 27(a), 27(b), 28(i), 28(ii)). Never turn a sub-question into a new top-level question.
+4. Do not skip a readable question. If the paper contains pages, process them in order.
+5. For diagrams, use the visual information in the uploaded page. Do not guess dimensions or labels that are not visible.
+6. For calculations, show only the necessary working and final answer, neatly arranged.
+7. For theory, definitions, and multiple choice, give direct answers.
+8. Before responding, silently verify arithmetic, signs, units, ratios, percentages, formulas, and copied question numbers.
+9. If OCR/text extraction is uncertain but the visual page makes the question readable, use the visual page instead of guessing from garbled text.
+10. If a question truly cannot be read, write: "[Question number] — Cannot read the question clearly from the uploaded page." Do not fabricate an answer.
+11. Do not add curriculum explanations or teacher/parent notes.
+` : ''}
+Selected subject: ${subject || 'General'}. Selected grade: ${grade || 'General'}.`;
+
+  const userPrompt = String(prompt || '').trim() || (paperMode ? 'Solve the uploaded question paper.' : 'Answer the uploaded question.');
   if (!userPrompt && !file) throw new Error('Enter a question or upload a question paper first.');
 
-  const parts = [{ text: `${system}\n\n${userPrompt}` }];
+  const parts = [];
   if (file?.data && file?.mimeType) {
     const mime = String(file.mimeType).toLowerCase();
     const allowed = ['application/pdf','image/png','image/jpeg','image/webp','image/heic','image/heif'];
     if (!allowed.includes(mime)) throw new Error('Upload a PDF or image (PNG, JPG, WEBP, HEIC, or HEIF).');
     const raw = String(file.data).replace(/^data:[^;]+;base64,/, '');
     const bytes = Math.floor(raw.length * 3 / 4);
-    if (bytes > 12 * 1024 * 1024) throw new Error('That file is too large. Please upload a file smaller than 12 MB.');
+    if (bytes > 12 * 1024 * 1024) throw new Error('That file is too large for Tusome EduShelf. Please upload a file smaller than 12 MB.');
+    // Put the visual/document part before the instruction text so the model can inspect it first.
     parts.push({ inline_data: { mime_type: mime, data: raw } });
   }
+  parts.push({ text: `${system}\n\nUSER REQUEST:\n${userPrompt}` });
 
   const transientStatuses = new Set([408, 429, 500, 502, 503, 504]);
-  const maxRetriesPerModel = Math.max(1, Math.min(4, Number(process.env.GEMINI_RETRIES || 2)));
-  const baseDelayMs = Math.max(500, Number(process.env.GEMINI_RETRY_DELAY_MS || 1500));
+  const maxRetriesPerModel = Math.max(1, Math.min(3, Number(process.env.GEMINI_RETRIES || 2)));
+  const baseDelayMs = Math.max(700, Number(process.env.GEMINI_RETRY_DELAY_MS || 1500));
   let lastError = null;
 
   for (const model of models) {
@@ -137,7 +170,13 @@ Answer: ...
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
           method: 'POST',
           headers: { 'x-goog-api-key': apiKey, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contents: [{ role: 'user', parts }] })
+          body: JSON.stringify({
+            contents: [{ role: 'user', parts }],
+            generationConfig: {
+              temperature: 0.1,
+              topP: 0.9
+            }
+          })
         });
         const rawResponse = await response.text();
         let data;
@@ -151,7 +190,11 @@ Answer: ...
           throw err;
         }
 
-        const answer = (data.candidates || []).flatMap(c => c.content?.parts || []).map(p => p.text || '').join('\n').trim();
+        const answer = (data.candidates || [])
+          .flatMap(c => c.content?.parts || [])
+          .map(p => p.text || '')
+          .join('\n')
+          .trim();
         if (!answer) throw new Error('Gemini returned no text response.');
         return answer;
       } catch (err) {
@@ -160,14 +203,13 @@ Answer: ...
         const transient = transientStatuses.has(status) || /high demand|temporarily|unavailable|overloaded|rate limit|resource exhausted/i.test(err?.message || '');
         if (!transient) throw err;
         if (attempt < maxRetriesPerModel) {
-          const delay = Math.min(15000, baseDelayMs * (2 ** attempt)) + Math.floor(Math.random() * 400);
-          console.warn(`Gemini ${model} is busy (attempt ${attempt + 1}/${maxRetriesPerModel + 1}). Retrying in ${delay}ms...`);
+          const delay = Math.min(12000, baseDelayMs * (2 ** attempt));
+          console.warn(`Gemini ${model} busy (attempt ${attempt + 1}/${maxRetriesPerModel + 1}); retrying in ${delay}ms...`);
           await new Promise(resolve => setTimeout(resolve, delay));
-        } else {
-          console.warn(`Gemini ${model} exhausted retries; trying the next fallback model.`);
         }
       }
     }
+    console.warn(`Gemini ${model} exhausted retries; trying the next fallback model.`);
   }
 
   throw new Error(`Gemini is temporarily busy. Automatic fallback was attempted across ${models.length} models. Please try again shortly. Last error: ${lastError?.message || 'unknown error'}`);

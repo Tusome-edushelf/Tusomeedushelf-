@@ -96,6 +96,12 @@ CORE RULES:
 - Never change the numbers, symbols, units, wording, or requested operation in the question.
 - Do not invent missing information. If part of a question cannot be read, identify the exact question/sub-question and say it cannot be read clearly.
 - Internally check every calculation before giving the final answer.
+- For numerical answers, independently recompute the result using a second check before displaying it.
+- Check copied values, signs, decimal points, fractions, ratios, percentages, units, and the final operation.
+- For equations, substitute the final value back into the original equation when practical and correct it if the check fails.
+- For geometry and measurement questions, verify the selected formula matches the shape and the requested quantity before calculating.
+- For ratios and percentages, verify the result against the original total/base before displaying it.
+- If a calculation depends on an unreadable symbol, number, diagram label, or unit, do not silently assume it; identify the uncertainty.
 - Use the same units as the question and convert units only when necessary.
 - Keep answers concise but complete. Do not add motivational text, tips, summaries, common mistakes, or unrelated explanations unless requested.
 
@@ -136,10 +142,11 @@ ${paperMode ? `UPLOADED QUESTION-PAPER MODE:
 5. For diagrams, use the visual information in the uploaded page. Do not guess dimensions or labels that are not visible.
 6. For calculations, show only the necessary working and final answer, neatly arranged.
 7. For theory, definitions, and multiple choice, give direct answers.
-8. Before responding, silently verify arithmetic, signs, units, ratios, percentages, formulas, and copied question numbers.
-9. If OCR/text extraction is uncertain but the visual page makes the question readable, use the visual page instead of guessing from garbled text.
-10. If a question truly cannot be read, write: "[Question number] — Cannot read the question clearly from the uploaded page." Do not fabricate an answer.
-11. Do not add curriculum explanations or teacher/parent notes.
+8. Before responding, perform a final quality-control pass: confirm every original question/sub-question is present, confirm numbering is unchanged, recompute every numerical answer, and check that each final answer matches its working.
+9. For each calculation, silently do a second independent check (for example substitution, reverse operation, total check, unit check, or estimation) and fix any mismatch before responding.
+10. If OCR/text extraction is uncertain but the visual page makes the question readable, use the visual page instead of guessing from garbled text.
+11. If a question truly cannot be read, write: "[Question number] — Cannot read the question clearly from the uploaded page." Do not fabricate an answer.
+12. Do not add curriculum explanations or teacher/parent notes.
 ` : ''}
 Selected subject: ${subject || 'General'}. Selected grade: ${grade || 'General'}.`;
 

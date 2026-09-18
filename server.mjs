@@ -97,29 +97,65 @@ function safeArithmetic(expr){
   if(!/^[0-9+\-*/().%\s*]+$/.test(e)) return null;
   try{const v=Function('"use strict"; return ('+e+')')(); return Number.isFinite(v)?v:null;}catch{return null;}
 }
+function fmtNum(n){
+  if(Number.isInteger(n)) return String(n);
+  return String(Number(n.toFixed(4)));
+}
 function directQuestionAnswer(q, subject='General'){
   const x=cleanQuestionText(q), l=x.toLowerCase();
-  // Common numerical forms
+  // Worked arithmetic / expression evaluation
   let m=l.match(/(?:calculate|find|evaluate|work out|what is)\s*[:=]?\s*([0-9]+(?:\s*[+\-×x*/÷]\s*[0-9]+)+)\s*\??$/i);
-  if(m){const v=safeArithmetic(m[1]); if(v!==null) return `Answer: ${v}`;}
+  if(m){const v=safeArithmetic(m[1]); if(v!==null) return `Answer: ${fmtNum(v)}`;}
+  // Workers × days = constant work
+  m=l.match(/(\d+(?:\.\d+)?)\s*(?:workers?|men|people)\b[\s\S]*?(?:complete|finish|do)\b[\s\S]*?(\d+(?:\.\d+)?)\s*days?[\s\S]*?(?:employ(?:ed|s)?|use|uses)\s*(\d+(?:\.\d+)?)\s*(?:workers?|men|people)[\s\S]*?(?:how many|how long|what)[\s\S]*?days?/i);
+  if(m){const w1=Number(m[1]),d1=Number(m[2]),w2=Number(m[3]); const d=w1*d1/w2; return `Working: ${w1} × ${d1} = ${w2} × d\nd = (${w1} × ${d1}) ÷ ${w2} = ${fmtNum(d)}\nAnswer: ${fmtNum(d)} days`}
+  m=l.match(/(?:job|work)[^.]*?(\d+(?:\.\d+)?)\s*(?:workers?|men|people)[^.]*?(\d+(?:\.\d+)?)\s*days[^.]*?(\d+(?:\.\d+)?)\s*(?:workers?|men|people)[^.]*?(?:how many|how long)[^.]*days?/i);
+  if(m){const d=Number(m[2]); const w2=Number(m[3]); const w1=Number(m[1]); const ans=w1*d/w2; return `Working: ${w1} × ${d} = ${w2} × d\nd = (${w1} × ${d}) ÷ ${w2} = ${fmtNum(ans)}\nAnswer: ${fmtNum(ans)} days`}
+  // Cylinder surface area
+  if(/cylindrical|cylinder/.test(l) && /radius\s*(?:of|=)?\s*([0-9.]+)\s*(?:cm|m)?/.test(l) && /height\s*(?:of|=)?\s*([0-9.]+)\s*(?:cm|m)?/.test(l)){
+    const rm=l.match(/radius\s*(?:of|=)?\s*([0-9.]+)/i), hm=l.match(/height\s*(?:of|=)?\s*([0-9.]+)/i); const r=Number(rm[1]),h=Number(hm[1]);
+    const pm=l.match(/(?:take|use|using)\s*(?:t\s*|pi\s*=\s*)?([0-9.]+)/i); const pi=pm?Number(pm[1]):3.142;
+    if(/curved surface|lateral surface/.test(l)) return `Working: 2πrh = 2 × ${pi} × ${r} × ${h}\nAnswer: ${fmtNum(2*pi*r*h)} cm²`;
+    if(/total surface/.test(l)) return `Working: 2πr(h + r) = 2 × ${pi} × ${r} × (${h} + ${r})\nAnswer: ${fmtNum(2*pi*r*(h+r))} cm²`;
+  }
+  // Percentage profit
+  m=l.match(/bought\s+.*?(?:sh\.?|ksh)?\s*([0-9,]+).*?sold\s+.*?(?:sh\.?|ksh)?\s*([0-9,]+).*?percentage profit/i);
+  if(m){const cp=Number(m[1].replace(/,/g,'')), sp=Number(m[2].replace(/,/g,'')); const p=sp-cp; return `Working: Profit = ${sp} − ${cp} = ${p}\nPercentage profit = (${p} ÷ ${cp}) × 100 = ${fmtNum(p/cp*100)}%\nAnswer: ${fmtNum(p/cp*100)}%`}
+  // Ratio sharing / partition
+  m=l.match(/(\d+(?:\.\d+)?)\s*(?:hectares?|ha|units?)[^.]*?ratio of\s*([0-9]+)\s*:\s*([0-9]+)\s*:\s*([0-9]+)\s*:\s*([0-9]+)/i);
+  if(m){const total=Number(m[1]), parts=[Number(m[2]),Number(m[3]),Number(m[4]),Number(m[5])], sum=parts.reduce((a,b)=>a+b,0), vals=parts.map(x=>total*x/sum); return `Working: Total ratio = ${parts.join(' + ')} = ${sum}\n1 part = ${total} ÷ ${sum} = ${fmtNum(total/sum)}\nAnswers: ${vals.map(fmtNum).join(', ')} hectares (in the order given)`}
+  // Linear equations
   m=l.match(/(?:solve|find\s+x)\s*[:=]?\s*([0-9.]+)x\s*([+\-])\s*([0-9.]+)\s*=\s*([0-9.]+)/i);
-  if(m){const a=Number(m[1]), b=(m[2]==='-'?-1:1)*Number(m[3]), c=Number(m[4]); const v=(c-b)/a; return `x = ${Number.isInteger(v)?v:v.toFixed(4).replace(/0+$/,'').replace(/\.$/,'')}`;}
+  if(m){const a=Number(m[1]), b=(m[2]==='-'?-1:1)*Number(m[3]), c=Number(m[4]); const v=(c-b)/a; return `Working: ${a}x ${m[2]} ${m[3]} = ${c}\n${a}x = ${fmtNum(c-b)}\nx = ${fmtNum(v)}\nAnswer: x = ${fmtNum(v)}`;}
   m=l.match(/(?:solve|find\s+x)\s*[:=]?\s*x\s*([+\-])\s*([0-9.]+)\s*=\s*([0-9.]+)/i);
-  if(m){const b=(m[1]==='-'?-1:1)*Number(m[2]), c=Number(m[3]); return `x = ${c-b}`;}
-  m=l.match(/(?:speed)\s*=\s*([0-9.]+)\s*(?:km|m)\s*(?:in|\/)\s*([0-9.]+)\s*(?:hours?|h)/i);
-  if(m)return `Speed = ${Number(m[1])/Number(m[2])} km/h`;
-  m=l.match(/(?:image size|image)\s*=\s*([0-9.]+)\s*(?:mm|cm).*?(?:actual size|actual)\s*=\s*([0-9.]+)\s*(?:mm|cm)/i);
-  if(m)return `Magnification = image size ÷ actual size = ${Number(m[1])/Number(m[2])}×`;
-  // Direct factual answers commonly encountered in school papers
-  if(/what is photosynthesis|define photosynthesis/.test(l)) return 'Photosynthesis is the process by which green plants use light energy to make glucose from carbon dioxide and water, releasing oxygen.';
-  if(/what is an atom|define an atom/.test(l)) return 'An atom is the smallest unit of an element that retains the chemical identity of that element.';
-  if(/what is a molecule|define a molecule/.test(l)) return 'A molecule is a group of two or more atoms chemically joined together.';
-  if(/what is magnification|define magnification/.test(l)) return 'Magnification is the ratio of image size to actual size: Magnification = image size ÷ actual size.';
-  if(/what is a linear equation|define a linear equation/.test(l)) return 'A linear equation is an equation in which the highest power of the variable is 1.';
-  if(/pythagorean|pythagoras/.test(l) && /theorem|relationship|state|formula/.test(l)) return 'For a right-angled triangle, a² + b² = c², where c is the hypotenuse.';
-  if(/what is speed|define speed/.test(l)) return 'Speed is the distance travelled per unit time. Speed = distance ÷ time.';
-  if(/area of a circle|area of circle/.test(l)) return 'Area of a circle = πr², where r is the radius.';
+  if(m){const b=(m[1]==='-'?-1:1)*Number(m[2]), c=Number(m[3]); const v=c-b; return `Working: x ${m[1]} ${m[2]} = ${c}\nx = ${fmtNum(v)}\nAnswer: x = ${fmtNum(v)}`;}
+  // Common factual answers
+  if(/what is photosynthesis|define photosynthesis/.test(l)) return 'Answer: Photosynthesis is the process by which green plants make food using light energy, carbon dioxide and water, releasing oxygen.';
+  if(/what is an atom|define an atom/.test(l)) return 'Answer: An atom is the smallest unit of an element that retains the chemical identity of that element.';
+  if(/what is a molecule|define a molecule/.test(l)) return 'Answer: A molecule is a group of two or more atoms chemically bonded together.';
+  if(/what is magnification|define magnification/.test(l)) return 'Answer: Magnification is the ratio of image size to actual size.';
+  if(/what is a linear equation|define a linear equation/.test(l)) return 'Answer: A linear equation is an equation in which the highest power of the variable is 1.';
+  if(/pythagorean|pythagoras/.test(l) && /theorem|relationship|state|formula/.test(l)) return 'Answer: For a right-angled triangle, a² + b² = c², where c is the hypotenuse.';
+  if(/what is speed|define speed/.test(l)) return 'Answer: Speed is the distance travelled per unit time. Speed = distance ÷ time.';
   return null;
+}
+function splitPaperSubquestions(text){
+  const s=cleanQuestionText(text);
+  const matches=[...s.matchAll(/(?:^|\s)([a-z])\)\s*/gi)];
+  if(!matches.length) return [{label:'',text:s}];
+  const parts=[];
+  let last=0;
+  for(let i=0;i<matches.length;i++){
+    const start=matches[i].index + matches[i][0].lastIndexOf(matches[i][1]);
+    if(start>last){
+      const chunk=s.slice(last,start).trim(); if(chunk) parts.push({label:'',text:chunk.replace(/^\s*[a-z]\)\s*/i,'').trim()});
+    }
+    const next=(i+1<matches.length)?matches[i+1].index:s.length;
+    const body=s.slice(start+2,next).trim();
+    parts.push({label:matches[i][1].toLowerCase()+')',text:body});
+    last=next;
+  }
+  return parts.filter(x=>x.text);
 }
 function solveUploadedPaperDirect({subject, grade, prompt}){
   const marker='EXTRACTED QUESTION PAPER:';
@@ -134,14 +170,24 @@ function solveUploadedPaperDirect({subject, grade, prompt}){
     else if(/^(?:q\.?\s*\d+)/i.test(line)) { const z=line.match(/(?:q\.?\s*)(\d+)\s*[).:-]?\s*(.*)/i); if(z){if(current)qs.push(current);current={n:z[1],text:z[2]};}}
   }
   if(current)qs.push(current);
-  if(!qs.length) return 'No numbered questions were detected in the uploaded file. Please upload a clearer file or type the questions into the box.';
+  if(!qs.length) return 'I could not detect numbered questions. Please upload a clearer paper.';
   const out=[];
   for(const q of qs){
-    const ans=directQuestionAnswer(q.text,subject);
-    out.push(`${q.n}. ${q.text}\nAnswer: ${ans || 'Please type this question in the box if you need a detailed solution.'}`);
+    const subs=splitPaperSubquestions(q.text);
+    if(subs.length===1){
+      const ans=directQuestionAnswer(q.text,subject);
+      out.push(`${q.n}. ${ans || 'Answer could not be read or solved confidently. Please upload a clearer image of this question.'}`);
+    } else {
+      out.push(`${q.n}.`);
+      for(const sub of subs){
+        const ans=directQuestionAnswer(sub.text,subject);
+        out.push(`   ${sub.label} ${ans || 'Answer could not be read or solved confidently. Please upload a clearer image of this question.'}`);
+      }
+    }
   }
-  return `DIRECT ANSWERS\nSubject: ${subject||'General'} | Grade: ${grade||'General'}\n\n`+out.join('\n\n');
+  return `DIRECT ANSWERS\n${out.join('\n')}`;
 }
+
 function localStudyAssistant({ subject, grade, mode, focus, prompt }) {
   const q = String(prompt || '').trim();
   if (!q) throw new Error('Enter a question or topic first.');

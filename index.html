@@ -150,6 +150,7 @@ footer{text-align:center;padding:30px;color:#687386}
     <label>What would you like help with?</label>
     <select id="aiMode">
       <option value="answer">Answer / Explain a Question</option>
+      <option value="paper">Question Paper — Direct Answers</option>
       <option value="notes">Develop Revision Notes</option>
       <option value="practice">Create Practice Questions</option>
       <option value="summary">Summarize a Topic</option>
@@ -532,10 +533,11 @@ async function prepareAIFile(input){
 async function solveUploadedPaper(){
   if(!uploadedAIText){const input=document.getElementById('aiFile'); if(input?.files?.[0]) await prepareAIFile(input);}
   if(!uploadedAIText){alert('Please upload a PDF, image, or TXT question paper first.');return;}
-  document.getElementById('aiMode').value='direct';
+  document.getElementById('aiMode').value='paper';
   const prompt=document.getElementById('aiPrompt');
-  prompt.value=`Solve the uploaded question paper. Give DIRECT answers. Keep the original question numbering. For calculations, show only the necessary calculation and final answer. For theory, definitions and multiple choice, give the answer directly.\n\nEXTRACTED QUESTION PAPER:\n${uploadedAIText.slice(0,30000)}`;
-  document.querySelector('#aiForm button[type="submit"]')?.click();
+  prompt.value=`SOLVE UPLOADED QUESTION PAPER. DIRECT ANSWERS ONLY. Preserve every question and sub-question number. For calculations, show only the necessary working and final answer. For theory/definitions/multiple choice, give the answer directly. Do not add definitions, key concepts, study guides, revision notes, worked examples, or extra teaching sections unless a question asks for them. If text is unreadable, identify the exact question number and say it needs a clearer image.\n\nEXTRACTED QUESTION PAPER:\n${uploadedAIText.slice(0,30000)}`;
+  // Submit the form normally so the server receives the dedicated paper mode.
+  document.getElementById('aiForm')?.requestSubmit();
 }
 
 async function checkAIStatus(){const el=document.getElementById('aiStatus');if(!el)return;try{const r=await fetch('/api/health');const d=await r.json();const ok=!!(d.ai&&d.ai.configured);el.className=ok?'success':'notice';el.textContent=ok?'🟢 AI service connected • '+(d.ai.provider||'local')+' • '+(d.ai.model||'built-in'):'🟠 AI service is not configured.'}catch(e){el.className='notice';el.textContent='🔴 EduShelf server is not running. Start it with: npm install && npm start'}}

@@ -21,3 +21,7 @@ Password: `admin123`
 4. Start with `npm start`.
 
 > The role checks in this prototype use a client-provided role header and are not a substitute for production authentication. Before launch, replace the prototype login with server-side authenticated sessions/roles and persistent database storage.
+
+
+## Question Paper Solver
+The uploaded-paper button uses a dedicated `paper` mode. It returns direct answers only, preserves question/sub-question numbering, shows only necessary calculation working, and reports unreadable questions instead of falling back to study-guide templates.

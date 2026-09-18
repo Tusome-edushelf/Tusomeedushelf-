@@ -522,7 +522,7 @@ async function solveUploadedPaper(){
   if(!uploadedAIText){alert('Please upload a PDF, image, or TXT question paper first.');return;}
   document.getElementById('aiMode').value='answer';
   const prompt=document.getElementById('aiPrompt');
-  if(!prompt.value.trim()) prompt.value=`Solve the uploaded question paper step by step. Show each question, working, final answer, and a short explanation.\n\n${uploadedAIText.slice(0,30000)}`;
+  if(!prompt.value.trim()) prompt.value=`Solve the uploaded question paper. Give each answer directly and keep the original question numbering. For calculation questions, show only the necessary calculation/working followed by the final answer. For theory or definition questions, give the direct answer without unnecessary long explanations. For multiple-choice questions, give the correct option and answer. For essay questions, give a complete answer in an appropriate format. Do not add lengthy teaching explanations unless they are needed to make the answer correct or the learner asks for more detail.\n\n${uploadedAIText.slice(0,30000)}`;
   document.querySelector('#aiForm button[type="submit"]')?.click();
 }
 

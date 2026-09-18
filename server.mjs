@@ -86,6 +86,7 @@ async function callGemini({ subject, grade, mode, focus, prompt, file }) {
   const models = [...new Set([primaryModel, ...fallbackModels])];
 
   const paperMode = mode === 'paper';
+  const markMode = mode === 'mark';
   const system = `You are the main academic question-answering engine for Tusome EduShelf.
 Your job is to answer the EXACT question or uploaded question paper correctly.
 
@@ -134,6 +135,27 @@ Give the option letter/number and the answer. Do not list all options unless nee
 ESSAYS:
 Give a complete, well-organized answer appropriate to the question.
 
+${markMode ? `MARK MY WORK MODE:
+1. Read the uploaded question and the learner's working carefully, using the visual page rather than relying on garbled OCR.
+2. Mark the learner's work against the actual question. Do not change the question to fit the selected grade.
+3. For each readable question/sub-question, identify whether the learner's answer/step is correct, partially correct, or incorrect.
+4. Preserve the original question and sub-question numbering exactly as visible.
+5. For calculations, verify each important step, signs, operations, formulas, units, substitutions, and the final answer.
+6. If a step is wrong, show the corrected step and continue from the correct point. Do not hide the learner's mistake.
+7. If the final answer is wrong, provide the correct final answer.
+8. If the learner's answer is correct, clearly say so and do not invent a correction.
+9. If the uploaded working is unclear, identify the exact part that cannot be read and do not guess.
+10. Do not force CBC/KICD/CBE explanations unless the learner explicitly asks for curriculum alignment.
+11. Keep the marking concise but useful. Do not add unrelated tips, summaries, teacher/parent notes, or motivational text.
+12. Use this format where useful:
+Question [number]
+Status: Correct / Partly correct / Incorrect
+Working check:
+...
+Correction:
+...
+Final answer: ...
+` : ''}
 ${paperMode ? `UPLOADED QUESTION-PAPER MODE:
 1. Read the entire uploaded paper carefully, including every visible page, diagram, table, graph, formula, and handwritten/printed sub-question.
 2. Solve ALL readable questions unless the user asks for a specific number.

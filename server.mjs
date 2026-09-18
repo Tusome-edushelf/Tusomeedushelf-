@@ -6,18 +6,14 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: '18mb' }));
 
 const PORT = Number(process.env.PORT || 3000);
 const DATA_DIR = path.join(__dirname, 'data');
 const TX_FILE = path.join(DATA_DIR, 'transactions.json');
-const NOTES_FILE = path.join(DATA_DIR, 'notes.json');
-const NOTES_DIR = path.join(DATA_DIR, 'notes');
 
 await fs.mkdir(DATA_DIR, { recursive: true });
-await fs.mkdir(NOTES_DIR, { recursive: true });
 try { await fs.access(TX_FILE); } catch { await fs.writeFile(TX_FILE, '[]', 'utf8'); }
-try { await fs.access(NOTES_FILE); } catch { await fs.writeFile(NOTES_FILE, '[]', 'utf8'); }
 
 async function readTx() {
   try { return JSON.parse(await fs.readFile(TX_FILE, 'utf8')); }
@@ -50,17 +46,6 @@ function cfg(name) {
   if (!v) throw new Error(`Missing ${name} in .env`);
   return v;
 }
-function requireAdmin(req,res,next) {
-  if (String(req.get('x-user-role') || '').toLowerCase() !== 'admin') {
-    return res.status(403).json({error:'Administrator access required.'});
-  }
-  next();
-}
-
-function positivePrice(value) {
-  const n = Number(value);
-  return Number.isInteger(n) && n >= 1 ? n : null;
-}
 
 async function getAccessToken() {
   const key = cfg('MPESA_CONSUMER_KEY');
@@ -90,435 +75,82 @@ function curriculumContext(subject, grade, focus) {
   return [base, f ? `Requested CBE focus: ${f}` : ''].filter(Boolean).join('\\n');
 }
 
+async function callGemini({ subject, grade, mode, focus, prompt, file }) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error('GEMINI_API_KEY is not configured on the server.');
+  const model = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
+  const curriculum = curriculumContext(subject, grade, focus);
+  const paperMode = mode === 'paper';
+  const system = `You are Tusome EduShelf AI Study Assistant for Kenyan learners and teachers.\n` +
+    `Give accurate, age-appropriate educational help for the selected subject and grade.\n` +
+    `When CBE/KICD context is supplied, use it as grounding and do not invent official KICD wording.\n` +
+    (curriculum ? `Curriculum context:\n${curriculum}\n` : '') +
+    (paperMode ? `\nQUESTION-PAPER SOLVER RULES:\n` +
+      `Solve the uploaded question paper directly. Preserve the original numbering exactly as visible. ` +
+      `For theory/short-answer questions, give the direct answer. For calculations, show only the necessary calculation and final answer. ` +
+      `For multiple choice, give the correct option and answer. For definitions, give a direct definition. ` +
+      `For essay questions, give a complete answer. Do not add study notes, main ideas, common mistakes, or extra teaching sections unless requested. ` +
+      `If a question or sub-question is unreadable, say exactly which number is unreadable rather than guessing. ` : '') +
+    `\nMode: ${mode || 'answer'}. Subject: ${subject || 'General'}. Grade: ${grade || 'General'}.`;
+  const userPrompt = String(prompt || '').trim() || (paperMode ? 'Solve the uploaded question paper.' : '');
+  if (!userPrompt && !file) throw new Error('Enter a question or upload a question paper first.');
 
-function cleanQuestionText(s){return String(s||'').replace(/\s+/g,' ').trim();}
-function safeArithmetic(expr){
-  let e=String(expr).replace(/,/g,'').replace(/×/g,'*').replace(/÷/g,'/').replace(/−/g,'-').replace(/²/g,'**2').replace(/\^/g,'**');
-  if(!/^[0-9+\-*/().%\s*]+$/.test(e)) return null;
-  try{const v=Function('"use strict"; return ('+e+')')(); return Number.isFinite(v)?v:null;}catch{return null;}
-}
-function fmtNum(n){
-  if(Number.isInteger(n)) return String(n);
-  return String(Number(n.toFixed(4)));
-}
-function directQuestionAnswer(q, subject='General'){
-  const x=cleanQuestionText(q), l=x.toLowerCase();
-  // Worked arithmetic / expression evaluation
-  let m=l.match(/(?:calculate|find|evaluate|work out|what is)\s*[:=]?\s*([0-9]+(?:\s*[+\-×x*/÷]\s*[0-9]+)+)\s*\??$/i);
-  if(m){const v=safeArithmetic(m[1]); if(v!==null) return `Answer: ${fmtNum(v)}`;}
-  // Workers × days = constant work
-  m=l.match(/(\d+(?:\.\d+)?)\s*(?:workers?|men|people)\b[\s\S]*?(?:complete|finish|do)\b[\s\S]*?(\d+(?:\.\d+)?)\s*days?[\s\S]*?(?:employ(?:ed|s)?|use|uses)\s*(\d+(?:\.\d+)?)\s*(?:workers?|men|people)[\s\S]*?(?:how many|how long|what)[\s\S]*?days?/i);
-  if(m){const w1=Number(m[1]),d1=Number(m[2]),w2=Number(m[3]); const d=w1*d1/w2; return `Working: ${w1} × ${d1} = ${w2} × d\nd = (${w1} × ${d1}) ÷ ${w2} = ${fmtNum(d)}\nAnswer: ${fmtNum(d)} days`}
-  m=l.match(/(?:job|work)[^.]*?(\d+(?:\.\d+)?)\s*(?:workers?|men|people)[^.]*?(\d+(?:\.\d+)?)\s*days[^.]*?(\d+(?:\.\d+)?)\s*(?:workers?|men|people)[^.]*?(?:how many|how long)[^.]*days?/i);
-  if(m){const d=Number(m[2]); const w2=Number(m[3]); const w1=Number(m[1]); const ans=w1*d/w2; return `Working: ${w1} × ${d} = ${w2} × d\nd = (${w1} × ${d}) ÷ ${w2} = ${fmtNum(ans)}\nAnswer: ${fmtNum(ans)} days`}
-  // Cylinder surface area
-  if(/cylindrical|cylinder/.test(l) && /radius\s*(?:of|=)?\s*([0-9.]+)\s*(?:cm|m)?/.test(l) && /height\s*(?:of|=)?\s*([0-9.]+)\s*(?:cm|m)?/.test(l)){
-    const rm=l.match(/radius\s*(?:of|=)?\s*([0-9.]+)/i), hm=l.match(/height\s*(?:of|=)?\s*([0-9.]+)/i); const r=Number(rm[1]),h=Number(hm[1]);
-    const pm=l.match(/(?:take|use|using)\s*(?:t\s*|pi\s*=\s*)?([0-9.]+)/i); const pi=pm?Number(pm[1]):3.142;
-    if(/curved surface|lateral surface/.test(l)) return `Working: 2πrh = 2 × ${pi} × ${r} × ${h}\nAnswer: ${fmtNum(2*pi*r*h)} cm²`;
-    if(/total surface/.test(l)) return `Working: 2πr(h + r) = 2 × ${pi} × ${r} × (${h} + ${r})\nAnswer: ${fmtNum(2*pi*r*(h+r))} cm²`;
-  }
-  // Percentage profit
-  m=l.match(/bought\s+.*?(?:sh\.?|ksh)?\s*([0-9,]+).*?sold\s+.*?(?:sh\.?|ksh)?\s*([0-9,]+).*?percentage profit/i);
-  if(m){const cp=Number(m[1].replace(/,/g,'')), sp=Number(m[2].replace(/,/g,'')); const p=sp-cp; return `Working: Profit = ${sp} − ${cp} = ${p}\nPercentage profit = (${p} ÷ ${cp}) × 100 = ${fmtNum(p/cp*100)}%\nAnswer: ${fmtNum(p/cp*100)}%`}
-  // Ratio sharing / partition
-  m=l.match(/(\d+(?:\.\d+)?)\s*(?:hectares?|ha|units?)[^.]*?ratio of\s*([0-9]+)\s*:\s*([0-9]+)\s*:\s*([0-9]+)\s*:\s*([0-9]+)/i);
-  if(m){const total=Number(m[1]), parts=[Number(m[2]),Number(m[3]),Number(m[4]),Number(m[5])], sum=parts.reduce((a,b)=>a+b,0), vals=parts.map(x=>total*x/sum); return `Working: Total ratio = ${parts.join(' + ')} = ${sum}\n1 part = ${total} ÷ ${sum} = ${fmtNum(total/sum)}\nAnswers: ${vals.map(fmtNum).join(', ')} hectares (in the order given)`}
-  // Linear equations
-  m=l.match(/(?:solve|find\s+x)\s*[:=]?\s*([0-9.]+)x\s*([+\-])\s*([0-9.]+)\s*=\s*([0-9.]+)/i);
-  if(m){const a=Number(m[1]), b=(m[2]==='-'?-1:1)*Number(m[3]), c=Number(m[4]); const v=(c-b)/a; return `Working: ${a}x ${m[2]} ${m[3]} = ${c}\n${a}x = ${fmtNum(c-b)}\nx = ${fmtNum(v)}\nAnswer: x = ${fmtNum(v)}`;}
-  m=l.match(/(?:solve|find\s+x)\s*[:=]?\s*x\s*([+\-])\s*([0-9.]+)\s*=\s*([0-9.]+)/i);
-  if(m){const b=(m[1]==='-'?-1:1)*Number(m[2]), c=Number(m[3]); const v=c-b; return `Working: x ${m[1]} ${m[2]} = ${c}\nx = ${fmtNum(v)}\nAnswer: x = ${fmtNum(v)}`;}
-  // Common factual answers
-  if(/what is photosynthesis|define photosynthesis/.test(l)) return 'Answer: Photosynthesis is the process by which green plants make food using light energy, carbon dioxide and water, releasing oxygen.';
-  if(/what is an atom|define an atom/.test(l)) return 'Answer: An atom is the smallest unit of an element that retains the chemical identity of that element.';
-  if(/what is a molecule|define a molecule/.test(l)) return 'Answer: A molecule is a group of two or more atoms chemically bonded together.';
-  if(/what is magnification|define magnification/.test(l)) return 'Answer: Magnification is the ratio of image size to actual size.';
-  if(/what is a linear equation|define a linear equation/.test(l)) return 'Answer: A linear equation is an equation in which the highest power of the variable is 1.';
-  if(/pythagorean|pythagoras/.test(l) && /theorem|relationship|state|formula/.test(l)) return 'Answer: For a right-angled triangle, a² + b² = c², where c is the hypotenuse.';
-  if(/what is speed|define speed/.test(l)) return 'Answer: Speed is the distance travelled per unit time. Speed = distance ÷ time.';
-  return null;
-}
-function splitPaperSubquestions(text){
-  const s=cleanQuestionText(text);
-  // Only treat a)/b)/c) as sub-question markers when they occur after punctuation/space,
-  // avoiding false matches inside words and OCR noise.
-  const matches=[...s.matchAll(/(?:^|[.;:])\s*([a-d])\)\s*/gi)];
-  if(!matches.length) return [{label:'',text:s}];
-  const parts=[];
-  for(let i=0;i<matches.length;i++){
-    const marker=matches[i];
-    const start=marker.index + marker[0].lastIndexOf(marker[1]);
-    const next=(i+1<matches.length)?matches[i+1].index:s.length;
-    const body=s.slice(start+2,next).trim();
-    if(body) parts.push({label:marker[1].toLowerCase()+')',text:body});
-  }
-  return parts.length ? parts : [{label:'',text:s}];
-}
-function extractNumberedQuestions(text){
-  const s=cleanQuestionText(text);
-  // OCR often collapses the whole paper into one line. Detect question numbers globally.
-  const re=/(?:^|\s)(?:question\s*)?(\d{1,3})\s*[).:-]\s*/gi;
-  const matches=[...s.matchAll(re)];
-  const qs=[];
-  for(let i=0;i<matches.length;i++){
-    const n=matches[i][1];
-    const start=matches[i].index + matches[i][0].lastIndexOf(matches[i][1]) + n.length;
-    const next=i+1<matches.length ? matches[i+1].index : s.length;
-    const body=s.slice(start,next).trim();
-    if(body) qs.push({n,text:body});
-  }
-  return qs;
-}
-function solveUploadedPaperDirect({subject, grade, prompt}){
-  const marker='EXTRACTED QUESTION PAPER:';
-  const raw=String(prompt||'');
-  const paper=raw.includes(marker)?raw.split(marker).slice(1).join(marker).trim():raw;
-  const qs=extractNumberedQuestions(paper);
-  if(!qs.length) return 'I could not detect numbered questions. Please upload a clearer paper.';
-  const out=[];
-  for(const q of qs){
-    const subs=splitPaperSubquestions(q.text);
-    if(subs.length===1){
-      const ans=directQuestionAnswer(q.text,subject);
-      out.push(`${q.n}. ${ans || 'Answer could not be read or solved confidently. Please upload a clearer image of this question.'}`);
-    } else {
-      out.push(`${q.n}.`);
-      for(const sub of subs){
-        // Include the parent question so sub-parts retain shared values such as r and h.
-        const combined=q.text+' '+sub.text;
-        const ans=directQuestionAnswer(combined,subject);
-        out.push(`   ${sub.label} ${ans || 'Answer could not be read or solved confidently. Please upload a clearer image of this question.'}`);
-      }
-    }
-  }
-  return `DIRECT ANSWERS\n${out.join('\n')}`;
-}
-
-function localStudyAssistant({ subject, grade, mode, focus, prompt }) {
-  const q = String(prompt || '').trim();
-  if (!q) throw new Error('Enter a question or topic first.');
-  const subj = subject || 'General';
-  const g = grade || 'General';
-  const low = q.toLowerCase();
-  const selectedMode = mode || 'answer';
-  if ((selectedMode === 'direct' || selectedMode === 'paper') && /EXTRACTED QUESTION PAPER:/i.test(q)) return solveUploadedPaperDirect({subject:subj, grade:g, prompt:q});
-  const curriculum = curriculumContext(subj, g, focus);
-  const cbe = focus ? `\nCBE focus: ${focus}` : '';
-  const header = `Tusome EduShelf Local Study Assistant\nSubject: ${subj} | Grade: ${g}\nMode: ${selectedMode}${cbe}\n\n${curriculum ? 'CURRICULUM ALIGNMENT\n'+curriculum+'\n\n' : ''}`;
-
-  const pack = (title, definition, concepts, steps, example, realLife, mistakes, check, diagram) => ({title, definition, concepts, steps, example, realLife, mistakes, check, diagram});
-  let lesson;
-
-  if (/linear equation/.test(low)) {
-    lesson = pack(
-      'Linear Equations',
-      'A linear equation is an equation in which the highest power of the variable is 1. The goal is to find the value of the unknown while keeping both sides equal.',
-      ['Variable: the unknown value, often represented by x or y.', 'Coefficient: the number multiplying a variable.', 'Constant: a number without a variable.', 'Equality sign (=): shows that the two sides have the same value.'],
-      ['Simplify each side if necessary.', 'Use the same operation on both sides of the equation.', 'Move the constant term away from the variable.', 'Divide or multiply to make the variable stand alone.', 'Substitute the answer back into the original equation to check it.'],
-      'Solve 2x + 3 = 11:\n1. Subtract 3 from both sides: 2x = 8.\n2. Divide both sides by 2: x = 4.\n3. Check: 2(4) + 3 = 11 ✓',
-      'If a taxi charges a fixed booking fee of KSh 3 and KSh 2 per kilometre, a total of KSh 11 can be represented by 2x + 3 = 11, where x is the number of kilometres.',
-      ['Changing only one side of an equation.', 'Forgetting the negative sign when moving a term.', 'Dividing one term instead of the whole side.', 'Not checking the final answer.'],
-      'Substitute the value of the variable into the original equation. If both sides have the same value, the solution is correct.',
-      'balance'
-    );
-  } else if (/linear function/.test(low)) {
-    lesson = pack(
-      'Linear Functions',
-      'A linear function is commonly written as y = mx + c, where m is the gradient (slope) and c is the y-intercept.',
-      ['Gradient tells how much y changes when x increases by 1.', 'Y-intercept is the value of y when x = 0.', 'The graph of a linear function is a straight line.'],
-      ['Identify m and c.', 'Choose several x-values.', 'Calculate the corresponding y-values.', 'Plot the ordered pairs (x, y).', 'Join the points with a straight line.'],
-      'For y = 2x + 1:\nx = 0 → y = 1\nx = 1 → y = 3\nx = 2 → y = 5.\nThe points lie on one straight line.',
-      'A savings plan that increases by the same amount every week can be represented by a linear function.',
-      ['Confusing gradient with intercept.', 'Using inconsistent scales on a graph.', 'Plotting (x,y) in the wrong order.'],
-      'Pick one plotted point and substitute its x-value into the equation. The calculated y-value should match the graph.',
-      'graph'
-    );
-  } else if (/fraction/.test(low)) {
-    lesson = pack(
-      'Fractions',
-      'A fraction represents a part of a whole or a number divided by another number. In a/b, a is the numerator and b is the denominator, with b ≠ 0.',
-      ['Numerator: parts being considered.', 'Denominator: equal parts making the whole.', 'Proper fraction: numerator is smaller than denominator.', 'Equivalent fractions have the same value.'],
-      ['For addition/subtraction, find a common denominator when denominators differ.', 'Convert to equivalent fractions.', 'Perform the operation on the numerators.', 'Simplify the result where possible.'],
-      'Add 2/7 + 3/7:\nThe denominators are already equal.\n2/7 + 3/7 = 5/7.',
-      'If 2 out of 7 equal pieces of a cake are eaten and another 3 out of 7 are eaten, 5/7 of the cake has been eaten.',
-      ['Adding denominators when adding fractions.', 'Forgetting to find a common denominator.', 'Failing to simplify the final answer.'],
-      'Estimate whether the fraction is reasonable. For example, adding two positive fractions should not produce a negative answer.',
-      'fraction'
-    );
-  } else if (/magnification/.test(low)) {
-    lesson = pack(
-      'Magnification',
-      'Magnification compares the size of an image with the actual size of the object.',
-      ['Magnification has no unit.', 'Image size and actual size must be in the same units before dividing.', 'A magnification greater than 1 means the image is larger than the actual object.'],
-      ['Write the formula: Magnification = image size ÷ actual size.', 'Convert both measurements to the same unit.', 'Substitute the values.', 'Calculate and state the magnification.'],
-      'If an image is 30 mm long and the actual object is 5 mm long:\nMagnification = 30 ÷ 5 = 6×.',
-      'Microscopes produce enlarged images so that small biological structures can be observed more easily.',
-      ['Mixing centimetres and millimetres.', 'Reversing image size and actual size.', 'Adding the two measurements instead of dividing.'],
-      'Multiply actual size by magnification. The result should equal the image size.',
-      'magnification'
-    );
-  } else if (/photosynthesis/.test(low)) {
-    lesson = pack(
-      'Photosynthesis',
-      'Photosynthesis is the process by which green plants use light energy to make glucose from carbon dioxide and water. Chlorophyll captures light energy, and oxygen is released.',
-      ['Raw materials: carbon dioxide and water.', 'Energy source: light.', 'Pigment: chlorophyll.', 'Main food product: glucose.', 'Oxygen is released as a by-product.'],
-      ['Light is absorbed by chlorophyll.', 'Roots absorb water.', 'Carbon dioxide enters mainly through stomata.', 'The plant uses light energy to form glucose.', 'Oxygen is released.'],
-      'Word equation:\nCarbon dioxide + water —light/chlorophyll→ glucose + oxygen.',
-      'Photosynthesis provides food for plants and is the starting point for much of the energy available in food chains.',
-      ['Saying plants obtain food from the soil.', 'Leaving out light or chlorophyll.', 'Confusing respiration with photosynthesis.'],
-      'Ask: What are the raw materials, what provides energy, and what products are formed?',
-      'photosynthesis'
-    );
-  } else if (/\b(atom|molecule)s?\b/.test(low)) {
-    lesson = pack(
-      'Atoms and Molecules',
-      'An atom is the smallest unit of an element that retains the chemical identity of that element. A molecule consists of two or more atoms chemically joined together.',
-      ['Atoms contain protons, neutrons and electrons.', 'Elements contain one type of atom.', 'A molecule may contain atoms of the same element or different elements.', 'Water (H₂O) contains hydrogen and oxygen atoms.'],
-      ['Identify the element or compound.', 'Count the atoms shown in a formula.', 'Distinguish individual atoms from chemically joined groups.', 'Use the chemical formula to communicate composition.'],
-      'H₂O has 2 hydrogen atoms and 1 oxygen atom in each molecule.',
-      'Understanding atoms and molecules helps explain materials, chemical reactions and everyday substances such as water, oxygen and carbon dioxide.',
-      ['Calling a molecule a single atom.', 'Ignoring the small number (subscript) in a chemical formula.', 'Assuming every molecule is a compound.'],
-      'Count the symbols and subscripts in the formula and check whether the description matches.',
-      'atoms'
-    );
-  } else if (/pythagoras|pythagorean/.test(low)) {
-    lesson = pack(
-      'Pythagorean Relationship',
-      'In a right-angled triangle, the square of the hypotenuse equals the sum of the squares of the other two sides: a² + b² = c².',
-      ['Hypotenuse: longest side, opposite the right angle.', 'The relationship applies to right-angled triangles.', 'The side c represents the hypotenuse in the standard formula.'],
-      ['Identify the right angle.', 'Identify the hypotenuse.', 'Write a² + b² = c².', 'Substitute known lengths.', 'Solve for the unknown and check that the answer is positive.'],
-      'If a = 3 and b = 4:\nc² = 3² + 4² = 9 + 16 = 25\nc = 5.',
-      'The relationship can be used to calculate a missing distance when two sides of a right-angled triangle are known.',
-      ['Using the wrong side as the hypotenuse.', 'Forgetting to square the lengths.', 'Stopping at c² instead of finding c.'],
-      'Check that the longest side is the hypotenuse and that a² + b² equals c².',
-      'pythagoras'
-    );
-  } else if (/speed|distance|time/.test(low)) {
-    lesson = pack(
-      'Speed, Distance and Time',
-      'Speed describes how quickly distance is covered. The basic relationship is speed = distance ÷ time.',
-      ['Speed = distance ÷ time.', 'Distance = speed × time.', 'Time = distance ÷ speed.', 'Units must be consistent.'],
-      ['Identify what is known and what is required.', 'Choose the correct formula.', 'Convert units if necessary.', 'Substitute the values.', 'Calculate and include the correct unit.'],
-      'A car travels 120 km in 2 hours:\nSpeed = 120 ÷ 2 = 60 km/h.',
-      'Speed calculations are used in transport, athletics, travel planning and estimating arrival times.',
-      ['Mixing minutes and hours.', 'Using the wrong formula.', 'Leaving out units.'],
-      'Check using the related formula. For example, speed × time should give distance.',
-      'speed'
-    );
-  } else if (/area of (a )?circle|circle/.test(low)) {
-    lesson = pack(
-      'Circles and Area',
-      'The area of a circle is the amount of surface enclosed by the circle. The formula is A = πr², where r is the radius.',
-      ['Radius: distance from the centre to the circumference.', 'Diameter: distance across the circle through its centre.', 'Diameter = 2 × radius.', 'Use the value of π required by the question, commonly 22/7 or 3.142.'],
-      ['Identify the radius.', 'If diameter is given, divide it by 2.', 'Use A = πr².', 'Substitute and calculate.', 'Give the answer in square units.'],
-      'If r = 7 cm:\nA = 22/7 × 7² = 154 cm².',
-      'Area of a circle is useful when finding the surface covered by round objects such as circular gardens, plates or tanks.',
-      ['Using diameter as r.', 'Forgetting to square the radius.', 'Writing cm instead of cm².'],
-      'Check that the final unit is squared and compare the size with the circle radius.',
-      'circle'
-    );
-  } else {
-    lesson = pack(
-      q,
-      `This topic should be understood by connecting the main idea to a definition, key concepts, an example and an application. For this local assistant, a topic-specific explanation is available when the topic matches its built-in study guides.`,
-      ['Identify the important terms in the question.', 'Separate facts, rules, formulas and examples.', 'Connect the concept to something familiar.', 'Use practice to test understanding.'],
-      ['Read the question carefully.', 'Identify what is being asked.', 'Recall the relevant rule or concept.', 'Work through an example step by step.', 'Check the result and explain it in your own words.'],
-      `Study example:\nStart with a simple example related to “${q}”, then change one value or condition and solve again.`,
-      'Try to connect the topic to an everyday situation, school activity or observation.',
-      ['Memorising without understanding.', 'Skipping working in calculations.', 'Not checking whether the final answer is reasonable.'],
-      'Explain the idea in one or two sentences without looking at your notes, then solve a new example.',
-      'study'
-    );
+  const parts = [{ text: `${system}\n\n${userPrompt}` }];
+  if (file?.data && file?.mimeType) {
+    const mime = String(file.mimeType).toLowerCase();
+    const allowed = ['application/pdf','image/png','image/jpeg','image/webp','image/heic','image/heif'];
+    if (!allowed.includes(mime)) throw new Error('Upload a PDF or image (PNG, JPG, WEBP, HEIC, or HEIF).');
+    const raw = String(file.data).replace(/^data:[^;]+;base64,/, '');
+    const bytes = Math.floor(raw.length * 3 / 4);
+    if (bytes > 12 * 1024 * 1024) throw new Error('That file is too large. Please upload a file smaller than 12 MB.');
+    parts.push({ inline_data: { mime_type: mime, data: raw } });
   }
 
-  let body = `📘 ${lesson.title}\n\nDEFINITION / MAIN IDEA\n${lesson.definition}\n\nKEY CONCEPTS\n${lesson.concepts.map((x,i)=>`${i+1}. ${x}`).join('\n')}\n\nSTEP-BY-STEP METHOD\n${lesson.steps.map((x,i)=>`${i+1}. ${x}`).join('\n')}\n\nWORKED EXAMPLE\n${lesson.example}\n\nREAL-LIFE APPLICATION\n${lesson.realLife}\n\nCOMMON MISTAKES TO AVOID\n${lesson.mistakes.map(x=>'• '+x).join('\n')}\n\nCHECK YOUR UNDERSTANDING\n${lesson.check}\n\n[DIAGRAM:${lesson.diagram}]\n\nQUICK SUMMARY\nRemember the definition, the main steps, the worked example and how to check your answer.`;
-
-  if (selectedMode === 'notes') {
-    body += `\n\nREVISION NOTES\n• Learn the definition and key terms.\n• Write the main formula or process from memory.\n• Review the worked example.\n• Create one example of your own.\n• Explain the topic aloud in simple words.`;
-  } else if (selectedMode === 'practice') {
-    body += `\n\nPRACTICE QUESTIONS\n1. Define the main concept in your own words.\n2. State two important facts or rules about it.\n3. Solve or explain a similar example.\n4. Give one real-life application.\n5. Explain how you would check your answer.\n\nTry the questions before asking for the answers.`;
-  } else if (selectedMode === 'summary') {
-    body = `📌 SUMMARY — ${lesson.title}\n\n${lesson.definition}\n\nKEY POINTS\n${lesson.concepts.slice(0,4).map(x=>'• '+x).join('\n')}\n\nMETHOD\n${lesson.steps.slice(0,4).map((x,i)=>`${i+1}. ${x}`).join('\n')}\n\nEXAMPLE\n${lesson.example}\n\n[DIAGRAM:${lesson.diagram}]\n\nKEY TAKEAWAY\n${lesson.check}`;
-  } else if (selectedMode === 'lesson') {
-    body += `\n\nTEACHING / CBE EXTENSION\n• Learning intention: Learners explain and apply the concept.\n• Suggested inquiry: What changes when one value or condition changes?\n• Learner activity: Work in pairs, explain the method, then compare solutions.\n• Assessment: Observe working, questioning, explanation and application.\n• Differentiation: Give guided examples to learners who need support and extension problems to fast learners.`;
-  } else if (selectedMode === 'assessment') {
-    body += `\n\nASSESSMENT IDEAS\n1. Recall: define the key concept.\n2. Application: solve a new example.\n3. Reasoning: explain why the method works.\n4. Transfer: apply the idea to a real-life situation.\n\nSimple 4-level rubric:\n4 — Accurate, clear and independently explained.\n3 — Mostly accurate with minor errors.\n2 — Partial understanding; needs guidance.\n1 — Beginning understanding; needs substantial support.`;
-  } else if (selectedMode === 'inquiry') {
-    body += `\n\nINQUIRY ACTIVITY\nAsk: What pattern or relationship can you discover?\nPredict: Learners make a prediction before calculating or observing.\nInvestigate: Test at least three examples.\nExplain: Describe the pattern using evidence.\nApply: Create a new example and solve it.`;
-  } else if (selectedMode === 'remediation') {
-    body += `\n\nREMEDIAL SUPPORT\n1. Revisit the key vocabulary.\n2. Use a simpler example with small numbers or familiar situations.\n3. Model one step at a time.\n4. Let the learner explain each step before moving on.\n5. Give two similar questions before increasing difficulty.`;
-  }
-
-  return header + body;
-}
-async function openAIAnswer({subject, grade, mode, focus, prompt}) {
-  const key = process.env.OPENAI_API_KEY;
-  if (!key) return null;
-  const model = process.env.OPENAI_MODEL || 'gpt-5.6-luna';
-  const direct = (mode === 'direct' || mode === 'paper') && /EXTRACTED QUESTION PAPER:/i.test(String(prompt||''));
-  const instructions = direct
-    ? `You are the Tusome EduShelf question-paper solver. Return DIRECT answers. Preserve the original question numbering. For theory, definitions and multiple choice, give the answer directly. For calculations, show only the necessary calculation/working and then the final answer. Do not add long lessons or unnecessary explanations. If a question cannot be read or solved confidently, say exactly which question needs clarification. Subject: ${subject||'General'}; Grade: ${grade||'General'}; CBE focus: ${focus||'not specified'}.`
-    : `You are the Tusome EduShelf study assistant for Kenyan learners. Give accurate, age-appropriate answers aligned to the selected grade and CBE focus. Be clear and useful. Subject: ${subject||'General'}; Grade: ${grade||'General'}; Mode: ${mode||'answer'}; CBE focus: ${focus||'not specified'}.`;
-  const r = await fetch('https://api.openai.com/v1/responses', {
-    method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${key}`},
-    body:JSON.stringify({model,instructions,input:String(prompt||'')})
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+    method: 'POST',
+    headers: { 'x-goog-api-key': apiKey, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ contents: [{ role: 'user', parts }] })
   });
-  const data = await r.json();
-  if (!r.ok) throw new Error(data?.error?.message || `OpenAI request failed (${r.status}).`);
-  const text = data.output_text || (Array.isArray(data.output) ? data.output.flatMap(o=>o.content||[]).map(c=>c.text||'').filter(Boolean).join('\n') : '');
-  if (!text.trim()) throw new Error('The AI returned an empty answer.');
-  return text.trim();
+  const rawResponse = await response.text();
+  let data;
+  try { data = JSON.parse(rawResponse); } catch { throw new Error(`Gemini returned a non-JSON response (${response.status}).`); }
+  if (!response.ok) throw new Error(data?.error?.message || `Gemini request failed (${response.status}).`);
+  const answer = (data.candidates || []).flatMap(c => c.content?.parts || []).map(p => p.text || '').join('\n').trim();
+  if (!answer) throw new Error('Gemini returned no text response.');
+  return answer;
 }
 
 app.post('/api/ai', async (req, res) => {
   try {
-    const body = req.body || {};
-    let answer = null;
-    let provider = 'local';
-    if (process.env.OPENAI_API_KEY) {
-      try { answer = await openAIAnswer(body); provider = 'openai'; }
-      catch (e) { console.warn('OpenAI unavailable; using local fallback:', e.message); }
-    }
-    if (!answer) answer = localStudyAssistant(body);
-    res.json({ ok: true, answer, provider });
+    const answer = await callGemini(req.body || {});
+    res.json({ ok: true, answer });
   } catch (e) {
     console.error('AI error:', e);
-    res.status(502).json({ error: e?.message || 'AI service failed.' });
+    const message = e?.message || 'AI service failed.';
+    const status = /not configured/.test(message) ? 503 : 502;
+    res.status(status).json({ error: message });
   }
 });
 
 app.get('/api/health', async (_req, res) => {
   const required = ['MPESA_CONSUMER_KEY','MPESA_CONSUMER_SECRET','MPESA_SHORTCODE','MPESA_PASSKEY','MPESA_CALLBACK_URL'];
+  const aiConfigured = Boolean(process.env.GEMINI_API_KEY);
   const missing = required.filter(name => !process.env[name]);
-  const hasOpenAI = !!process.env.OPENAI_API_KEY;
   res.json({
-    ok: true, daraja: process.env.MPESA_ENV || 'sandbox', configured: missing.length === 0, missing,
-    ai: { configured: true, provider: hasOpenAI ? 'hybrid-openai-plus-local-fallback' : 'built-in-local-fallback', model: hasOpenAI ? (process.env.OPENAI_MODEL || 'gpt-5.6-luna') : 'built-in-local-study-assistant' }
+    ok: true,
+    daraja: process.env.MPESA_ENV || 'sandbox',
+    configured: missing.length === 0,
+    missing,
+    ai: { configured: aiConfigured, provider: 'Gemini', model: process.env.GEMINI_MODEL || 'gemini-3.8-flash' }
   });
-});
-
-
-async function readNotes() {
-  try { return JSON.parse(await fs.readFile(NOTES_FILE, 'utf8')); }
-  catch { return []; }
-}
-async function writeNotes(items) {
-  await fs.writeFile(NOTES_FILE, JSON.stringify(items, null, 2), 'utf8');
-}
-function safeName(value='note') { return String(value).replace(/[^a-z0-9_-]+/gi, '_').slice(0,80) || 'note'; }
-function makeNoteId() { return 'NOTE_' + Date.now() + '_' + Math.random().toString(36).slice(2,8); }
-function pdfEscape(text) { return String(text).replace(/\\/g,'\\\\').replace(/\(/g,'\\(').replace(/\)/g,'\\)'); }
-function makeSimplePdf(title, meta, content) {
-  const lines=[];
-  const addWrapped=(text,max=88)=>{String(text||'').split(/\r?\n/).forEach(raw=>{if(!raw.trim()){lines.push('');return;}let s=raw.trim();while(s.length>max){let cut=s.lastIndexOf(' ',max);if(cut<20)cut=max;lines.push(s.slice(0,cut));s=s.slice(cut).trim();}lines.push(s);});};
-  lines.push(title); lines.push(meta); lines.push(''); addWrapped('CBE / KICD-aligned supplementary learning note'); lines.push(''); addWrapped(content,88);
-  const pages=[]; const perPage=46; for(let i=0;i<lines.length;i+=perPage) pages.push(lines.slice(i,i+perPage));
-  const objects=[]; const add=o=>{objects.push(o);return objects.length;};
-  const catalog=add(null), pagesObj=add(null), font=add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
-  const pageIds=[];
-  for(const pageLines of pages){let stream='BT\n/F1 11 Tf\n50 790 Td\n'; for(const line of pageLines){stream+=`(${pdfEscape(line)}) Tj\n0 -15 Td\n`;} stream+='ET'; const contentId=add(`<< /Length ${Buffer.byteLength(stream,'latin1')} >>\nstream\n${stream}\nendstream`); const pageId=add(`<< /Type /Page /Parent ${pagesObj} 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 ${font} 0 R >> >> /Contents ${contentId} 0 R >>`); pageIds.push(pageId);}
-  objects[catalog-1]=`<< /Type /Catalog /Pages ${pagesObj} 0 R >>`;
-  objects[pagesObj-1]=`<< /Type /Pages /Kids [${pageIds.map(id=>id+' 0 R').join(' ')}] /Count ${pageIds.length} >>`;
-  let pdf='%PDF-1.4\n'; const offsets=[0]; for(let i=0;i<objects.length;i++){offsets[i+1]=Buffer.byteLength(pdf,'latin1'); pdf+=`${i+1} 0 obj\n${objects[i]}\nendobj\n`;}
-  const xref=Buffer.byteLength(pdf,'latin1'); pdf+=`xref\n0 ${objects.length+1}\n0000000000 65535 f \n`; for(let i=1;i<offsets.length;i++) pdf+=String(offsets[i]).padStart(10,'0')+' 00000 n \n'; pdf+=`trailer\n<< /Size ${objects.length+1} /Root ${catalog} 0 R >>\nstartxref\n${xref}\n%%EOF`;
-  return Buffer.from(pdf,'latin1');
-}
-async function createPdfNote({title, subject, grade, strand, substrand, topic, description, content, source='Tusome EduShelf'}) {
-  const id = makeNoteId(); const filename = `${safeName(title)}_${id}.pdf`; const filepath = path.join(NOTES_DIR, filename);
-  const meta=[subject,grade,topic].filter(Boolean).join(' • ');
-  const full=[strand?`Strand: ${strand}`:'',substrand?`Sub-strand: ${substrand}`:'',description||'',`Prepared by ${source}. This is original supplementary material aligned to the selected curriculum focus; check it against the current official KICD curriculum design.`].filter(Boolean).join('\n');
-  await fs.writeFile(filepath,makeSimplePdf(title||'Learning Notes',meta,full+'\n\n'+String(content||'')));
-  return { id, filename, filepath };
-}
-
-app.get('/api/notes', async (req,res) => {
-  const notes = await readNotes();
-  const status = String(req.query.status || 'approved');
-  res.json({ ok:true, notes: notes.filter(n => status === 'all' ? true : n.status === status).map(({filepath, ...n}) => n) });
-});
-
-app.post('/api/notes/generate', requireAdmin, async (req,res) => {
-  try {
-    const b=req.body||{};
-    if(!b.title||!b.subject||!b.grade||!b.topic||!b.content) return res.status(400).json({error:'Title, subject, grade, topic and content are required.'});
-    const pdf=await createPdfNote(b);
-    const notes=await readNotes();
-    const item={id:pdf.id,title:b.title,subject:b.subject,grade:b.grade,strand:b.strand||'',substrand:b.substrand||'',topic:b.topic,description:b.description||'',price:0,teacher:'Tusome EduShelf system',sourceType:'generated',status:'pending',fileName:pdf.filename,filepath:pdf.filepath,createdAt:new Date().toISOString()};
-    notes.unshift(item); await writeNotes(notes);
-    res.json({ok:true,note:{...item,filepath:undefined},message:'Note generated and submitted for administrator approval.'});
-  } catch(e){ console.error(e); res.status(500).json({error:'Could not generate PDF note.'}); }
-});
-
-app.post('/api/notes/upload', (req,res,next) => {
-  if (!['teacher','admin'].includes(String(req.get('x-user-role') || '').toLowerCase())) return res.status(403).json({error:'Teacher access required to upload notes.'});
-  next();
-}, async (req,res) => {
-  try {
-    const b=req.body||{};
-    if(!b.title||!b.subject||!b.grade||!b.topic||!b.fileBase64) return res.status(400).json({error:'Title, subject, grade, topic and PDF file are required.'});
-    const price=positivePrice(b.price);
-    if(price===null) return res.status(400).json({error:'Teacher-uploaded notes must have a whole-number selling price of at least KES 1.'});
-    const id=makeNoteId(); const filename=`${safeName(b.fileName||b.title)}_${id}.pdf`;
-    const filepath=path.join(NOTES_DIR,filename);
-    const base64=String(b.fileBase64).replace(/^data:application\/pdf;base64,/,'');
-    await fs.writeFile(filepath,Buffer.from(base64,'base64'));
-    const notes=await readNotes();
-    const item={id,title:b.title,subject:b.subject,grade:b.grade,strand:b.strand||'',substrand:b.substrand||'',topic:b.topic,description:b.description||'',price,priceSetBy:'Teacher',priceSetAt:new Date().toISOString(),teacher:b.teacher||'Teacher',sourceType:'uploaded',status:'pending',fileName:filename,filepath,createdAt:new Date().toISOString()};
-    notes.unshift(item); await writeNotes(notes);
-    res.json({ok:true,note:{...item,filepath:undefined},message:'PDF uploaded and submitted for administrator approval.'});
-  } catch(e){ console.error(e); res.status(500).json({error:'Could not upload PDF note.'}); }
-});
-
-app.post('/api/notes/:id/price', requireAdmin, async (req,res) => {
-  const notes=await readNotes();
-  const item=notes.find(n=>n.id===req.params.id);
-  if(!item) return res.status(404).json({error:'Note not found.'});
-  if(item.sourceType!=='generated') return res.status(400).json({error:'Administrator pricing is allowed only for system-generated notes. Teacher-uploaded notes keep the price set by the teacher.'});
-  const price=positivePrice(req.body?.price);
-  if(price===null) return res.status(400).json({error:'Selling price must be a whole number of at least KES 1.'});
-  item.price=price;
-  item.priceSetBy='Administrator';
-  item.priceSetAt=new Date().toISOString();
-  await writeNotes(notes);
-  res.json({ok:true,note:{...item,filepath:undefined}});
-});
-
-app.post('/api/notes/:id/approve', requireAdmin, async (req,res) => {
-  const notes=await readNotes(); const item=notes.find(n=>n.id===req.params.id);
-  if(!item) return res.status(404).json({error:'Note not found.'});
-  if(item.sourceType==='generated' && positivePrice(item.price)===null) return res.status(400).json({error:'Set a selling price before approving this system-generated note.'});
-  if(item.sourceType==='uploaded' && positivePrice(item.price)===null) return res.status(400).json({error:'Teacher-uploaded note must have a valid teacher-set selling price before approval.'});
-  item.status='approved'; item.approvedAt=new Date().toISOString(); await writeNotes(notes);
-  res.json({ok:true,note:{...item,filepath:undefined}});
-});
-app.post('/api/notes/:id/reject', requireAdmin, async (req,res) => {
-  const notes=await readNotes(); const item=notes.find(n=>n.id===req.params.id);
-  if(!item) return res.status(404).json({error:'Note not found.'});
-  item.status='rejected'; item.rejectedAt=new Date().toISOString(); await writeNotes(notes);
-  res.json({ok:true,note:{...item,filepath:undefined}});
-});
-app.delete('/api/notes/:id', requireAdmin, async (req,res) => {
-  const notes=await readNotes(); const item=notes.find(n=>n.id===req.params.id); if(!item)return res.status(404).json({error:'Note not found.'});
-  notes.splice(notes.indexOf(item),1); await writeNotes(notes); try{await fs.unlink(item.filepath)}catch{} res.json({ok:true});
-});
-app.get('/api/notes/:id/download', async (req,res) => {
-  const notes=await readNotes(); const item=notes.find(n=>n.id===req.params.id);
-  if(!item || item.status!=='approved') return res.status(404).json({error:'Approved note not found.'});
-  res.download(item.filepath,item.fileName);
 });
 
 app.post('/api/payments/stkpush', async (req, res) => {
   try {
     const { materialId, title, amount, phone } = req.body || {};
-    if (!materialId || !title) return res.status(400).json({ error: 'Material and title are required.' });
-    const noteId=String(materialId).replace(/^NOTE_/,'');
-    const notes=await readNotes();
-    const note=notes.find(n=>String(n.id)===noteId);
-    if(!note || note.status!=='approved') return res.status(404).json({error:'Approved note not found.'});
-    const numericAmount=Number(note.price);
-    if(positivePrice(numericAmount)===null) return res.status(400).json({error:'This note has no valid administrator-set price.'});
-    if(Number(amount)!==numericAmount) return res.status(400).json({error:'Payment amount does not match the administrator-set note price.'});
+    const numericAmount = Math.round(Number(amount));
+    if (!materialId || !title || !Number.isFinite(numericAmount) || numericAmount < 1)
+      return res.status(400).json({ error: 'Invalid material or amount.' });
 
     const normalizedPhone = normalizePhone(phone);
     const shortcode = cfg('MPESA_SHORTCODE');

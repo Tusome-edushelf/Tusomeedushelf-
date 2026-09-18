@@ -60,12 +60,79 @@ async function getAccessToken() {
   return data.access_token;
 }
 
+
+
+function curriculumContext(subject, grade, focus) {
+  const g = String(grade || '').trim();
+  const subj = String(subject || '').trim();
+  const f = String(focus || '').trim();
+  const known = {
+    '7|Mathematics': 'KICD Grade 7 Mathematics includes Numbers, Algebra, Measurements, Geometry, and Data Handling and Probability. Algebra includes Algebraic Expressions, Linear Equations and Linear Inequalities. Measurements include Pythagorean Relationship, Length, Area, Volume and Capacity, Time, Distance and Speed, Temperature, and Money.',
+    '8|Mathematics': 'KICD Grade 8 Mathematics includes Numbers, Algebra, Measurements, Geometry, and Data Handling and Probability. Algebra includes Algebraic Expressions and Linear Equations. Measurements include Circles, Area, and Money; Geometry includes Geometrical Constructions, Coordinates and Graphs, Scale Drawing, and Common Solids.',
+    '9|Mathematics': 'Use the KICD Grade 9 Mathematics curriculum context where available. Do not invent a strand or learning outcome; if a specific outcome is unknown, say so and provide a general explanation.'
+  };
+  const base = known[`${g}|${subj}`] || '';
+  return [base, f ? `Requested CBE focus: ${f}` : ''].filter(Boolean).join('\\n');
+}
+
+async function callOpenAI({ subject, grade, mode, focus, prompt }) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error('OPENAI_API_KEY is not configured on the server.');
+  const model = process.env.OPENAI_MODEL || 'gpt-5.6-luna';
+  const curriculum = curriculumContext(subject, grade, focus);
+  const system = `You are Tusome EduShelf AI Study Assistant for Kenyan learners and teachers.\n\n` +
+    `Give clear, age-appropriate educational help. Respect the selected grade and subject. ` +
+    `When CBE/KICD context is supplied, use it as grounding and do not invent official KICD wording. ` +
+    `If exact curriculum information is not supplied, clearly distinguish general teaching guidance from official curriculum facts. ` +
+    `Mode: ${mode || 'answer'}.\nSubject: ${subject || 'General'}.\nGrade: ${grade || 'General'}.\n` +
+    (curriculum ? `Curriculum context:\n${curriculum}\n` : '');
+  const user = String(prompt || '').trim();
+  if (!user) throw new Error('Enter a question or topic first.');
+
+  const response = await fetch('https://api.openai.com/v1/responses', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model,
+      instructions: system,
+      input: user,
+      max_output_tokens: 1200
+    })
+  });
+  const raw = await response.text();
+  let data;
+  try { data = JSON.parse(raw); } catch { throw new Error(`OpenAI returned a non-JSON response (${response.status}).`); }
+  if (!response.ok) throw new Error(data?.error?.message || `OpenAI request failed (${response.status}).`);
+  const answer = data.output_text || (data.output || []).flatMap(x => x.content || []).map(x => x.text || '').join('\\n').trim();
+  if (!answer) throw new Error('OpenAI returned no text response.');
+  return answer;
+}
+
+app.post('/api/ai', async (req, res) => {
+  try {
+    const answer = await callOpenAI(req.body || {});
+    res.json({ ok: true, answer });
+  } catch (e) {
+    console.error('AI error:', e);
+    const message = e?.message || 'AI service failed.';
+    const status = /not configured/.test(message) ? 503 : 502;
+    res.status(status).json({ error: message });
+  }
+});
+
 app.get('/api/health', async (_req, res) => {
+  const required = ['MPESA_CONSUMER_KEY','MPESA_CONSUMER_SECRET','MPESA_SHORTCODE','MPESA_PASSKEY','MPESA_CALLBACK_URL'];
+  const aiConfigured = Boolean(process.env.OPENAI_API_KEY);
+  const missing = required.filter(name => !process.env[name]);
   res.json({
     ok: true,
     daraja: process.env.MPESA_ENV || 'sandbox',
-    configured: Boolean(process.env.MPESA_CONSUMER_KEY && process.env.MPESA_CONSUMER_SECRET &&
-      process.env.MPESA_SHORTCODE && process.env.MPESA_PASSKEY && process.env.MPESA_CALLBACK_URL)
+    configured: missing.length === 0,
+    missing,
+    ai: { configured: aiConfigured, model: process.env.OPENAI_MODEL || 'gpt-5.6-luna' }
   });
 });
 
@@ -175,4 +242,4 @@ app.get('/api/payments/status/:checkoutRequestId', async (req, res) => {
 
 app.use(express.static(__dirname));
 
-app.listen(PORT, '0.0.0.0', () => console.log(`Tusome EduShelf running on port ${PORT}`));
+app.listen(PORT, () => console.log(`Tusome EduShelf running at http://localhost:${PORT}`));

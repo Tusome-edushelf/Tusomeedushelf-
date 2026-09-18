@@ -116,7 +116,7 @@ footer{text-align:center;padding:30px;color:#687386}
     </div>
   </div>
 
-  <form onsubmit="askAI(event)" style="max-width:800px">
+  <form id="aiForm" onsubmit="askAI(event)" style="max-width:800px">
     <label>Subject</label>
     <select id="aiSubject">
       <option>Mathematics</option><option>English</option><option>Kiswahili</option>
@@ -159,10 +159,16 @@ footer{text-align:center;padding:30px;color:#687386}
       <option value="remediation">Create Remedial Support</option>
     </select>
 
+    <label>Upload a question paper or learning file (optional)</label>
+    <input id="aiFile" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.txt" onchange="prepareAIFile(this)" style="margin:8px 0">
+    <div id="aiFileStatus" class="notice" style="display:none"></div>
+    <div id="aiFilePreview" style="display:none;margin:10px 0"></div>
+
     <label>Your question or topic</label>
-    <textarea id="aiPrompt" rows="6" required placeholder="Example: Explain linear functions and give me two examples."></textarea>
+    <textarea id="aiPrompt" rows="6" required placeholder="Example: Explain linear functions and give me two examples. Or upload a question paper and ask the AI to solve it."></textarea>
 
     <button class="btn primary" type="submit">✨ Ask AI</button>
+    <button class="btn" type="button" onclick="solveUploadedPaper()">📝 Solve Uploaded Paper</button>
   </form>
 
   <div id="aiResult" class="card" style="max-width:800px;margin:20px auto;display:none">
@@ -474,6 +480,52 @@ function diagramSVG(type){const c='xmlns="http://www.w3.org/2000/svg" viewBox="0
 function renderAIResponse(text,targetId='aiAnswer'){const target=document.getElementById(targetId);if(!target)return;const marker=/\[DIAGRAM:([a-z-]+)\]/g;let out='',last=0,m;while((m=marker.exec(text))){out+=formatAIText(text.slice(last,m.index));out+=`<div class="ai-diagram">${diagramSVG(m[1])}</div>`;last=marker.lastIndex}out+=formatAIText(text.slice(last));target.innerHTML=out}
 function formatAIText(t){let x=escapeAI(t);x=x.replace(/^(DEFINITION \/ MAIN IDEA|KEY CONCEPTS|STEP-BY-STEP METHOD|WORKED EXAMPLE|REAL-LIFE APPLICATION|COMMON MISTAKES TO AVOID|CHECK YOUR UNDERSTANDING|QUICK SUMMARY|REVISION NOTES|PRACTICE QUESTIONS|TEACHING \/ CBE EXTENSION|ASSESSMENT IDEAS|INQUIRY ACTIVITY|REMEDIAL SUPPORT|KEY POINTS|METHOD|EXAMPLE|KEY TAKEAWAY)/gm,'<strong>$1</strong>');return '<div class="ai-section">'+x.replace(/\n/g,'<br>')+'</div>'}
 function copyAI(){navigator.clipboard?.writeText(document.getElementById('aiAnswer').textContent);alert('Response copied.')}
+let uploadedAIText='';
+let uploadedAIFileName='';
+let uploadedAIDataUrl='';
+
+function setAIFileStatus(message, kind='notice'){const el=document.getElementById('aiFileStatus');if(!el)return;el.style.display='block';el.className=kind;el.textContent=message;}
+
+async function prepareAIFile(input){
+  const file=input?.files?.[0]; if(!file)return;
+  uploadedAIText=''; uploadedAIFileName=file.name; uploadedAIDataUrl='';
+  const preview=document.getElementById('aiFilePreview'); preview.style.display='block'; preview.innerHTML='';
+  try{
+    if(file.type.startsWith('image/')){
+      uploadedAIDataUrl=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=reject;r.readAsDataURL(file)});
+      preview.innerHTML=`<img src="${uploadedAIDataUrl}" alt="Uploaded question paper" style="max-width:100%;max-height:360px;border-radius:8px">`;
+      setAIFileStatus('🔎 Reading the question paper image…');
+      if(window.Tesseract){
+        const result=await Tesseract.recognize(uploadedAIDataUrl,'eng',{logger:m=>{if(m.status==='recognizing text'&&m.progress) setAIFileStatus(`🔎 Reading image… ${Math.round(m.progress*100)}%`)}});
+        uploadedAIText=result.data.text.trim();
+      }
+    } else if(file.type==='text/plain' || file.name.toLowerCase().endsWith('.txt')){
+      uploadedAIText=await file.text();
+    } else if(file.type==='application/pdf' || file.name.toLowerCase().endsWith('.pdf')){
+      setAIFileStatus('📄 Reading PDF text…');
+      const pdfjs=await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs');
+      pdfjs.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs';
+      const buf=await file.arrayBuffer(); const pdf=await pdfjs.getDocument({data:buf}).promise; let all=[];
+      for(let i=1;i<=pdf.numPages;i++){const page=await pdf.getPage(i);const c=await page.getTextContent();all.push(c.items.map(x=>x.str).join(' '));setAIFileStatus(`📄 Reading PDF… page ${i} of ${pdf.numPages}`)}
+      uploadedAIText=all.join('\n').trim();
+      preview.innerHTML=`<div class="material">📄 <b>${escapeAI(file.name)}</b><br><small>${pdf.numPages} page(s) read</small></div>`;
+    } else throw new Error('Use a PDF, image, or TXT question paper.');
+    if(!uploadedAIText) throw new Error('No readable text was found. For a scanned PDF, upload clear page images or type the question.');
+    const chars=uploadedAIText.length;
+    setAIFileStatus(`✅ ${file.name} read successfully (${chars} characters). The assistant can now use the questions.`, 'success');
+    document.getElementById('aiPrompt').value=`Please solve the questions in the uploaded ${file.name}. Show each question, explain the method step by step, give the final answer, and point out any important formula or concept.\n\nEXTRACTED QUESTION PAPER:\n${uploadedAIText.slice(0,30000)}`;
+  }catch(err){setAIFileStatus('❌ '+(err.message||'Could not read this file.'),'notice');}
+}
+
+async function solveUploadedPaper(){
+  if(!uploadedAIText){const input=document.getElementById('aiFile'); if(input?.files?.[0]) await prepareAIFile(input);}
+  if(!uploadedAIText){alert('Please upload a PDF, image, or TXT question paper first.');return;}
+  document.getElementById('aiMode').value='answer';
+  const prompt=document.getElementById('aiPrompt');
+  if(!prompt.value.trim()) prompt.value=`Solve the uploaded question paper step by step. Show each question, working, final answer, and a short explanation.\n\n${uploadedAIText.slice(0,30000)}`;
+  document.querySelector('#aiForm button[type="submit"]')?.click();
+}
+
 async function checkAIStatus(){const el=document.getElementById('aiStatus');if(!el)return;try{const r=await fetch('/api/health');const d=await r.json();const ok=!!(d.ai&&d.ai.configured);el.className=ok?'success':'notice';el.textContent=ok?'🟢 AI service connected • '+(d.ai.provider||'local')+' • '+(d.ai.model||'built-in'):'🟠 AI service is not configured.'}catch(e){el.className='notice';el.textContent='🔴 EduShelf server is not running. Start it with: npm install && npm start'}}
 async function askAI(e){e.preventDefault();const subject=document.getElementById('aiSubject').value,grade=document.getElementById('aiGrade').value,mode=document.getElementById('aiMode').value,focus=document.getElementById('cbeFocus').value,prompt=document.getElementById('aiPrompt').value.trim(),box=document.getElementById('aiResult'),answer=document.getElementById('aiAnswer'),button=e.target.querySelector('button[type="submit"]');if(!prompt){alert('Enter a question or topic first.');return}button.disabled=true;button.textContent='⏳ Thinking...';answer.innerHTML='<div class="ai-section">The AI is preparing your response...</div>';box.style.display='block';try{const res=await fetch('/api/ai',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({subject,grade,mode,focus,prompt})});const data=await res.json();if(!res.ok)throw new Error(data.error||'The AI service could not respond.');renderAIResponse(data.answer);logActivity('Used local AI Study Assistant: '+mode+' / '+subject+' / '+grade);logNotification('AI response generated for '+subject+' ('+grade+').');refreshProgress();renderNotifications()}catch(err){renderAIResponse('Sorry, the AI service is not available right now.\n\n'+err.message)}finally{button.disabled=false;button.textContent='✨ Ask AI'}}
 async function loadCurriculumCatalogue(){const box=document.getElementById('curriculumCatalogue');if(!box)return;box.textContent='Loading curriculum records...';try{const grade=document.getElementById('catGrade').value,subject=document.getElementById('catSubject').value;const r=await fetch('/api/curriculum?'+new URLSearchParams({grade,subject}));const data=await r.json();box.innerHTML=data.records.length?data.records.map(x=>`<div class="material"><div><b>${x.grade} • ${x.subject}</b><br><span class="tag">${x.strand}</span> <span class="tag">${x.substrand}</span><br><small>${(x.learningOutcomes||[]).join(' • ')||'Structure record — exact learning outcomes not yet imported for this entry.'}</small></div><span class="tag">${(x.learningOutcomes||[]).length} outcomes</span></div>`).join(''):'<p>No imported record matches this selection yet.</p>'}catch(e){box.textContent='Start the EduShelf server to load curriculum records.'}}
@@ -501,5 +553,7 @@ async function generateNotePDF(e){e.preventDefault();if(localStorage.getItem('tu
 async function uploadNotePDF(){const f=document.getElementById('noteUploadFile')?.files?.[0];if(!f){alert('Choose a PDF first.');return;}if(f.type!=='application/pdf'){alert('Please choose a PDF file.');return;}const title=prompt('Enter the note title:',f.name.replace(/\.pdf$/i,''));if(!title)return;const subject=prompt('Subject / Learning Area:','Mathematics')||'Other';const grade=prompt('Grade:','Grade 8')||'Grade 8';const topic=prompt('Topic:','Revision Notes')||'Revision Notes';const price=Number(prompt('Set your selling price in KES (teacher-set):','50'));if(!Number.isInteger(price)||price<1){alert('Enter a whole-number selling price of at least KES 1.');return;}const reader=new FileReader();reader.onload=async()=>{try{const r=await fetch('/api/notes/upload',{method:'POST',headers:{'Content-Type':'application/json','x-user-role':localStorage.getItem('tusomeRole')||''},body:JSON.stringify({title,subject,grade,topic,price,fileName:f.name,fileBase64:reader.result,teacher:localStorage.getItem('tusomeName')||'Teacher'})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Upload failed.');alert('PDF uploaded with your teacher-set price and submitted for administrator approval.');}catch(e){alert(e.message)}};reader.readAsDataURL(f);}
 renderMaterials();renderTeacher();renderAdmin();refreshProgress();checkAIStatus();
 </script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs" type="module" id="pdfjsModule"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 </body>
 </html>

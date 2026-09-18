@@ -51,3 +51,18 @@ Open `/api/health` to see whether Daraja and AI are configured. The response nev
 
 ## Gemini AI
 The Study Assistant uses the Gemini API through the server-side `GEMINI_API_KEY` environment variable. The default model is `gemini-3.8-flash`. The AI Assistant also accepts PDF/image question papers and returns direct answers while preserving visible numbering. Do not put the Gemini key in `index.html` or send it in chat.
+
+
+## Gemini automatic fallback
+The server now retries transient Gemini errors (including 429 and 5xx responses) with exponential backoff and then tries the configured fallback models. The default chain is:
+- gemini-3.8-flash
+- gemini-3.7-flash
+- gemini-3.6-flash
+- gemini-3.5-flash
+
+Optional environment variables:
+- GEMINI_FALLBACK_MODELS
+- GEMINI_RETRIES (default 2 retries per model)
+- GEMINI_RETRY_DELAY_MS (default 1500 ms)
+
+This does not bypass quotas. If the project has exhausted its quota, changing models may still fail; the app will report that clearly.

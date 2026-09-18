@@ -78,7 +78,10 @@ function curriculumContext(subject, grade, focus) {
 async function callGemini({ subject, grade, mode, focus, prompt, file }) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('GEMINI_API_KEY is not configured on the server.');
-  const model = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
+  const primaryModel = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
+  const fallbackModels = (process.env.GEMINI_FALLBACK_MODELS || 'gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash')
+    .split(',').map(x => x.trim()).filter(Boolean);
+  const models = [...new Set([primaryModel, ...fallbackModels])];
   const curriculum = curriculumContext(subject, grade, focus);
   const paperMode = mode === 'paper';
   const system = `You are Tusome EduShelf AI Study Assistant for Kenyan learners and teachers.\n` +
@@ -106,18 +109,51 @@ async function callGemini({ subject, grade, mode, focus, prompt, file }) {
     parts.push({ inline_data: { mime_type: mime, data: raw } });
   }
 
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
-    method: 'POST',
-    headers: { 'x-goog-api-key': apiKey, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ contents: [{ role: 'user', parts }] })
-  });
-  const rawResponse = await response.text();
-  let data;
-  try { data = JSON.parse(rawResponse); } catch { throw new Error(`Gemini returned a non-JSON response (${response.status}).`); }
-  if (!response.ok) throw new Error(data?.error?.message || `Gemini request failed (${response.status}).`);
-  const answer = (data.candidates || []).flatMap(c => c.content?.parts || []).map(p => p.text || '').join('\n').trim();
-  if (!answer) throw new Error('Gemini returned no text response.');
-  return answer;
+  const transientStatuses = new Set([408, 429, 500, 502, 503, 504]);
+  const maxRetriesPerModel = Math.max(1, Math.min(4, Number(process.env.GEMINI_RETRIES || 2)));
+  const baseDelayMs = Math.max(500, Number(process.env.GEMINI_RETRY_DELAY_MS || 1500));
+  let lastError = null;
+
+  for (const model of models) {
+    for (let attempt = 0; attempt <= maxRetriesPerModel; attempt++) {
+      try {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+          method: 'POST',
+          headers: { 'x-goog-api-key': apiKey, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ role: 'user', parts }] })
+        });
+        const rawResponse = await response.text();
+        let data;
+        try { data = JSON.parse(rawResponse); }
+        catch { throw new Error(`Gemini returned a non-JSON response (${response.status}).`); }
+
+        if (!response.ok) {
+          const message = data?.error?.message || `Gemini request failed (${response.status}).`;
+          const err = new Error(message);
+          err.status = response.status;
+          throw err;
+        }
+
+        const answer = (data.candidates || []).flatMap(c => c.content?.parts || []).map(p => p.text || '').join('\n').trim();
+        if (!answer) throw new Error('Gemini returned no text response.');
+        return answer;
+      } catch (err) {
+        lastError = err;
+        const status = Number(err?.status || 0);
+        const transient = transientStatuses.has(status) || /high demand|temporarily|unavailable|overloaded|rate limit|resource exhausted/i.test(err?.message || '');
+        if (!transient) throw err;
+        if (attempt < maxRetriesPerModel) {
+          const delay = Math.min(15000, baseDelayMs * (2 ** attempt)) + Math.floor(Math.random() * 400);
+          console.warn(`Gemini ${model} is busy (attempt ${attempt + 1}/${maxRetriesPerModel + 1}). Retrying in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        } else {
+          console.warn(`Gemini ${model} exhausted retries; trying the next fallback model.`);
+        }
+      }
+    }
+  }
+
+  throw new Error(`Gemini is temporarily busy. Automatic fallback was attempted across ${models.length} models. Please try again shortly. Last error: ${lastError?.message || 'unknown error'}`);
 }
 
 app.post('/api/ai', async (req, res) => {
@@ -141,7 +177,7 @@ app.get('/api/health', async (_req, res) => {
     daraja: process.env.MPESA_ENV || 'sandbox',
     configured: missing.length === 0,
     missing,
-    ai: { configured: aiConfigured, provider: 'Gemini', model: process.env.GEMINI_MODEL || 'gemini-3.8-flash' }
+    ai: { configured: aiConfigured, provider: 'Gemini', model: process.env.GEMINI_MODEL || 'gemini-3.8-flash', fallbackModels: (process.env.GEMINI_FALLBACK_MODELS || 'gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash').split(',').map(x => x.trim()).filter(Boolean) }
   });
 });
 

@@ -90,6 +90,58 @@ function curriculumContext(subject, grade, focus) {
   return [base, f ? `Requested CBE focus: ${f}` : ''].filter(Boolean).join('\\n');
 }
 
+
+function cleanQuestionText(s){return String(s||'').replace(/\s+/g,' ').trim();}
+function safeArithmetic(expr){
+  let e=String(expr).replace(/,/g,'').replace(/×/g,'*').replace(/÷/g,'/').replace(/−/g,'-').replace(/²/g,'**2').replace(/\^/g,'**');
+  if(!/^[0-9+\-*/().%\s*]+$/.test(e)) return null;
+  try{const v=Function('"use strict"; return ('+e+')')(); return Number.isFinite(v)?v:null;}catch{return null;}
+}
+function directQuestionAnswer(q, subject='General'){
+  const x=cleanQuestionText(q), l=x.toLowerCase();
+  // Common numerical forms
+  let m=l.match(/(?:calculate|find|evaluate|work out|what is)\s*[:=]?\s*([0-9]+(?:\s*[+\-×x*/÷]\s*[0-9]+)+)\s*\??$/i);
+  if(m){const v=safeArithmetic(m[1]); if(v!==null) return `Answer: ${v}`;}
+  m=l.match(/(?:solve|find\s+x)\s*[:=]?\s*([0-9.]+)x\s*([+\-])\s*([0-9.]+)\s*=\s*([0-9.]+)/i);
+  if(m){const a=Number(m[1]), b=(m[2]==='-'?-1:1)*Number(m[3]), c=Number(m[4]); const v=(c-b)/a; return `x = ${Number.isInteger(v)?v:v.toFixed(4).replace(/0+$/,'').replace(/\.$/,'')}`;}
+  m=l.match(/(?:solve|find\s+x)\s*[:=]?\s*x\s*([+\-])\s*([0-9.]+)\s*=\s*([0-9.]+)/i);
+  if(m){const b=(m[1]==='-'?-1:1)*Number(m[2]), c=Number(m[3]); return `x = ${c-b}`;}
+  m=l.match(/(?:speed)\s*=\s*([0-9.]+)\s*(?:km|m)\s*(?:in|\/)\s*([0-9.]+)\s*(?:hours?|h)/i);
+  if(m)return `Speed = ${Number(m[1])/Number(m[2])} km/h`;
+  m=l.match(/(?:image size|image)\s*=\s*([0-9.]+)\s*(?:mm|cm).*?(?:actual size|actual)\s*=\s*([0-9.]+)\s*(?:mm|cm)/i);
+  if(m)return `Magnification = image size ÷ actual size = ${Number(m[1])/Number(m[2])}×`;
+  // Direct factual answers commonly encountered in school papers
+  if(/what is photosynthesis|define photosynthesis/.test(l)) return 'Photosynthesis is the process by which green plants use light energy to make glucose from carbon dioxide and water, releasing oxygen.';
+  if(/what is an atom|define an atom/.test(l)) return 'An atom is the smallest unit of an element that retains the chemical identity of that element.';
+  if(/what is a molecule|define a molecule/.test(l)) return 'A molecule is a group of two or more atoms chemically joined together.';
+  if(/what is magnification|define magnification/.test(l)) return 'Magnification is the ratio of image size to actual size: Magnification = image size ÷ actual size.';
+  if(/what is a linear equation|define a linear equation/.test(l)) return 'A linear equation is an equation in which the highest power of the variable is 1.';
+  if(/pythagorean|pythagoras/.test(l) && /theorem|relationship|state|formula/.test(l)) return 'For a right-angled triangle, a² + b² = c², where c is the hypotenuse.';
+  if(/what is speed|define speed/.test(l)) return 'Speed is the distance travelled per unit time. Speed = distance ÷ time.';
+  if(/area of a circle|area of circle/.test(l)) return 'Area of a circle = πr², where r is the radius.';
+  return null;
+}
+function solveUploadedPaperDirect({subject, grade, prompt}){
+  const marker='EXTRACTED QUESTION PAPER:';
+  const raw=String(prompt||'');
+  const paper=raw.includes(marker)?raw.split(marker).slice(1).join(marker).trim():raw;
+  const lines=paper.split(/\n+/).map(cleanQuestionText).filter(Boolean);
+  const qs=[]; let current=null;
+  for(const line of lines){
+    const m=line.match(/^(?:question\s*)?(\d{1,3})\s*[).:-]\s*(.*)$/i);
+    if(m){if(current)qs.push(current); current={n:m[1],text:m[2]};}
+    else if(current) current.text+=' '+line;
+    else if(/^(?:q\.?\s*\d+)/i.test(line)) { const z=line.match(/(?:q\.?\s*)(\d+)\s*[).:-]?\s*(.*)/i); if(z){if(current)qs.push(current);current={n:z[1],text:z[2]};}}
+  }
+  if(current)qs.push(current);
+  if(!qs.length) return 'No numbered questions were detected in the uploaded file. Please upload a clearer file or type the questions into the box.';
+  const out=[];
+  for(const q of qs){
+    const ans=directQuestionAnswer(q.text,subject);
+    out.push(`${q.n}. ${q.text}\nAnswer: ${ans || 'Please type this question in the box if you need a detailed solution.'}`);
+  }
+  return `DIRECT ANSWERS\nSubject: ${subject||'General'} | Grade: ${grade||'General'}\n\n`+out.join('\n\n');
+}
 function localStudyAssistant({ subject, grade, mode, focus, prompt }) {
   const q = String(prompt || '').trim();
   if (!q) throw new Error('Enter a question or topic first.');
@@ -97,6 +149,7 @@ function localStudyAssistant({ subject, grade, mode, focus, prompt }) {
   const g = grade || 'General';
   const low = q.toLowerCase();
   const selectedMode = mode || 'answer';
+  if ((selectedMode === 'direct' || selectedMode === 'paper') && /EXTRACTED QUESTION PAPER:/i.test(q)) return solveUploadedPaperDirect({subject:subj, grade:g, prompt:q});
   const curriculum = curriculumContext(subj, g, focus);
   const cbe = focus ? `\nCBE focus: ${focus}` : '';
   const header = `Tusome EduShelf Local Study Assistant\nSubject: ${subj} | Grade: ${g}\nMode: ${selectedMode}${cbe}\n\n${curriculum ? 'CURRICULUM ALIGNMENT\n'+curriculum+'\n\n' : ''}`;
@@ -246,28 +299,49 @@ function localStudyAssistant({ subject, grade, mode, focus, prompt }) {
 
   return header + body;
 }
+async function openAIAnswer({subject, grade, mode, focus, prompt}) {
+  const key = process.env.OPENAI_API_KEY;
+  if (!key) return null;
+  const model = process.env.OPENAI_MODEL || 'gpt-5.6-luna';
+  const direct = (mode === 'direct' || mode === 'paper') && /EXTRACTED QUESTION PAPER:/i.test(String(prompt||''));
+  const instructions = direct
+    ? `You are the Tusome EduShelf question-paper solver. Return DIRECT answers. Preserve the original question numbering. For theory, definitions and multiple choice, give the answer directly. For calculations, show only the necessary calculation/working and then the final answer. Do not add long lessons or unnecessary explanations. If a question cannot be read or solved confidently, say exactly which question needs clarification. Subject: ${subject||'General'}; Grade: ${grade||'General'}; CBE focus: ${focus||'not specified'}.`
+    : `You are the Tusome EduShelf study assistant for Kenyan learners. Give accurate, age-appropriate answers aligned to the selected grade and CBE focus. Be clear and useful. Subject: ${subject||'General'}; Grade: ${grade||'General'}; Mode: ${mode||'answer'}; CBE focus: ${focus||'not specified'}.`;
+  const r = await fetch('https://api.openai.com/v1/responses', {
+    method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${key}`},
+    body:JSON.stringify({model,instructions,input:String(prompt||'')})
+  });
+  const data = await r.json();
+  if (!r.ok) throw new Error(data?.error?.message || `OpenAI request failed (${r.status}).`);
+  const text = data.output_text || (Array.isArray(data.output) ? data.output.flatMap(o=>o.content||[]).map(c=>c.text||'').filter(Boolean).join('\n') : '');
+  if (!text.trim()) throw new Error('The AI returned an empty answer.');
+  return text.trim();
+}
+
 app.post('/api/ai', async (req, res) => {
   try {
-    const answer = localStudyAssistant(req.body || {});
-    res.json({ ok: true, answer });
+    const body = req.body || {};
+    let answer = null;
+    let provider = 'local';
+    if (process.env.OPENAI_API_KEY) {
+      try { answer = await openAIAnswer(body); provider = 'openai'; }
+      catch (e) { console.warn('OpenAI unavailable; using local fallback:', e.message); }
+    }
+    if (!answer) answer = localStudyAssistant(body);
+    res.json({ ok: true, answer, provider });
   } catch (e) {
     console.error('AI error:', e);
-    const message = e?.message || 'AI service failed.';
-    const status = /not configured/.test(message) ? 503 : 502;
-    res.status(status).json({ error: message });
+    res.status(502).json({ error: e?.message || 'AI service failed.' });
   }
 });
 
 app.get('/api/health', async (_req, res) => {
   const required = ['MPESA_CONSUMER_KEY','MPESA_CONSUMER_SECRET','MPESA_SHORTCODE','MPESA_PASSKEY','MPESA_CALLBACK_URL'];
-  const aiConfigured = true;
   const missing = required.filter(name => !process.env[name]);
+  const hasOpenAI = !!process.env.OPENAI_API_KEY;
   res.json({
-    ok: true,
-    daraja: process.env.MPESA_ENV || 'sandbox',
-    configured: missing.length === 0,
-    missing,
-    ai: { configured: aiConfigured, provider: 'local', model: 'built-in-local-study-assistant' }
+    ok: true, daraja: process.env.MPESA_ENV || 'sandbox', configured: missing.length === 0, missing,
+    ai: { configured: true, provider: hasOpenAI ? 'hybrid-openai-plus-local-fallback' : 'built-in-local-fallback', model: hasOpenAI ? (process.env.OPENAI_MODEL || 'gpt-5.6-luna') : 'built-in-local-study-assistant' }
   });
 });
 

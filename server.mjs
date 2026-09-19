@@ -654,7 +654,8 @@ app.get('/api/materials/:id/file', requireAuth, async (req, res) => {
     const allowed = req.user.role === 'admin' || (req.user.role === 'teacher' && row.teacherEmail === req.user.email) || (req.user.role === 'learner' && row.approvalStatus === 'approved');
     if (!allowed) return res.status(403).json({ error: 'This material is not available to your account.' });
     res.setHeader('Content-Type', row.mimeType || 'application/octet-stream');
-    res.setHeader('Content-Disposition', `inline; filename="${String(row.fileName).replace(/"/g, '')}"`);
+    const disposition = String(req.query.download || '') === '1' ? 'attachment' : 'inline';
+    res.setHeader('Content-Disposition', `${disposition}; filename="${String(row.fileName).replace(/"/g, '')}"`);
     res.send(row.fileData);
   } catch (e) {
     console.error('Material file error:', e);

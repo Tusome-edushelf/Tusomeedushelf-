@@ -75,7 +75,7 @@ function curriculumContext(subject, grade, focus) {
   return [base, f ? `Requested CBE focus: ${f}` : ''].filter(Boolean).join('\\n');
 }
 
-async function callGemini({ subject, grade, mode, focus, prompt, file }) {
+async function callGemini({ subject, grade, mode, focus, prompt, file, questionFile, workingFile }) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('GEMINI_API_KEY is not configured on the server.');
 
@@ -147,14 +147,22 @@ ${markMode ? `MARK MY WORK MODE:
 9. If the uploaded working is unclear, identify the exact part that cannot be read and do not guess.
 10. Do not force CBC/KICD/CBE explanations unless the learner explicitly asks for curriculum alignment.
 11. Keep the marking concise but useful. Do not add unrelated tips, summaries, teacher/parent notes, or motivational text.
-12. Use this format where useful:
-Question [number]
-Status: Correct / Partly correct / Incorrect
-Working check:
-...
-Correction:
-...
-Final answer: ...
+12. Return a learner-friendly step-by-step marking report.
+13. Award marks only for work that is supported by the learner's visible working. If the question has no visible mark allocation, infer a reasonable mark allocation and state that it is inferred.
+14. Never penalize a learner for handwriting style; judge the mathematical/academic work only.
+15. When a learner has a correct method but an arithmetic slip, preserve method credit and explain the slip.
+16. When a learner's final answer is correct but working is missing, do not invent steps; mark only what can be verified.
+17. In Mark My Work mode, return ONLY valid JSON with this shape (no Markdown fences):
+{
+  "score": number,
+  "maxScore": number,
+  "overallFeedback": string,
+  "nextStep": string,
+  "questions": [
+    {"number": string, "status": "Correct"|"Partly correct"|"Incorrect"|"Cannot read", "marksAwarded": number, "marksAvailable": number, "steps": [{"status": "Correct"|"Incorrect"|"Partly correct"|"Cannot read", "working": string, "correction": string}], "finalAnswer": string, "feedback": string}
+  ]
+}
+18. Include every readable question/sub-question from the uploaded question paper and preserve its original numbering. If only the working is uploaded and the question is missing, clearly say that the question cannot be verified and do not invent a mark allocation.
 ` : ''}
 ${paperMode ? `UPLOADED QUESTION-PAPER MODE:
 1. Read the entire uploaded paper carefully, including every visible page, diagram, table, graph, formula, and handwritten/printed sub-question.
@@ -172,18 +180,22 @@ ${paperMode ? `UPLOADED QUESTION-PAPER MODE:
 ` : ''}
 Selected subject: ${subject || 'General'}. Selected grade: ${grade || 'General'}.`;
 
-  const userPrompt = String(prompt || '').trim() || (paperMode ? 'Solve the uploaded question paper.' : 'Answer the uploaded question.');
-  if (!userPrompt && !file) throw new Error('Enter a question or upload a question paper first.');
+  const userPrompt = String(prompt || '').trim() || (paperMode ? 'Solve the uploaded question paper.' : markMode ? 'Mark the learner’s uploaded working against the uploaded question paper.' : 'Answer the uploaded question.');
+  if (!userPrompt && !file && !questionFile && !workingFile) throw new Error('Enter a question or upload a question paper first.');
 
   const parts = [];
-  if (file?.data && file?.mimeType) {
-    const mime = String(file.mimeType).toLowerCase();
+  const uploads = [];
+  if (questionFile?.data && questionFile?.mimeType) uploads.push({label:'QUESTION PAPER', file:questionFile});
+  else if (file?.data && file?.mimeType) uploads.push({label:'QUESTION PAPER', file});
+  if (workingFile?.data && workingFile?.mimeType) uploads.push({label:'LEARNER WORKING', file:workingFile});
+  for (const upload of uploads) {
+    const mime = String(upload.file.mimeType).toLowerCase();
     const allowed = ['application/pdf','image/png','image/jpeg','image/webp','image/heic','image/heif'];
     if (!allowed.includes(mime)) throw new Error('Upload a PDF or image (PNG, JPG, WEBP, HEIC, or HEIF).');
-    const raw = String(file.data).replace(/^data:[^;]+;base64,/, '');
+    const raw = String(upload.file.data).replace(/^data:[^;]+;base64,/, '');
     const bytes = Math.floor(raw.length * 3 / 4);
-    if (bytes > 12 * 1024 * 1024) throw new Error('That file is too large for Tusome EduShelf. Please upload a file smaller than 12 MB.');
-    // Put the visual/document part before the instruction text so the model can inspect it first.
+    if (bytes > 12 * 1024 * 1024) throw new Error(`The ${upload.label.toLowerCase()} is too large. Please upload a file smaller than 12 MB.`);
+    parts.push({ text: `--- ${upload.label} ---` });
     parts.push({ inline_data: { mime_type: mime, data: raw } });
   }
   parts.push({ text: `${system}\n\nUSER REQUEST:\n${userPrompt}` });
@@ -203,7 +215,8 @@ Selected subject: ${subject || 'General'}. Selected grade: ${grade || 'General'}
             contents: [{ role: 'user', parts }],
             generationConfig: {
               temperature: 0.1,
-              topP: 0.9
+              topP: 0.9,
+              ...(markMode ? { responseMimeType: 'application/json' } : {})
             }
           })
         });
@@ -225,6 +238,14 @@ Selected subject: ${subject || 'General'}. Selected grade: ${grade || 'General'}
           .join('\n')
           .trim();
         if (!answer) throw new Error('Gemini returned no text response.');
+        if (markMode) {
+          try { return JSON.parse(answer); }
+          catch {
+            const cleaned = answer.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
+            try { return JSON.parse(cleaned); }
+            catch { throw new Error('The AI returned an invalid marking report. Please try marking the work again.'); }
+          }
+        }
         return answer;
       } catch (err) {
         lastError = err;
@@ -247,7 +268,7 @@ Selected subject: ${subject || 'General'}. Selected grade: ${grade || 'General'}
 app.post('/api/ai', async (req, res) => {
   try {
     const answer = await callGemini(req.body || {});
-    res.json({ ok: true, answer });
+    res.json({ ok: true, answer: typeof answer === 'string' ? answer : JSON.stringify(answer), ...(mode === 'mark' ? { marking: answer } : {}) });
   } catch (e) {
     console.error('AI error:', e);
     const message = e?.message || 'AI service failed.';

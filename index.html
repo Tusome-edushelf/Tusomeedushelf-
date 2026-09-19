@@ -79,6 +79,7 @@ footer{text-align:center;padding:30px;color:#687386}.ai-answer{line-height:1.75;
     <div class="card"><h3>📘 Mathematics</h3><p>12 materials</p></div>
     <div class="card"><h3>🧬 Biology</h3><p>8 materials</p></div>
     <div class="card"><h3>📖 English</h3><p>10 materials</p></div>
+    <div class="card"><h3>🤖 AI Assistant</h3><p>Ask questions, create notes, practise and get study support.</p><button class="btn primary" onclick="openAIAssistant('learner')">Open AI Assistant</button></div>
   </div>
   <div class="card" style="margin-top:22px">
     <div class="topline"><div><h3 style="margin-bottom:4px">Available Materials</h3><small id="materialResultCount" class="small"></small></div><button class="btn" onclick="resetMaterialFilters()">Reset</button></div>
@@ -98,7 +99,7 @@ footer{text-align:center;padding:30px;color:#687386}.ai-answer{line-height:1.75;
   <div id="aiStatus" class="notice" style="margin:12px 0">Checking AI service...</div>
   <div class="topline">
     <div><h2>🤖 AI Study Assistant</h2><p>Ask questions, create notes and practise what you have learned.</p></div>
-    <button class="btn primary" onclick="show('learner')">Back to Dashboard</button>
+    <button class="btn primary" onclick="backFromAIAssistant()">Back to Dashboard</button>
   </div>
 
   <div class="cards">
@@ -283,6 +284,7 @@ footer{text-align:center;padding:30px;color:#687386}.ai-answer{line-height:1.75;
     <div class="card"><h3>📚 Learning Activity</h3><p id="parentActivity">Loading...</p></div>
     <div class="card"><h3>🤖 Study Support</h3><p id="parentAI">Loading...</p></div>
     <div class="card"><h3>📝 Practice</h3><p id="parentPractice">Loading...</p></div>
+    <div class="card"><h3>🤖 AI Assistant</h3><p>Open the same EduShelf AI study support available across the platform.</p><button class="btn primary" onclick="openAIAssistant('parent')">Open AI Assistant</button></div>
   </div>
 </section>
 
@@ -310,6 +312,7 @@ footer{text-align:center;padding:30px;color:#687386}.ai-answer{line-height:1.75;
     <div class="card"><h3>📤 Uploaded</h3><p><b id="count">3</b> materials</p></div>
     <div class="card"><h3>👁 Views</h3><p>128 learner views</p></div>
     <div class="card"><h3>📚 Subjects</h3><p>3 subjects</p></div>
+    <div class="card"><h3>🤖 AI Assistant</h3><p>Create lesson plans, assessments, notes and learning activities.</p><button class="btn primary" onclick="openAIAssistant('teacher')">Open AI Assistant</button></div>
   </div>
   <div class="card" style="margin-top:22px"><h3>Your Recent Uploads</h3><div id="teacherMaterials"></div></div>
 </section>
@@ -338,6 +341,7 @@ footer{text-align:center;padding:30px;color:#687386}.ai-answer{line-height:1.75;
     <div class="card"><h3>📚 Learning Materials</h3><p><b id="adminCount">0</b> total • <b id="adminPendingMaterials">0</b> active</p></div>
     <div class="card"><h3>💰 Material Prices</h3><p>Admin reviews and sets the selling price before publication.</p></div>
     <div class="card"><h3>👨‍🏫 Teachers</h3><p>Teachers can join directly and upload materials without teacher access.</p></div>
+    <div class="card"><h3>🤖 AI Assistant</h3><p>Review AI-generated learning content and use the study assistant when needed.</p><button class="btn primary" onclick="openAIAssistant('admin')">Open AI Assistant</button></div>
   </div>
   <div class="admin-tabs">
     <button class="btn primary" onclick="adminTab('approvals')">Learning Materials</button>
@@ -618,6 +622,18 @@ function show(id){
   updatePublicUi();
   window.scrollTo(0,0);
 }
+let aiReturnDashboard='learner';
+function openAIAssistant(dashboard){
+  aiReturnDashboard=dashboard||getSessionRole()||'learner';
+  sessionStorage.setItem('tusomeAIReturnDashboard',aiReturnDashboard);
+  show('ai');
+}
+function backFromAIAssistant(){
+  const role=getSessionRole();
+  const target=sessionStorage.getItem('tusomeAIReturnDashboard')||aiReturnDashboard||role||'learner';
+  if(['learner','teacher','admin','parent'].includes(target)){show(target)}else{show(role==='admin'?'admin':role==='teacher'?'teacher':'learner')}
+}
+
 function copyAI(){navigator.clipboard?.writeText(document.getElementById('aiAnswer').textContent);alert('Response copied.')}
 async function checkAIStatus(){const el=document.getElementById('aiStatus');if(!el)return;try{const r=await fetch('/api/health');const d=await r.json();el.className=d.ai?.configured?'success':'notice';el.textContent=d.ai?.configured?'🟢 Gemini AI connected • '+d.ai.model:'🟠 AI service is not configured. Add GEMINI_API_KEY to Render Environment.'}catch(e){el.className='notice';el.textContent='🔴 EduShelf server is not running. Start it with: npm install && npm start'}}
 async function askAI(e){e.preventDefault();const subject=document.getElementById('aiSubject').value,grade=document.getElementById('aiGrade').value,mode=document.getElementById('aiMode').value,focus=document.getElementById('cbeFocus').value,prompt=document.getElementById('aiPrompt').value.trim(),qFile=document.getElementById('aiQuestionFile')?.files?.[0],wFile=document.getElementById('aiWorkingFile')?.files?.[0],box=document.getElementById('aiResult'),answer=document.getElementById('aiAnswer'),button=e.target.querySelector('button[type="submit"]');if(!prompt&&!qFile&&!wFile){alert('Enter a question or upload a question paper first.');return}if(mode==='mark'&&!qFile&&!wFile){alert('For Mark My Work, upload your question paper and/or your working.');return}button.disabled=true;button.textContent='⏳ Gemini is working...';answer.textContent='Gemini is preparing your response...';box.style.display='block';try{const readFile=async(file)=>{if(!file)return null;if(file.size>12*1024*1024)throw new Error('Please keep each uploaded file below 12 MB.');const dataUrl=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error('Could not read the selected file.'));reader.readAsDataURL(file)});return{name:file.name,mimeType:file.type,data:dataUrl}};const [questionFile,workingFile]=await Promise.all([readFile(qFile),readFile(wFile)]);const res=await fetch('/api/ai',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({subject,grade,mode,focus,prompt,file:questionFile,questionFile,workingFile})});const data=await res.json();if(!res.ok)throw new Error(data.error||'The Gemini service could not respond.');answer.textContent=data.answer;if(mode==='mark')saveMarkAttempt(subject,grade,prompt,data.answer);logActivity('Used Gemini AI Study Assistant: '+mode+' / '+subject+' / '+grade);logNotification('Gemini response generated for '+subject+' ('+grade+').');refreshProgress();renderNotifications()}catch(err){answer.textContent='Sorry, Gemini could not respond.\n\n'+err.message;checkAIStatus()}finally{button.disabled=false;button.textContent='✨ Ask AI'}}

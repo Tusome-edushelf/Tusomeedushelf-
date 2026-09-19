@@ -24,7 +24,7 @@ label{font-weight:700;font-size:14px}.topline{display:flex;justify-content:space
 .notice{padding:13px;background:#fff7df;border-radius:10px;margin:15px 0}
 footer{text-align:center;padding:30px;color:#687386}.ai-answer{line-height:1.75;white-space:pre-wrap;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:#fbfcff;border:1px solid #e1e6ef;border-radius:12px;padding:18px;overflow:auto;font-size:15px}
 @media(max-width:600px){.hero h1{font-size:31px}.hero{padding:40px 25px}nav button{margin-left:5px}}
-.cards .card{min-width:0}.small{font-size:12px;color:#687386}.material>b{word-break:break-word}.success{background:#e8f8ee;color:#176b3a;padding:8px 12px;border-radius:8px}\n.progress-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}.progress-row{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:11px 0;border-bottom:1px solid #e8edf3}.progress-row:last-child{border-bottom:0}.progress-bar{height:8px;border-radius:99px;background:#e8edf3;overflow:hidden;margin-top:7px}.progress-fill{height:100%;background:#2563eb;border-radius:99px}.score-good{color:#15803d;font-weight:700}.score-mid{color:#b45309;font-weight:700}.score-low{color:#b91c1c;font-weight:700}@media(max-width:760px){.progress-grid{grid-template-columns:1fr}}</style>
+.cards .card{min-width:0}.small{font-size:12px;color:#687386}.material>b{word-break:break-word}.success{background:#e8f8ee;color:#176b3a;padding:8px 12px;border-radius:8px}\n.progress-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}.progress-row{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:11px 0;border-bottom:1px solid #e8edf3}.progress-row:last-child{border-bottom:0}.progress-bar{height:8px;border-radius:99px;background:#e8edf3;overflow:hidden;margin-top:7px}.progress-fill{height:100%;background:#2563eb;border-radius:99px}.score-good{color:#15803d;font-weight:700}.score-mid{color:#b45309;font-weight:700}.score-low{color:#b91c1c;font-weight:700}@media(max-width:760px){.progress-grid{grid-template-columns:1fr}}.admin-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:18px 0}.admin-panel{margin-top:12px}.admin-action-row{display:flex;gap:7px;flex-wrap:wrap;align-items:center}.status-approved{color:#15803d;font-weight:700}.status-pending{color:#b45309;font-weight:700}.status-rejected,.status-suspended{color:#b91c1c;font-weight:700}.admin-stat{display:inline-block;padding:5px 9px;border-radius:999px;background:#eef2ff;margin-right:5px}.table-like{width:100%;overflow:auto}.table-like table{width:100%;border-collapse:collapse}.table-like th,.table-like td{padding:10px;border-bottom:1px solid #e8edf3;text-align:left;vertical-align:top}.price-input{width:110px!important;margin:0!important}</style>
 </head>
 <body>
 <header>
@@ -321,38 +321,51 @@ footer{text-align:center;padding:30px;color:#687386}.ai-answer{line-height:1.75;
 
 
 <section id="admin" class="page">
-  <div class="topline">
-    <div><h2>Administrator Dashboard</h2><p>Control platform activity, users and learning materials.</p></div>
-    <button class="btn primary" onclick="show('login')">Logout</button>
-  </div>
-
+  <div class="topline"><div><h2>🛡️ Administrator Control Center</h2><p>Central control for approvals, users, AI-generated notes, pricing, reports, transactions and platform revenue.</p></div><button class="btn primary" onclick="adminRefreshAll()">Refresh</button></div>
   <div class="cards">
-    <div class="card"><h3>📚 Total Materials</h3><p><b id="adminCount">0</b> materials</p></div>
-    <div class="card"><h3>👨‍🏫 Teachers</h3><p><b>8</b> registered teachers</p></div>
-    <div class="card"><h3>🎓 Learners</h3><p><b>124</b> registered learners</p></div>
-    <div class="card"><h3>🟢 Activity</h3><p><b id="activityCount">0</b> recorded actions</p></div>
+    <div class="card"><h3>📚 Materials</h3><p><b id="adminCount">0</b> total • <b id="adminPendingMaterials">0</b> pending</p></div>
+    <div class="card"><h3>👨‍🏫 Teachers</h3><p><b id="adminPendingTeachers">0</b> awaiting approval</p></div>
+    <div class="card"><h3>👥 Users</h3><p><b id="adminUsers">0</b> registered</p></div>
+    <div class="card"><h3>💰 Revenue</h3><p><b id="adminRevenue">KES 0.00</b></p></div>
+  </div>
+  <div class="admin-tabs">
+    <button class="btn primary" onclick="adminTab('approvals')">Approvals</button>
+    <button class="btn" onclick="adminTab('notes')">System Notes</button>
+    <button class="btn" onclick="adminTab('users')">Users</button>
+    <button class="btn" onclick="adminTab('reports')">Reports</button>
+    <button class="btn" onclick="adminTab('transactions')">Transactions</button>
+    <button class="btn" onclick="adminTab('notifications')">Notifications</button>
   </div>
 
-  <div class="card" style="margin-top:22px">
-    <div class="topline">
-      <h3>Manage Learning Materials</h3>
-      <button class="btn primary" onclick="show('upload')">+ Add Material</button>
+  <div id="adminApprovals" class="admin-panel">
+    <div class="card"><h3>👨‍🏫 Teacher Approval</h3><div id="teacherApprovalList"></div></div>
+    <div class="card" style="margin-top:18px"><h3>📚 Material Approval / Rejection</h3><div id="materialApprovalList"></div></div>
+  </div>
+
+  <div id="adminNotes" class="admin-panel" style="display:none">
+    <div class="card"><div class="topline"><div><h3>🤖 System-Generated Notes</h3><p>Approve, reject, publish or set the selling price of AI-generated notes.</p></div><button class="btn" onclick="seedSystemNote()">Add Demo Note</button></div><div id="systemNotesList"></div></div>
+  </div>
+
+  <div id="adminUsersPanel" class="admin-panel" style="display:none">
+    <div class="card"><h3>👥 User Management</h3><p>Activate, suspend or change account roles.</p><div id="userManagementList"></div></div>
+  </div>
+
+  <div id="adminReports" class="admin-panel" style="display:none">
+    <div class="cards">
+      <div class="card"><h3>Total Transactions</h3><p><b id="reportTransactions">0</b></p></div><div class="card"><h3>Confirmed Sales</h3><p><b id="reportConfirmed">0</b></p></div><div class="card"><h3>Teacher Earnings</h3><p><b id="reportTeacherRevenue">KES 0.00</b></p></div><div class="card"><h3>Platform Revenue</h3><p><b id="reportPlatformRevenue">KES 0.00</b></p></div>
     </div>
-    <div id="adminMaterials"></div>
+    <div class="card" style="margin-top:18px"><h3>📊 Platform Report</h3><div id="platformReport"></div></div>
   </div>
 
-  <div class="card" style="margin-top:22px">
-    <div class="topline"><h3>🇰🇪 Curriculum Grounding</h3><span class="tag">Verified records only</span></div>
-    <p>The AI uses imported curriculum records when there is an exact match. For production, the administrator should import the current official KICD curriculum-design documents and approve the extracted Grade → Learning Area → Strand → Sub-strand → Learning Outcome records.</p>
-    <button class="btn primary" onclick="loadCurriculumStatus()">Check Curriculum Records</button>
-    <div id="curriculumStatus" style="margin-top:12px"></div>
+  <div id="adminTransactions" class="admin-panel" style="display:none">
+    <div class="card"><h3>💳 Transaction Control</h3><div id="adminTransactionsList"></div></div>
   </div>
 
-  <div class="card" style="margin-top:22px">
-    <h3>Recent Platform Activity</h3>
-    <div id="activity"></div>
-    <button class="btn" onclick="clearActivity()">Clear Activity Log</button>
+  <div id="adminNotifications" class="admin-panel" style="display:none">
+    <div class="card"><h3>🔔 Notification Control</h3><form onsubmit="sendAdminNotification(event)"><input id="adminNotificationText" required placeholder="Write a platform notification"><button class="btn primary" type="submit">Send Notification</button></form><div id="adminNotificationList" style="margin-top:15px"></div></div>
   </div>
+
+  <div class="card" style="margin-top:22px"><h3>🧾 Audit Activity</h3><div id="activity"></div><button class="btn" onclick="clearActivity()">Clear Activity Log</button></div>
 </section>
 
 <section id="upload" class="page">
@@ -387,9 +400,9 @@ footer{text-align:center;padding:30px;color:#687386}.ai-answer{line-height:1.75;
 const key='edushelfMaterials';
 const curriculumSubjects=['Mathematics','English','Kiswahili','Integrated Science','Biology','Chemistry','Physics','Agriculture','Social Studies','Pre-Technical Studies','Creative Arts & Sports','Business Studies','Geography','History & Citizenship','Computer Studies','ICT','Home Science'];
 let materials=JSON.parse(localStorage.getItem(key)||'null')||[
- {title:'Linear Functions Notes',subject:'Mathematics',grade:'Grade 8',topic:'Linear Functions',file:'linear-functions.pdf'},
- {title:'Magnification Revision',subject:'Biology',grade:'Grade 8',topic:'Magnification',file:'magnification.pdf'},
- {title:'Grammar Revision Notes',subject:'English',grade:'Grade 8',topic:'Grammar',file:'grammar.pdf'}
+ {id:1,title:'Linear Functions Notes',subject:'Mathematics',grade:'Grade 8',topic:'Linear Functions',file:'linear-functions.pdf',approvalStatus:'approved',price:0},
+ {id:2,title:'Magnification Revision',subject:'Biology',grade:'Grade 8',topic:'Magnification',file:'magnification.pdf',approvalStatus:'approved',price:0},
+ {id:3,title:'Grammar Revision Notes',subject:'English',grade:'Grade 8',topic:'Grammar',file:'grammar.pdf',approvalStatus:'approved',price:0}
 ];
 function save(){localStorage.setItem(key,JSON.stringify(materials))}
 function logActivity(action){let logs=JSON.parse(localStorage.getItem('edushelfActivity')||'[]');logs.unshift({action,time:new Date().toLocaleString()});localStorage.setItem('edushelfActivity',JSON.stringify(logs.slice(0,50)))}
@@ -410,10 +423,10 @@ function populateMaterialFilters(){
   const sets={subjectFilter:[...new Set(materials.map(m=>m.subject).filter(Boolean))].sort(),gradeFilter:[...new Set(materials.map(m=>m.grade).filter(Boolean))].sort((a,b)=>{const na=parseInt(a.match(/\d+/)?.[0]||0),nb=parseInt(b.match(/\d+/)?.[0]||0);return na-nb||a.localeCompare(b)}),topicFilter:[...new Set(materials.map(m=>m.topic).filter(Boolean))].sort()};
   Object.entries(sets).forEach(([id,values])=>{const el=document.getElementById(id);if(!el)return;const current=el.value;el.innerHTML='<option value="">'+(id==='subjectFilter'?'All subjects':id==='gradeFilter'?'All grades':'All topics')+'</option>'+values.map(v=>`<option value="${String(v).replace(/"/g,'&quot;')}">${v}</option>`).join('');if(values.includes(current))el.value=current});
 }
-function renderMaterials(list=materials){const box=document.getElementById('materials');if(!box)return;const count=document.getElementById('materialResultCount');if(count)count.textContent=`Showing ${list.length} of ${materials.length} material${materials.length===1?'':'s'}`;box.innerHTML=list.length?list.map(m=>{const idx=materials.indexOf(m);const paid=isPurchased(m.id),price=materialPrice(m);return `<div class="material"><div style="min-width:0"><b>${m.title||'Untitled material'}</b><br><span class="tag">${m.subject||'General'}</span> <span class="tag">${m.grade||'All grades'}</span> <span class="tag">${price>0?'KES '+price:'FREE'}</span> <small>${m.topic||''}</small><br><small>📎 ${m.file||'Uploaded material'}</small></div><button class="btn primary" onclick="openMaterial(${idx})">${price===0||paid?'Open':'Buy'}</button></div>`}).join(''):'<div class="notice">No materials match your search. Try a different keyword or reset the filters.</div>'}
+function renderMaterials(list=materials.filter(m=>(m.approvalStatus||'approved')==='approved')){const box=document.getElementById('materials');if(!box)return;const count=document.getElementById('materialResultCount');if(count)count.textContent=`Showing ${list.length} of ${materials.length} material${materials.length===1?'':'s'}`;box.innerHTML=list.length?list.map(m=>{const idx=materials.indexOf(m);const paid=isPurchased(m.id),price=materialPrice(m);return `<div class="material"><div style="min-width:0"><b>${m.title||'Untitled material'}</b><br><span class="tag">${m.subject||'General'}</span> <span class="tag">${m.grade||'All grades'}</span> <span class="tag">${price>0?'KES '+price:'FREE'}</span> <small>${m.topic||''}</small><br><small>📎 ${m.file||'Uploaded material'}</small></div><button class="btn primary" onclick="openMaterial(${idx})">${price===0||paid?'Open':'Buy'}</button></div>`}).join(''):'<div class="notice">No materials match your search. Try a different keyword or reset the filters.</div>'}
 function filterMaterials(){
   const q=(document.getElementById('search')?.value||'').trim().toLowerCase(),subject=document.getElementById('subjectFilter')?.value||'',grade=document.getElementById('gradeFilter')?.value||'',topic=document.getElementById('topicFilter')?.value||'',sort=document.getElementById('materialSort')?.value||'newest';
-  let list=materials.filter(m=>{const text=[m.title,m.subject,m.grade,m.topic,m.strand,m.competency,m.description,m.file].filter(Boolean).join(' ').toLowerCase();return (!q||text.includes(q))&&(!subject||m.subject===subject)&&(!grade||m.grade===grade)&&(!topic||m.topic===topic)});
+  let list=materials.filter(m=>(m.approvalStatus||'approved')==='approved').filter(m=>{const text=[m.title,m.subject,m.grade,m.topic,m.strand,m.competency,m.description,m.file].filter(Boolean).join(' ').toLowerCase();return (!q||text.includes(q))&&(!subject||m.subject===subject)&&(!grade||m.grade===grade)&&(!topic||m.topic===topic)});
   if(sort==='az')list.sort((a,b)=>(a.title||'').localeCompare(b.title||''));else if(sort==='priceLow')list.sort((a,b)=>materialPrice(a)-materialPrice(b));else if(sort==='priceHigh')list.sort((a,b)=>materialPrice(b)-materialPrice(a));else list.sort((a,b)=>(Number(b.id)||0)-(Number(a.id)||0));
   renderMaterials(list)
 }
@@ -478,9 +491,60 @@ async function pollPayment(checkoutRequestId,m){
 function renderPayments(){const ps=getPurchases(),box=document.getElementById('purchaseList');if(box)box.innerHTML=ps.length?ps.map(p=>`<div class="material"><div><b>${p.title}</b><br><small>${p.time} • ${p.status.toUpperCase()} • KES ${p.amount}</small></div><span class="tag">Teacher KES ${p.teacherShare}</span></div>`).join(''):'<p>No purchases yet.</p>';const e=document.getElementById('teacherEarnings');if(e)e.textContent='KES '+Number(localStorage.getItem('tusomeTeacherEarnings')||0).toFixed(2);const r=document.getElementById('platformRevenue');if(r)r.textContent='KES '+Number(localStorage.getItem('tusomeRevenue')||0).toFixed(2)}
 function filterMaterials(){const q=(document.getElementById('search')?.value||'').toLowerCase();renderMaterials(materials.filter(m=>Object.values(m).join(' ').toLowerCase().includes(q)))}
 function renderTeacher(){const c=document.getElementById('count');if(c)c.textContent=materials.length;const box=document.getElementById('teacherMaterials');if(box)box.innerHTML=materials.length?materials.map((m,i)=>`<div class="material"><div><b>${m.title}</b><br><small>${m.subject} • ${m.grade} • ${m.topic}${m.strand?' • '+m.strand:''}</small></div><button class="btn" onclick="removeMaterial(${i})">Delete</button></div>`).join(''):'<p>No materials uploaded.</p>'}
-function renderAdmin(){const c=document.getElementById('adminCount');if(c)c.textContent=materials.length;const logs=JSON.parse(localStorage.getItem('edushelfActivity')||'[]');const ac=document.getElementById('activityCount');if(ac)ac.textContent=logs.length;const box=document.getElementById('adminMaterials');if(box)box.innerHTML=materials.length?materials.map((m,i)=>`<div class="material"><div><b>${m.title}</b><br><small>${m.subject} • ${m.grade} • ${m.topic}${m.strand?' • '+m.strand:''} • ${m.file}</small></div><button class="btn" onclick="adminDelete(${i})">Delete</button></div>`).join(''):'<p>No materials have been uploaded.</p>';const act=document.getElementById('activity');if(act)act.innerHTML=logs.length?logs.slice(0,10).map(x=>`<div class="material"><div>📝 ${x.action}</div><small>${x.time}</small></div>`).join(''):'<p>No activity recorded yet.</p>'}
-async function adminDelete(i){const item=materials[i];if(item&&confirm('Administrator: delete "'+item.title+'"?')){await deleteUploadedFile(item.fileId);materials.splice(i,1);save();logActivity('Deleted material: '+item.title);logNotification('Material deleted: '+item.title);renderAdmin();renderTeacher();renderMaterials()}}
-async function removeMaterial(i){if(confirm('Delete this material?')){const item=materials[i];await deleteUploadedFile(item.fileId);materials.splice(i,1);save();logActivity('Deleted material: '+item.title);logNotification('Material deleted: '+item.title);renderTeacher();renderMaterials()}}
+function getAdminState(){
+  const teachers=JSON.parse(localStorage.getItem('tusomeTeachers')||'null')||[
+    {id:'T001',name:'Teacher Demo',email:'teacher@edushelf.com',status:'pending',joined:'2026-09-18'},
+    {id:'T002',name:'Mary Wanjiku',email:'mary@edushelf.com',status:'approved',joined:'2026-09-12'},
+    {id:'T003',name:'John Otieno',email:'john@edushelf.com',status:'pending',joined:'2026-09-17'}
+  ];
+  const users=JSON.parse(localStorage.getItem('tusomeUsers')||'null')||[
+    {id:'U001',name:'Teacher Demo',email:'teacher@edushelf.com',role:'teacher',status:'pending'},
+    {id:'U002',name:'Mary Wanjiku',email:'mary@edushelf.com',role:'teacher',status:'active'},
+    {id:'U003',name:'Learner Demo',email:'learner@edushelf.com',role:'learner',status:'active'},
+    {id:'U004',name:'Parent Demo',email:'parent@edushelf.com',role:'parent',status:'active'},
+    {id:'U005',name:'Administrator',email:'admin@edushelf.com',role:'admin',status:'active'}
+  ];
+  const notes=JSON.parse(localStorage.getItem('tusomeSystemNotes')||'null')||[
+    {id:'N001',title:'Grade 8 Mathematics: Linear Functions',subject:'Mathematics',grade:'Grade 8',status:'pending',price:100,created:'2026-09-18',source:'AI'}
+  ];
+  return {teachers,users,notes};
+}
+function saveAdminState(st){localStorage.setItem('tusomeTeachers',JSON.stringify(st.teachers));localStorage.setItem('tusomeUsers',JSON.stringify(st.users));localStorage.setItem('tusomeSystemNotes',JSON.stringify(st.notes))}
+function adminTab(tab){
+  document.querySelectorAll('.admin-panel').forEach(x=>x.style.display='none');
+  const map={approvals:'adminApprovals',notes:'adminNotes',users:'adminUsersPanel',reports:'adminReports',transactions:'adminTransactions',notifications:'adminNotifications'};
+  const el=document.getElementById(map[tab]);if(el)el.style.display='block';
+  adminRefreshAll();
+}
+function adminRefreshAll(){
+  const st=getAdminState();saveAdminState(st);
+  const logs=JSON.parse(localStorage.getItem('edushelfActivity')||'[]');
+  const ps=getPurchases();const confirmed=ps.filter(x=>String(x.status).toLowerCase()==='confirmed');
+  const revenue=confirmed.reduce((a,x)=>a+Number(x.amount||0)-Number(x.teacherShare||0),0);
+  const pendingM=materials.filter(m=>(m.approvalStatus||'pending')!=='approved').length;
+  const pendingT=st.teachers.filter(x=>x.status==='pending').length;
+  const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v};
+  set('adminCount',materials.length);set('adminPendingMaterials',pendingM);set('adminPendingTeachers',pendingT);set('adminUsers',st.users.length);set('adminRevenue','KES '+revenue.toFixed(2));
+  set('reportTransactions',ps.length);set('reportConfirmed',confirmed.length);set('reportTeacherRevenue','KES '+confirmed.reduce((a,x)=>a+Number(x.teacherShare||0),0).toFixed(2));set('reportPlatformRevenue','KES '+revenue.toFixed(2));
+  const ta=document.getElementById('teacherApprovalList');if(ta)ta.innerHTML=st.teachers.map((t,i)=>`<div class="material"><div><b>${escHtml(t.name)}</b><br><small>${escHtml(t.email)} • Joined ${escHtml(t.joined)} • <span class="${t.status==='approved'?'status-approved':t.status==='rejected'?'status-rejected':'status-pending'}">${t.status.toUpperCase()}</span></small></div><div class="admin-action-row">${t.status!=='approved'?`<button class="btn" onclick="adminTeacher(${i},'approved')">Approve</button>`:''}${t.status!=='rejected'?`<button class="btn" onclick="adminTeacher(${i},'rejected')">Reject</button>`:''}</div></div>`).join('');
+  const ma=document.getElementById('materialApprovalList');if(ma)ma.innerHTML=materials.length?materials.map((m,i)=>`<div class="material"><div><b>${escHtml(m.title)}</b><br><small>${escHtml(m.subject)} • ${escHtml(m.grade)} • ${escHtml(m.topic||'')} • <span class="${m.approvalStatus==='approved'?'status-approved':m.approvalStatus==='rejected'?'status-rejected':'status-pending'}">${(m.approvalStatus||'pending').toUpperCase()}</span></small></div><div class="admin-action-row"><button class="btn" onclick="adminMaterialApproval(${i},'approved')">Approve</button><button class="btn" onclick="adminMaterialApproval(${i},'rejected')">Reject</button><button class="btn" onclick="adminDelete(${i})">Delete</button></div></div>`).join(''):'<p>No materials.</p>';
+  const nl=document.getElementById('systemNotesList');if(nl)nl.innerHTML=st.notes.map((n,i)=>`<div class="material"><div><b>${escHtml(n.title)}</b><br><small>${escHtml(n.subject)} • ${escHtml(n.grade)} • AI • <span class="${n.status==='approved'?'status-approved':n.status==='rejected'?'status-rejected':'status-pending'}">${n.status.toUpperCase()}</span></small></div><div class="admin-action-row"><input class="price-input" type="number" min="0" value="${Number(n.price||0)}" onchange="setNotePrice(${i},this.value)" title="Price in KES"><button class="btn" onclick="adminNote(${i},'approved')">Approve</button><button class="btn" onclick="adminNote(${i},'rejected')">Reject</button>${n.status==='approved'?'<button class="btn" onclick="adminNote('+i+',\'unpublished\')">Unpublish</button>':''}</div></div>`).join('')||'<p>No system-generated notes.</p>';
+  const ul=document.getElementById('userManagementList');if(ul)ul.innerHTML=st.users.map((u,i)=>`<div class="material"><div><b>${escHtml(u.name)}</b><br><small>${escHtml(u.email)} • ${escHtml(u.role)} • <span class="${u.status==='active'?'status-approved':u.status==='suspended'?'status-suspended':'status-pending'}">${u.status.toUpperCase()}</span></small></div><div class="admin-action-row"><select onchange="changeUserRole(${i},this.value)"><option ${u.role==='learner'?'selected':''}>learner</option><option ${u.role==='teacher'?'selected':''}>teacher</option><option ${u.role==='parent'?'selected':''}>parent</option><option ${u.role==='admin'?'selected':''}>admin</option></select><button class="btn" onclick="toggleUser(${i})">${u.status==='suspended'?'Activate':'Suspend'}</button></div></div>`).join('');
+  const tx=document.getElementById('adminTransactionsList');if(tx)tx.innerHTML=ps.length?`<div class="table-like"><table><tr><th>Material</th><th>Amount</th><th>Status</th><th>Time</th><th>Control</th></tr>${ps.map((x,i)=>`<tr><td>${escHtml(x.title)}</td><td>KES ${Number(x.amount||0).toFixed(2)}</td><td>${escHtml(x.status)}</td><td>${escHtml(x.time||'')}</td><td>${String(x.status).toLowerCase()!=='confirmed'?`<button class="btn" onclick="adminTransaction(${i},'confirmed')">Confirm</button>`:`<button class="btn" onclick="adminTransaction(${i},'refunded')">Refund</button>`}</td></tr>`).join('')}</table></div>`:'<p>No transactions recorded.</p>';
+  const report=document.getElementById('platformReport');if(report)report.innerHTML=`<p><span class="admin-stat">${materials.length} materials</span><span class="admin-stat">${st.teachers.filter(x=>x.status==='approved').length} approved teachers</span><span class="admin-stat">${st.users.length} users</span><span class="admin-stat">${st.notes.filter(x=>x.status==='approved').length} approved system notes</span></p><p>Pending material approvals: <b>${pendingM}</b>. Pending teacher approvals: <b>${pendingT}</b>. Confirmed transaction value: <b>KES ${confirmed.reduce((a,x)=>a+Number(x.amount||0),0).toFixed(2)}</b>. Platform revenue: <b>KES ${revenue.toFixed(2)}</b>.</p>`;
+  const an=document.getElementById('adminNotificationList');if(an){const ns=JSON.parse(localStorage.getItem('edushelfNotifications')||'[]');an.innerHTML=ns.length?ns.slice(0,15).map(x=>`<div class="material"><div>${escHtml(x.message)}<br><small>${escHtml(x.time)}</small></div></div>`).join(''):'<p>No notifications.</p>'}
+  const act=document.getElementById('activity');if(act)act.innerHTML=logs.length?logs.slice(0,15).map(x=>`<div class="material"><div>📝 ${escHtml(x.action)}</div><small>${escHtml(x.time)}</small></div>`).join(''):'<p>No activity recorded yet.</p>';
+}
+function adminTeacher(i,status){const st=getAdminState();st.teachers[i].status=status;const u=st.users.find(x=>x.email===st.teachers[i].email);if(u)u.status=status==='approved'?'active':'suspended';saveAdminState(st);logActivity(`${status==='approved'?'Approved':'Rejected'} teacher: ${st.teachers[i].name}`);logNotification(`Teacher ${st.teachers[i].name}: ${status}`);adminRefreshAll()}
+function adminMaterialApproval(i,status){if(!materials[i])return;materials[i].approvalStatus=status;materials[i].approvedAt=status==='approved'?new Date().toISOString():null;save();logActivity(`${status==='approved'?'Approved':'Rejected'} material: ${materials[i].title}`);logNotification(`Material ${materials[i].title}: ${status}`);adminRefreshAll();renderMaterials()}
+function adminNote(i,status){const st=getAdminState();st.notes[i].status=status==='unpublished'?'unpublished':status;saveAdminState(st);logActivity(`${status==='approved'?'Approved':status==='rejected'?'Rejected':'Unpublished'} system note: ${st.notes[i].title}`);logNotification(`System note ${st.notes[i].title}: ${st.notes[i].status}`);adminRefreshAll()}
+function setNotePrice(i,v){const st=getAdminState();st.notes[i].price=Math.max(0,Number(v||0));saveAdminState(st);logActivity(`Changed system note price: ${st.notes[i].title} to KES ${st.notes[i].price}`);adminRefreshAll()}
+function seedSystemNote(){const st=getAdminState();st.notes.unshift({id:'N'+Date.now(),title:'AI-Generated Revision Notes',subject:'General',grade:'Grade 8',status:'pending',price:100,created:new Date().toISOString().slice(0,10),source:'AI'});saveAdminState(st);logActivity('Created system-generated note for admin approval');adminRefreshAll()}
+function toggleUser(i){const st=getAdminState();if(st.users[i].role==='admin')return alert('The administrator account cannot be suspended here.');st.users[i].status=st.users[i].status==='suspended'?'active':'suspended';saveAdminState(st);logActivity(`${st.users[i].status==='active'?'Activated':'Suspended'} user: ${st.users[i].email}`);adminRefreshAll()}
+function changeUserRole(i,role){const st=getAdminState();if(st.users[i].role==='admin'&&role!=='admin')return alert('The primary administrator role cannot be changed here.');st.users[i].role=role;saveAdminState(st);logActivity(`Changed role for ${st.users[i].email} to ${role}`);adminRefreshAll()}
+function adminTransaction(i,status){const ps=getPurchases();if(!ps[i])return;ps[i].status=status;localStorage.setItem('tusomePurchases',JSON.stringify(ps));logActivity(`${status==='confirmed'?'Confirmed':'Refunded'} transaction: ${ps[i].title}`);logNotification(`Transaction ${ps[i].title}: ${status}`);adminRefreshAll();renderPayments()}
+function sendAdminNotification(e){e.preventDefault();const v=document.getElementById('adminNotificationText').value.trim();if(!v)return;logNotification('ADMIN: '+v);logActivity('Sent admin notification: '+v);e.target.reset();adminRefreshAll()}
+function renderAdmin(){adminRefreshAll()}
 function clearActivity(){localStorage.removeItem('edushelfActivity');renderAdmin();refreshProgress()}
 async function upload(e){e.preventDefault();const f=document.getElementById('file').files[0];if(!f)return;const fileId=materialKey();try{await saveUploadedFile(fileId,f);const m={id:Date.now(),fileId,title:title.value.trim(),subject:subject.value,grade:grade.value,strand:strand.value,competency:competency.value,topic:topic.value,file:f.name,fileType:f.type,fileSize:f.size,price:Number(price.value||0),description:desc.value};materials.unshift(m);save();logActivity('Uploaded material: '+m.title+' ('+m.subject+', '+m.grade+')');logNotification('New learning material uploaded: '+m.title);e.target.reset();renderTeacher();populateMaterialFilters();filterMaterials();show('teacher')}catch(err){alert('Upload failed. Your browser could not store the file. Please try again or use a modern browser.')}}
 function login(e){e.preventDefault();const role=document.getElementById('role').value;if(role==='admin'){const email=e.target.querySelector('input[type="email"]').value.trim();const password=e.target.querySelector('input[type="password"]').value;if(email==='admin@edushelf.com'&&password==='admin123')show('admin');else alert('Invalid administrator credentials. Prototype account: admin@edushelf.com / admin123')}else show(role==='teacher'?'teacher':'learner')}

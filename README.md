@@ -70,3 +70,18 @@ This does not bypass quotas. If the project has exhausted its quota, changing mo
 
 ## Personalized Learner Progress
 The learner Progress dashboard now records Mark My Work attempts locally, calculates average scores, tracks questions attempted and study streaks, groups results by subject/topic, highlights areas to improve and mastered topics, and provides targeted practice shortcuts. Existing Daraja/payment code and the existing prototype structure are preserved for later improvement.
+
+
+## Strengthened Admin Control
+The Administrator Control Center now provides centralized prototype controls for:
+- Teacher approval/rejection
+- Material approval/rejection
+- AI/system-generated note approval, rejection, unpublishing and KES pricing
+- User activation/suspension and role management
+- Platform reports
+- Transaction confirmation/refund controls
+- Platform revenue and teacher earnings reporting
+- Admin-sent platform notifications
+- Audit activity logging
+
+Approval state is respected by the learner-facing material catalogue. Existing Daraja/payment integration remains unchanged for the later payment-improvement phase.

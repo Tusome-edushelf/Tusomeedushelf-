@@ -1,40 +1,36 @@
-# Tusome EduShelf — Automatic Teacher Payouts v9
+# Tusome EduShelf — Role-Specific AI Assistant
 
-This version adds automatic teacher revenue payouts using Safaricom M-PESA Daraja B2C.
+This build keeps the existing dashboard structure and makes the AI Assistant respect the dashboard role.
 
-## Flow
-1. Learner completes an approved material purchase.
-2. The confirmed transaction locks the teacher/platform revenue split.
-3. Teacher saves a payout M-PESA number in the Teacher Dashboard.
-4. Admin sets a minimum automatic payout balance and enables automatic payouts.
-5. The server checks balances periodically.
-6. When a teacher reaches the threshold, the server creates a processing payout and submits it to Daraja B2C.
-7. Daraja calls the result callback; successful payouts are marked paid automatically, while failed payouts are recorded as failed.
+## Teacher AI
+- Lesson-plan generation
+- Scheme-of-work support
+- Assessment creation
+- Rubric generation
+- Differentiated activities
+- Remedial activities
+- Enrichment activities
+- AI material quality checking before submission
 
-## Required Render environment variables for live automatic B2C payouts
-- `MPESA_ENV=production` when going live
-- `MPESA_CONSUMER_KEY`
-- `MPESA_CONSUMER_SECRET`
-- `MPESA_B2C_SHORTCODE`
-- `MPESA_INITIATOR_NAME`
-- `MPESA_SECURITY_CREDENTIAL`
-- `MPESA_RESULT_URL` (public HTTPS URL ending in `/api/mpesa/b2c/result`)
-- `MPESA_QUEUE_TIMEOUT_URL` (public HTTPS URL ending in `/api/mpesa/b2c/timeout`)
+## Admin AI
+- Platform activity summaries
+- Material moderation assistance
+- Duplicate-material detection
+- Upload/user/payment reports
+- Materials waiting for approval
+- Admin AI does not make final approval/rejection decisions
 
-Optional:
-- `MPESA_COMMAND_ID` (defaults to `BusinessPayment`)
-- `MPESA_B2C_ENDPOINT` (defaults to the Daraja B2C v3 payment endpoint)
-- `AUTO_PAYOUT_ENABLED=true` to enable by environment; admin can also enable it in the dashboard
-- `AUTO_PAYOUT_THRESHOLD=500`
-- `AUTO_PAYOUT_INTERVAL_MS=300000` (5 minutes)
+## Parent / Guardian AI
+- Learner progress summaries
+- Suggested revision activities
+- Explanation of performance reports
+- Study-support suggestions
 
-Do not invent Daraja credentials or security credentials. Obtain and configure the appropriate B2C credentials in your Safaricom Daraja account before enabling automatic payouts.
+## Verification reminder
+Curriculum-related AI output is advisory. Teachers or administrators must verify curriculum-related content against the relevant official curriculum/materials before publishing or using it.
 
-## Important
-- Automatic payouts are OFF by default unless `AUTO_PAYOUT_ENABLED=true` is configured or the admin enables them after B2C configuration is present.
-- The server will not automatically send money without B2C configuration.
-- Payouts use whole Kenyan shillings (`Math.floor(balance)`). Any remainder below KES 1 stays in the teacher balance.
-- The system treats `paid` and `processing` payouts as already allocated so it does not create duplicate automatic payouts.
-- Sandbox/live B2C behavior depends on the Daraja application and credentials. Test in sandbox before production.
-
-Official Daraja documentation: https://developer.safaricom.co.ke/apis/BusinessToCustomer
+## Notes
+- Existing learner payment, material, PostgreSQL, revenue and dashboard features are preserved.
+- The AI quality checker currently accepts PDF and supported image uploads for content inspection. DOC/DOCX/PPT/PPTX can still be submitted normally for admin review.
+- Admin AI uses an authenticated server-side context endpoint and avoids sending unnecessary learner payment/contact details to the AI.
+- Server and browser JavaScript were syntax checked with `node --check`.

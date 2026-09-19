@@ -98,24 +98,11 @@ footer{text-align:center;padding:30px;color:#687386}.ai-answer{line-height:1.75;
 <section id="ai" class="page">
   <div id="aiStatus" class="notice" style="margin:12px 0">Checking AI service...</div>
   <div class="topline">
-    <div><h2>🤖 AI Study Assistant</h2><p>Ask questions, create notes and practise what you have learned.</p></div>
+    <div><h2 id="aiTitle">🤖 AI Assistant</h2><p id="aiDescription">Role-specific AI support for your EduShelf dashboard.</p></div>
     <button class="btn primary" onclick="backFromAIAssistant()">Back to Dashboard</button>
   </div>
-
-  <div class="cards">
-    <div class="card">
-      <h3>💬 Ask a Question</h3>
-      <p>Ask for an explanation of a school topic in clear, learner-friendly language.</p>
-    </div>
-    <div class="card">
-      <h3>📝 Develop Notes</h3>
-      <p>Turn a topic into organized revision notes with key points and examples.</p>
-    </div>
-    <div class="card">
-      <h3>❓ Practice Questions</h3>
-      <p>Generate questions to help you test your understanding.</p>
-    </div>
-  </div>
+  <div id="aiRoleNotice" class="notice">⚠️ <b>Verification reminder:</b> Teachers or administrators should verify curriculum-related AI content before publishing or using it.</div>
+  <div id="aiFeatureCards" class="cards"></div>
 
   <form onsubmit="askAI(event)" style="max-width:800px">
     <label>Subject</label>
@@ -316,7 +303,6 @@ footer{text-align:center;padding:30px;color:#687386}.ai-answer{line-height:1.75;
     <div class="card"><h3>🤖 AI Assistant</h3><p>Create lesson plans, assessments, notes and learning activities.</p><button class="btn primary" onclick="openAIAssistant('teacher')">Open AI Assistant</button></div>
   </div>
   <div class="card" style="margin-top:22px"><h3>💰 Sales & Earnings</h3><div id="teacherEarningsPanel"><p>Loading earnings...</p></div></div>
-  <div class="card" style="margin-top:22px"><h3>📱 Automatic Payout Phone</h3><p>Save the M-PESA number that should receive your teacher earnings.</p><div class="admin-action-row"><input id="teacherPayoutPhone" placeholder="07XXXXXXXX" inputmode="tel" maxlength="13"><button class="btn primary" onclick="saveTeacherPayoutPhone()">Save Payout Number</button></div><p id="teacherPayoutNotice" class="small"></p></div>
   <div class="card" style="margin-top:22px"><h3>Your Recent Uploads</h3><div id="teacherMaterials"></div></div>
 </section>
 
@@ -358,7 +344,6 @@ footer{text-align:center;padding:30px;color:#687386}.ai-answer{line-height:1.75;
   <div id="adminRevenue" class="admin-panel" style="display:none">
     <div class="card"><h3>⚙️ Revenue Split</h3><p>Set the percentage paid to teachers. The remaining percentage is the platform revenue.</p><div class="admin-action-row"><label>Teacher percentage <input id="teacherRevenuePercent" type="number" min="0" max="100" step="1" value="80" style="width:100px"></label><span id="platformRevenuePercent">Platform: 20%</span><button class="btn primary" onclick="saveRevenueSettings()">Save Split</button></div><p class="small">Example: 80% teacher / 20% platform on a KES 100 sale = KES 80 teacher earnings and KES 20 platform revenue.</p></div>
     <div class="card" style="margin-top:16px"><h3>👨‍🏫 Teacher Payouts</h3><div class="admin-action-row"><input id="payoutTeacherEmail" type="email" placeholder="teacher@example.com" style="max-width:240px"><input id="payoutAmount" type="number" min="1" step="0.01" placeholder="Amount (KES)" style="max-width:160px"><input id="payoutNotes" placeholder="Notes" style="max-width:240px"><button class="btn primary" onclick="createTeacherPayout()">Create Payout</button></div><div id="adminPayoutsList" style="margin-top:14px"></div></div>
-    <div class="card" style="margin-top:16px"><h3>⚡ Automatic Teacher Payouts</h3><p>When enabled, EduShelf checks teacher balances automatically and submits an M-PESA B2C payout when the balance reaches the threshold.</p><div class="admin-action-row"><label><input id="autoPayoutEnabled" type="checkbox"> Enable automatic payouts</label><label>Minimum balance <input id="autoPayoutThreshold" type="number" min="1" step="1" value="500" style="width:120px"></label><button class="btn primary" onclick="saveAutomaticPayoutSettings()">Save Automatic Payouts</button></div><p id="autoPayoutStatus" class="small"></p></div>
   </div>
 
   <div class="card" style="margin-top:18px"><h3>💬 Communication Centre — User Feedback</h3><p>Review complaints and suggestions, update status and respond to users.</p><div id="adminFeedbackList"></div></div>
@@ -389,8 +374,11 @@ footer{text-align:center;padding:30px;color:#687386}.ai-answer{line-height:1.75;
     <label>Price (KES)</label><input id="price" type="number" min="0" step="1" value="0" required placeholder="e.g. 50">
     <label>Description</label><textarea id="desc" rows="3" placeholder="Brief description"></textarea>
     <label>File</label><input id="file" type="file" required accept=".pdf,.doc,.docx,.ppt,.pptx">
+    <div class="notice" style="margin-top:4px">🔍 <b>AI quality check:</b> Review the material with AI before submission. Curriculum-related suggestions must be verified by a teacher or administrator.</div>
+    <button class="btn" type="button" onclick="checkMaterialQuality()">🔍 Check Material Quality</button>
     <button class="btn primary" type="submit">Upload Material</button>
     <button class="btn" type="button" onclick="show('teacher')">Cancel</button>
+    <div id="materialQualityResult" class="card" style="display:none;margin-top:14px"><h3>AI Material Quality Review</h3><div id="materialQualityAnswer" class="ai-answer"></div></div>
   </form>
 </section>
 </main>
@@ -575,7 +563,7 @@ async function loadAdminPayments(){
   try{
     const r=await fetch('/api/admin/payments',{credentials:'include'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load payment records.');
     const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v};
-    set('teacherRevenuePercent',d.settings.teacherPercentage);set('platformRevenuePercent','Platform: '+d.settings.platformPercentage+'%');if(d.autoPayout){const ae=document.getElementById('autoPayoutEnabled'),at=document.getElementById('autoPayoutThreshold'),as=document.getElementById('autoPayoutStatus');if(ae)ae.checked=!!d.autoPayout.enabled;if(at)at.value=d.autoPayout.threshold;if(as)as.textContent=d.b2cConfigured?'B2C configuration detected.':'B2C configuration is not complete yet.';}
+    set('teacherRevenuePercent',d.settings.teacherPercentage);set('platformRevenuePercent','Platform: '+d.settings.platformPercentage+'%');
     const tx=(d.transactions||[]).filter(x=>x.status==='paid');
     const total=tx.reduce((a,x)=>a+Number(x.amount||0),0), teacher=tx.reduce((a,x)=>a+Number(x.teacherAmount||0),0), platform=tx.reduce((a,x)=>a+Number(x.platformAmount||0),0);
     set('adminPaymentSummary',`Confirmed purchases: ${tx.length} • Sales: KES ${total.toFixed(2)} • Teacher earnings: KES ${teacher.toFixed(2)} • Platform revenue: KES ${platform.toFixed(2)}`);
@@ -593,17 +581,6 @@ async function createTeacherPayout(){
   try{const r=await fetch('/api/admin/teacher-payouts',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({teacherEmail,amount,notes})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not create payout.');document.getElementById('payoutAmount').value='';document.getElementById('payoutNotes').value='';loadAdminPayments();alert('Teacher payout record created. You can mark it Paid after the actual transfer is completed.');}catch(e){alert(e.message)}
 }
 async function markTeacherPayoutPaid(id){if(!confirm('Mark this teacher payout as paid?'))return;try{const r=await fetch('/api/admin/teacher-payouts/'+encodeURIComponent(id)+'/paid',{method:'PATCH',credentials:'include'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not update payout.');loadAdminPayments()}catch(e){alert(e.message)}}
-async function loadAutomaticPayoutSettings(){
-  try{const r=await fetch('/api/admin/automatic-payout-settings',{credentials:'include'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load automatic payout settings.');const e=document.getElementById('autoPayoutEnabled'),t=document.getElementById('autoPayoutThreshold'),s=document.getElementById('autoPayoutStatus');if(e)e.checked=!!d.settings.enabled;if(t)t.value=d.settings.threshold;if(s)s.textContent=d.b2cConfigured?'B2C configuration detected. Automatic payouts can be enabled.':'B2C configuration is not complete yet; automatic payouts are disabled until the Daraja B2C credentials and callback URLs are configured.';}catch(e){console.warn(e)}
-}
-async function saveAutomaticPayoutSettings(){
-  const enabled=!!document.getElementById('autoPayoutEnabled')?.checked,threshold=Number(document.getElementById('autoPayoutThreshold')?.value||0);if(!threshold||threshold<1){alert('Enter a minimum payout balance of at least KES 1.');return}try{const r=await fetch('/api/admin/automatic-payout-settings',{method:'PATCH',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({enabled,threshold})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not save automatic payout settings.');document.getElementById('autoPayoutStatus').textContent=enabled?'Automatic payouts are ON. The server checks balances every few minutes.':'Automatic payouts are OFF.';alert('Automatic payout settings saved.')}catch(e){alert(e.message)}}
-async function loadTeacherPayoutProfile(){
-  try{const r=await fetch('/api/teacher/payout-profile',{credentials:'include'});const d=await r.json();if(r.ok&&document.getElementById('teacherPayoutPhone'))document.getElementById('teacherPayoutPhone').value=d.phone||'';}catch(e){console.warn(e)}
-}
-async function saveTeacherPayoutPhone(){
-  const phone=(document.getElementById('teacherPayoutPhone')?.value||'').trim();if(!phone){alert('Enter your M-PESA phone number.');return}try{const r=await fetch('/api/teacher/payout-profile',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({phone})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not save payout number.');document.getElementById('teacherPayoutNotice').textContent='Payout number saved.';}catch(e){alert(e.message)}}
-
 async function loadTeacherEarnings(){
   try{
     const r=await fetch('/api/teacher/earnings',{credentials:'include'});
@@ -696,7 +673,7 @@ function show(id){
   }
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   const el=document.getElementById(id);if(el)el.classList.add('active');
-  if(id==='teacher'){loadServerMaterials().then(renderTeacher);loadTeacherEarnings();loadTeacherPayoutProfile()}
+  if(id==='teacher'){loadServerMaterials().then(renderTeacher);loadTeacherEarnings()}
   if(id==='admin'){adminRefreshAll()}
   if(id==='communication'){renderMyFeedback();renderAdminFeedback()}
   if(id==='notifications')renderNotifications();
@@ -707,9 +684,39 @@ function show(id){
   window.scrollTo(0,0);
 }
 let aiReturnDashboard='learner';
+const AI_DASHBOARDS={
+  learner:{title:'🤖 Learner AI Assistant',description:'Get explanations, revision help and study support based on your learning needs.',features:[['💬','Explain a Topic','Clear explanations and examples for school topics.'],['📝','Revision Notes','Create concise notes for revision.'],['❓','Practice Questions','Generate practice questions and self-check activities.'],['📖','Study Support','Get revision suggestions based on your progress.']]},
+  teacher:{title:'🤖 Teacher AI Assistant',description:'Plan lessons, create assessments and design differentiated learning activities.',features:[['📘','Lesson Plans','Generate structured lesson plans with objectives, activities and assessment.'],['📚','Scheme of Work','Build a structured scheme-of-work outline from the selected subject and grade.'],['📝','Assessment & Rubrics','Create assessments, marking guidance and rubrics.'],['🎯','Differentiated Activities','Create activities for different learner needs.'],['🔄','Remedial & Enrichment','Create targeted remedial support and extension activities.'],['🔍','Material Quality Check','Review uploaded material before submission.']]},
+  admin:{title:'🤖 Admin AI Assistant',description:'Summarize platform activity and assist with moderation, reporting and approval workflows.',features:[['📈','Activity Summary','Summarize platform activity without exposing unnecessary personal information.'],['🛡️','Moderation Assistance','Review materials for quality, clarity and possible issues.'],['♻️','Duplicate Detection','Identify likely duplicate or highly similar materials.'],['📊','Platform Reports','Summarize uploads, users and payment activity.'],['⏳','Approval Queue','Identify materials currently waiting for approval.']]},
+  parent:{title:'🤖 Parent / Guardian AI',description:'Simple study-support information focused only on learner progress and revision.',features:[['📈','Progress Summary','Explain recent learner progress in simple language.'],['📖','Revision Activities','Suggest age-appropriate revision activities.'],['📊','Performance Report','Explain performance information without making high-stakes decisions.'],['💡','Study Support','Suggest practical ways to support study at home.']]}
+};
+function configureAIAssistant(dashboard){
+  const cfg=AI_DASHBOARDS[dashboard]||AI_DASHBOARDS.learner;
+  document.getElementById('aiTitle').textContent=cfg.title;
+  document.getElementById('aiDescription').textContent=cfg.description;
+  const box=document.getElementById('aiFeatureCards');
+  box.innerHTML=cfg.features.map(x=>`<div class="card"><h3>${x[0]} ${x[1]}</h3><p>${x[2]}</p></div>`).join('');
+  const notice=document.getElementById('aiRoleNotice');
+  notice.style.display=dashboard==='teacher'||dashboard==='admin'?'block':'none';
+  const mode=document.getElementById('aiMode');
+  const modeSets={
+    learner:[['answer','Answer / Explain a Question'],['notes','Develop Revision Notes'],['practice','Create Practice Questions'],['summary','Summarize a Topic'],['mark','Mark My Work — Check & Correct']],
+    teacher:[['lesson','Lesson Plan Generation'],['scheme','Scheme-of-Work Support'],['assessment','Assessment Creation'],['rubric','Rubric Generation'],['differentiated','Differentiated Activities'],['remediation','Remedial Activities'],['enrichment','Enrichment Activities'],['material_quality','Material Quality Check'],['answer','Explain / Research a Topic']],
+    admin:[['admin_summary','Platform Activity Summary'],['moderation','Material Moderation Assistance'],['duplicate','Duplicate-Material Detection'],['admin_reports','Uploads, Users & Payments Report'],['approval_queue','Materials Waiting for Approval'],['answer','Admin Question / Analysis']],
+    parent:[['parent_progress','Learner Progress Summary'],['parent_revision','Suggested Revision Activities'],['parent_report','Explain Performance Report'],['parent_study','Study-Support Suggestions']]
+  };
+  const options=modeSets[dashboard]||modeSets.learner;
+  mode.innerHTML=options.map(o=>`<option value="${o[0]}">${o[1]}</option>`).join('');
+  const labels=document.querySelectorAll('#ai form label');
+  if(labels[0])labels[0].textContent=dashboard==='admin'?'Subject / Area':'Subject';
+  const prompt=document.getElementById('aiPrompt');
+  prompt.placeholder=dashboard==='teacher'?'Example: Create a Grade 8 Mathematics lesson on linear equations...':dashboard==='admin'?'Example: Summarize materials awaiting approval and recent payment activity...':dashboard==='parent'?'Example: Explain this learner\'s recent progress and suggest revision support...':'Example: Explain linear functions and give me two examples.';
+  document.getElementById('aiResult').style.display='none';
+}
 function openAIAssistant(dashboard){
   aiReturnDashboard=dashboard||getSessionRole()||'learner';
   sessionStorage.setItem('tusomeAIReturnDashboard',aiReturnDashboard);
+  configureAIAssistant(aiReturnDashboard);
   show('ai');
 }
 function backFromAIAssistant(){
@@ -720,13 +727,31 @@ function backFromAIAssistant(){
 
 function copyAI(){navigator.clipboard?.writeText(document.getElementById('aiAnswer').textContent);alert('Response copied.')}
 async function checkAIStatus(){const el=document.getElementById('aiStatus');if(!el)return;try{const r=await fetch('/api/health');const d=await r.json();el.className=d.ai?.configured?'success':'notice';el.textContent=d.ai?.configured?'🟢 Gemini AI connected • '+d.ai.model:'🟠 AI service is not configured. Add GEMINI_API_KEY to Render Environment.'}catch(e){el.className='notice';el.textContent='🔴 EduShelf server is not running. Start it with: npm install && npm start'}}
-async function askAI(e){e.preventDefault();const subject=document.getElementById('aiSubject').value,grade=document.getElementById('aiGrade').value,mode=document.getElementById('aiMode').value,focus=document.getElementById('cbeFocus').value,prompt=document.getElementById('aiPrompt').value.trim(),qFile=document.getElementById('aiQuestionFile')?.files?.[0],wFile=document.getElementById('aiWorkingFile')?.files?.[0],box=document.getElementById('aiResult'),answer=document.getElementById('aiAnswer'),button=e.target.querySelector('button[type="submit"]');if(!prompt&&!qFile&&!wFile){alert('Enter a question or upload a question paper first.');return}if(mode==='mark'&&!qFile&&!wFile){alert('For Mark My Work, upload your question paper and/or your working.');return}button.disabled=true;button.textContent='⏳ Gemini is working...';answer.textContent='Gemini is preparing your response...';box.style.display='block';try{const readFile=async(file)=>{if(!file)return null;if(file.size>12*1024*1024)throw new Error('Please keep each uploaded file below 12 MB.');const dataUrl=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error('Could not read the selected file.'));reader.readAsDataURL(file)});return{name:file.name,mimeType:file.type,data:dataUrl}};const [questionFile,workingFile]=await Promise.all([readFile(qFile),readFile(wFile)]);const res=await fetch('/api/ai',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({subject,grade,mode,focus,prompt,file:questionFile,questionFile,workingFile})});const data=await res.json();if(!res.ok)throw new Error(data.error||'The Gemini service could not respond.');answer.textContent=data.answer;if(mode==='mark')saveMarkAttempt(subject,grade,prompt,data.answer);logActivity('Used Gemini AI Study Assistant: '+mode+' / '+subject+' / '+grade);logNotification('Gemini response generated for '+subject+' ('+grade+').');refreshProgress();renderNotifications()}catch(err){answer.textContent='Sorry, Gemini could not respond.\n\n'+err.message;checkAIStatus()}finally{button.disabled=false;button.textContent='✨ Ask AI'}}
+async function buildAIContext(role,mode){
+  if(role==='learner'){return JSON.stringify({activity:JSON.parse(localStorage.getItem('edushelfActivity')||'[]').slice(0,20),attempts:getMarkAttempts().slice(0,20)});}
+  if(role==='parent'){const attempts=getMarkAttempts();return JSON.stringify({progress:document.getElementById('parentActivity')?.textContent||'',aiSessions:document.getElementById('parentAI')?.textContent||'',practice:document.getElementById('parentPractice')?.textContent||'',recentAttempts:attempts.slice(0,10)});}
+  if(role==='admin'){
+    try{const r=await fetch('/api/admin/ai-context',{credentials:'include'});const d=r.ok?await r.json():{error:'Could not load live admin context.'};return JSON.stringify(d).slice(0,30000)}catch(e){return JSON.stringify({error:'Could not load the live admin context. Use the visible dashboard information only.'});}
+  }
+  return '';
+}
+async function askAI(e){e.preventDefault();const subject=document.getElementById('aiSubject').value,grade=document.getElementById('aiGrade').value,mode=document.getElementById('aiMode').value,focus=document.getElementById('cbeFocus').value,enteredPrompt=document.getElementById('aiPrompt').value.trim(),qFile=document.getElementById('aiQuestionFile')?.files?.[0],wFile=document.getElementById('aiWorkingFile')?.files?.[0],box=document.getElementById('aiResult'),answer=document.getElementById('aiAnswer'),button=e.target.querySelector('button[type="submit"]');const defaultPrompts={lesson:'Create a lesson plan for the selected subject and grade. Include objectives, learning activities, resources, differentiation and assessment.',scheme:'Create a structured scheme of work for the selected subject and grade, with sequence, topics, outcomes, activities, resources and assessment checkpoints.',assessment:'Create an assessment for the selected subject and grade with clear questions/tasks and marking guidance.',rubric:'Create a four-level rubric with observable criteria for the selected subject and grade.',differentiated:'Create differentiated activities for learners needing support, learners at expected level and learners ready for extension.',remediation:'Create remedial activities for likely learning gaps in the selected topic.',enrichment:'Create enrichment activities that deepen understanding of the selected topic.',admin_summary:'Summarize the current platform activity from the supplied dashboard data.',moderation:'Review the supplied material information for moderation concerns and items requiring human review.',duplicate:'Identify likely duplicate or highly similar materials from the supplied material list.',admin_reports:'Prepare a concise report on uploads, users and payments from the supplied dashboard data.',approval_queue:'Identify materials currently waiting for approval from the supplied dashboard data.',parent_progress:'Summarize the learner progress from the supplied progress data.',parent_revision:'Suggest revision activities based on the learner progress data.',parent_report:'Explain the learner performance information in simple language.',parent_study:'Suggest practical study-support ideas based on the learner progress data.'};const prompt=enteredPrompt||defaultPrompts[mode]||'';if(!prompt&&!qFile&&!wFile){alert('Enter a question or upload a question paper first.');return}if(mode==='mark'&&!qFile&&!wFile){alert('For Mark My Work, upload your question paper and/or your working.');return}button.disabled=true;button.textContent='⏳ Gemini is working...';answer.textContent='Gemini is preparing your response...';box.style.display='block';try{const readFile=async(file)=>{if(!file)return null;if(file.size>12*1024*1024)throw new Error('Please keep each uploaded file below 12 MB.');const dataUrl=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error('Could not read the selected file.'));reader.readAsDataURL(file)});return{name:file.name,mimeType:file.type,data:dataUrl}};const [questionFile,workingFile]=await Promise.all([readFile(qFile),readFile(wFile)]);const res=await fetch('/api/ai',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({subject,grade,mode,focus,prompt,file:questionFile,questionFile,workingFile,role:aiReturnDashboard,context:await buildAIContext(aiReturnDashboard,mode)})});const data=await res.json();if(!res.ok)throw new Error(data.error||'The Gemini service could not respond.');answer.textContent=data.answer;if(mode==='mark')saveMarkAttempt(subject,grade,prompt,data.answer);logActivity('Used Gemini AI Study Assistant: '+mode+' / '+subject+' / '+grade);logNotification('Gemini response generated for '+subject+' ('+grade+').');refreshProgress();renderNotifications()}catch(err){answer.textContent='Sorry, Gemini could not respond.\n\n'+err.message;checkAIStatus()}finally{button.disabled=false;button.textContent='✨ Ask AI'}}
 async function loadCurriculumCatalogue(){const box=document.getElementById('curriculumCatalogue');if(!box)return;box.textContent='Loading curriculum records...';try{const grade=document.getElementById('catGrade').value,subject=document.getElementById('catSubject').value;const r=await fetch('/api/curriculum?'+new URLSearchParams({grade,subject}));const data=await r.json();box.innerHTML=data.records.length?data.records.map(x=>`<div class="material"><div><b>${x.grade} • ${x.subject}</b><br><span class="tag">${x.strand}</span> <span class="tag">${x.substrand}</span><br><small>${(x.learningOutcomes||[]).join(' • ')||'Structure record — exact learning outcomes not yet imported for this entry.'}</small></div><span class="tag">${(x.learningOutcomes||[]).length} outcomes</span></div>`).join(''):'<p>No imported record matches this selection yet.</p>'}catch(e){box.textContent='Start the EduShelf server to load curriculum records.'}}
 document.getElementById('aiMode')?.addEventListener('change',()=>{const mode=document.getElementById('aiMode').value;const hint=document.getElementById('aiFileHint');if(hint){hint.innerHTML=mode==='mark'?'Upload the <b>question paper</b> in the first slot and <b>your working</b> in the second slot. Gemini will compare them and mark each step.':'Use the <b>Question Paper</b> slot for a paper you want Gemini to solve. The <b>Your Working</b> slot is for Mark My Work.';}});
 
-async function runGeneratedAI(subject,grade,mode,focus,prompt,resultBox,answerBox){resultBox.style.display='block';answerBox.textContent='Generating...';try{const res=await fetch('/api/ai',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({subject,grade,mode,focus,prompt})});const data=await res.json();if(!res.ok)throw new Error(data.error||'AI request failed.');answerBox.textContent=data.answer;logActivity('Generated '+mode+' / '+subject+' / '+grade);logNotification('New AI '+mode+' generated for '+subject+' ('+grade+').');refreshProgress()}catch(err){answerBox.textContent='Sorry, the AI service is unavailable.\n\n'+err.message}}
+async function runGeneratedAI(subject,grade,mode,focus,prompt,resultBox,answerBox,extraContext=''){resultBox.style.display='block';answerBox.textContent='Generating...';try{const res=await fetch('/api/ai',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({subject,grade,mode,focus,prompt,role:aiReturnDashboard,context:extraContext})});const data=await res.json();if(!res.ok)throw new Error(data.error||'AI request failed.');answerBox.textContent=data.answer;logActivity('Generated '+mode+' / '+subject+' / '+grade);logNotification('New AI '+mode+' generated for '+subject+' ('+grade+').');refreshProgress()}catch(err){answerBox.textContent='Sorry, the AI service is unavailable.\n\n'+err.message}}
 function generateLesson(e){e.preventDefault();runGeneratedAI(document.getElementById('lessonSubject').value,document.getElementById('lessonGrade').value,'lesson','Learning Outcome / Strand / Sub-strand',`Create a ${document.getElementById('lessonDuration').value} lesson plan for ${document.getElementById('lessonStrand').value}. Topic/learning outcome: ${document.getElementById('lessonTopic').value}. Include objectives, key inquiry question, learning experiences, resources, competencies, values, PCIs, differentiation and assessment.`,document.getElementById('lessonResult'),document.getElementById('lessonAnswer'))}
 function generateAssessment(e){e.preventDefault();runGeneratedAI(document.getElementById('assessmentSubject').value,document.getElementById('assessmentGrade').value,'assessment','Assessment / Rubric',`Create a ${document.getElementById('assessmentType').value} assessment for ${document.getElementById('assessmentStrand').value}. Topic/outcome: ${document.getElementById('assessmentTopic').value}. Include instructions, tasks/questions, marking guidance and a 4-level rubric with observable criteria.`,document.getElementById('assessmentResult'),document.getElementById('assessmentAnswer'))}
+async function checkMaterialQuality(){
+  const file=document.getElementById('file')?.files?.[0];
+  const box=document.getElementById('materialQualityResult'),answer=document.getElementById('materialQualityAnswer');
+  if(!file){alert('Select the material file first.');return}
+  if(file.size>12*1024*1024){alert('Please keep the material below 12 MB.');return}
+  const allowed=['application/pdf','image/png','image/jpeg','image/webp','image/heic','image/heif'];
+  if(!allowed.includes(file.type)){answer.textContent='For the AI quality check, please use a PDF or supported image. You can still submit DOC/DOCX/PPT/PPTX for normal admin review.';box.style.display='block';return}
+  const data=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=()=>reject(new Error('Could not read the material.'));r.readAsDataURL(file)});
+  box.style.display='block';answer.textContent='Checking material quality...';
+  try{const res=await fetch('/api/ai',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({role:'teacher',mode:'material_quality',subject:document.getElementById('subject').value,grade:document.getElementById('grade').value,focus:document.getElementById('strand').value,prompt:`Review this proposed learning material before submission. Title: ${document.getElementById('title').value}. Topic: ${document.getElementById('topic').value}. Competency: ${document.getElementById('competency').value}. Description: ${document.getElementById('desc').value}`,file:{name:file.name,mimeType:file.type,data}})});const d=await res.json();if(!res.ok)throw new Error(d.error||'Quality check failed.');answer.textContent=d.answer;logActivity('Used AI material quality checker: '+document.getElementById('title').value)}catch(e){answer.textContent='Quality check failed.\n\n'+e.message}}
 function escHtml(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
 function getMarkAttempts(){try{return JSON.parse(localStorage.getItem('tusomeMarkAttempts')||'[]')}catch{return[]}}
 function saveMarkAttempt(subject,grade,prompt,answer){
@@ -771,6 +796,7 @@ async function restoreServerSession(){
   updatePublicUi();
 }
 restoreServerSession();
+configureAIAssistant(getSessionRole()||'learner');
 (async()=>{await loadServerMaterials();if(getSessionRole()==='learner')await loadServerPurchases();populateMaterialFilters();populateMaterialFilters();renderMaterials();renderTeacher();renderAdmin();refreshProgress();checkAIStatus()})();
 </script>
 <button id="communicationLaunch" class="btn primary communication-launch" onclick="openCommunicationCentre()" style="position:fixed;right:18px;bottom:18px;z-index:20;border-radius:24px">💬 Communication Centre</button>

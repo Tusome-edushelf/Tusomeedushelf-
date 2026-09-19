@@ -1,36 +1,18 @@
-# Tusome EduShelf — Role-Specific AI Assistant
+# Tusome EduShelf — Role-Specific AI v11
 
-This build keeps the existing dashboard structure and makes the AI Assistant respect the dashboard role.
+This update improves the quality and presentation of the role-specific AI assistant.
 
-## Teacher AI
-- Lesson-plan generation
-- Scheme-of-work support
-- Assessment creation
-- Rubric generation
-- Differentiated activities
-- Remedial activities
-- Enrichment activities
-- AI material quality checking before submission
+## Improvements
+- Clearer, more structured AI instructions for teacher, admin, parent/guardian, and learner tasks.
+- Scheme-of-work generation now explicitly uses a readable table with Week/Lesson, Topic, Learning Outcomes, Activities, Resources, Assessment, and Remarks/References.
+- Assessment and rubric outputs are structured for easy editing and classroom use.
+- Differentiated, remedial, and enrichment activities use practical tables where appropriate.
+- Material quality checking returns a clear check/status/evidence/improvement table.
+- Admin reports, moderation, duplicate detection, and approval-queue responses use tables when useful.
+- Parent progress/revision support uses concise tables where helpful.
+- AI responses now render headings, bullets, numbered lists, and Markdown tables as readable HTML tables/cards instead of showing raw Markdown.
+- The curriculum verification reminder remains in place for curriculum-related teacher/admin work.
+- Teacher/admin human oversight remains required; AI does not make final curriculum, moderation, or approval decisions.
 
-## Admin AI
-- Platform activity summaries
-- Material moderation assistance
-- Duplicate-material detection
-- Upload/user/payment reports
-- Materials waiting for approval
-- Admin AI does not make final approval/rejection decisions
-
-## Parent / Guardian AI
-- Learner progress summaries
-- Suggested revision activities
-- Explanation of performance reports
-- Study-support suggestions
-
-## Verification reminder
-Curriculum-related AI output is advisory. Teachers or administrators must verify curriculum-related content against the relevant official curriculum/materials before publishing or using it.
-
-## Notes
-- Existing learner payment, material, PostgreSQL, revenue and dashboard features are preserved.
-- The AI quality checker currently accepts PDF and supported image uploads for content inspection. DOC/DOCX/PPT/PPTX can still be submitted normally for admin review.
-- Admin AI uses an authenticated server-side context endpoint and avoids sending unnecessary learner payment/contact details to the AI.
-- Server and browser JavaScript were syntax checked with `node --check`.
+## Deployment
+Replace the current project with this ZIP on Render and redeploy. Existing environment variables remain unchanged.

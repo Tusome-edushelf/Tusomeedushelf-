@@ -104,3 +104,11 @@ Approval state is respected by the learner-facing material catalogue. Existing D
 - PDF preview opens in an in-app preview window for uploaded PDFs.
 - Paid notes require purchase before preview/download; free notes can be previewed/downloaded directly.
 - Learner catalogue only exposes approved materials.
+
+
+## Communication Centre v1
+- Dedicated dashboard for complaints and suggestions.
+- Users choose Complaint or Suggestion, enter a subject/message, and submit.
+- Users can view message status and admin responses.
+- Admin can review all submissions, mark Reviewing/Resolved, and respond.
+- Prototype data is stored locally in localStorage.

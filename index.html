@@ -546,6 +546,7 @@ function adminRefreshAll(){
       </div>
       <div class="admin-action-row">
         <label style="display:flex;align-items:center;gap:6px">KES <input type="number" min="0" step="1" value="${price}" style="width:110px" onchange="adminSetMaterialPrice(${i},this.value)" aria-label="Material price"></label>
+        <button class="btn" onclick="adminPreviewMaterial(${i})">Review / Open</button>
         ${status!=='approved'?`<button class="btn" onclick="adminMaterialApproval(${i},'approved')">Approve</button>`:''}
         ${status!=='rejected'?`<button class="btn" onclick="adminMaterialApproval(${i},'rejected')">Reject</button>`:''}
       </div>
@@ -561,6 +562,30 @@ function adminSetMaterialPrice(i,value){
   logNotification(`Material price updated: ${materials[i].title} — KES ${price.toFixed(2)}`);
   adminRefreshAll();
   renderMaterials();
+}
+async function adminPreviewMaterial(i){
+  const m=materials[i];
+  if(!m)return;
+  try{
+    if(m.fileId){
+      const stored=await getUploadedFile(m.fileId);
+      if(!stored){alert('The stored file could not be found. Please upload the material again.');return}
+      const url=URL.createObjectURL(stored.blob);
+      const opened=window.open(url,'_blank');
+      if(!opened){
+        const a=document.createElement('a');
+        a.href=url; a.target='_blank';
+        a.download=stored.name||m.file||'material';
+        a.click();
+      }
+      setTimeout(()=>URL.revokeObjectURL(url),60000);
+      logActivity('Admin reviewed material: '+m.title);
+      return;
+    }
+    alert('No uploaded file is attached to this material.');
+  }catch(err){
+    alert('Unable to open the material for review. Please upload it again.');
+  }
 }
 function adminMaterialApproval(i,status){if(!materials[i])return;materials[i].approvalStatus=status;materials[i].approvedAt=status==='approved'?new Date().toISOString():null;save();logActivity(`${status==='approved'?'Approved':'Rejected'} material: ${materials[i].title}`);logNotification(`Material ${materials[i].title}: ${status}`);adminRefreshAll();renderMaterials()}
 function adminNote(i,status){const st=getAdminState();st.notes[i].status=status==='unpublished'?'unpublished':status;saveAdminState(st);logActivity(`${status==='approved'?'Approved':status==='rejected'?'Rejected':'Unpublished'} system note: ${st.notes[i].title}`);logNotification(`System note ${st.notes[i].title}: ${st.notes[i].status}`);adminRefreshAll()}

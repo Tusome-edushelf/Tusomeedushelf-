@@ -133,4 +133,11 @@ Approval state is respected by the learner-facing material catalogue. Existing D
 
 
 ### Security Step 1 — Server-side authentication
-Login is now verified by the Express server. Sessions use an HttpOnly signed cookie. AI and M-PESA actions require authentication. The temporary user store is `data/users.json`; the planned database step can replace it later. Configure `AUTH_SESSION_SECRET`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD` in `.env`.
+Login is now verified by the Express server. Sessions use an HttpOnly signed cookie. AI and M-PESA actions require authentication. Demo users are now seeded into PostgreSQL when `DATABASE_URL` is configured; the database is the server-side source for login. Configure `AUTH_SESSION_SECRET`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD` in `.env`.
+
+## Step 2 — PostgreSQL database
+Tusome EduShelf now connects to Render PostgreSQL through the `DATABASE_URL` environment variable. On startup the server creates the core `users`, `materials`, and `transactions` tables if they do not already exist, seeds the current administrator/teacher/learner demo accounts from the authentication environment variables, and migrates legacy `transactions.json` records into PostgreSQL.
+
+For a Render-hosted EduShelf service, use the database's **Internal Database URL** as `DATABASE_URL`. Keep this value server-side and never place it in frontend code. The existing `MPESA_SHORTCODE` and `MPESA_PASSKEY` variables remain unchanged.
+
+The current free Render PostgreSQL plan is intended for testing/prototyping and expires according to the database plan shown in Render. Upgrade to a persistent database before production use.

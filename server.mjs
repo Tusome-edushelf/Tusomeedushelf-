@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
+import { Pool } from 'pg';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
@@ -12,6 +13,19 @@ app.use(express.json({ limit: '18mb' }));
 const PORT = Number(process.env.PORT || 3000);
 const DATA_DIR = path.join(__dirname, 'data');
 const TX_FILE = path.join(DATA_DIR, 'transactions.json');
+
+// Step 2 database connection. Render provides DATABASE_URL for the PostgreSQL service.
+// The file store remains only as a temporary migration/development fallback.
+const DATABASE_URL = process.env.DATABASE_URL || '';
+const db = DATABASE_URL ? new Pool({
+  connectionString: DATABASE_URL,
+  max: 5,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
+  ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false }
+}) : null;
+
+let databaseReady = false;
 
 const AUTH_COOKIE = 'tusome_session';
 const AUTH_SESSION_SECRET = process.env.AUTH_SESSION_SECRET || crypto.randomBytes(32).toString('hex');
@@ -94,8 +108,10 @@ function authUsers() {
   ];
 }
 
-function findUser(email) {
+async function findUser(email) {
   const normalized = String(email || '').trim().toLowerCase();
+  const fromDb = await dbFindUser(normalized);
+  if (fromDb) return fromDb;
   return authUsers().find(u => u.email === normalized);
 }
 
@@ -108,6 +124,175 @@ async function readTx() {
 }
 async function writeTx(items) {
   await fs.writeFile(TX_FILE, JSON.stringify(items, null, 2), 'utf8');
+}
+
+
+async function initDatabase() {
+  if (!db) {
+    console.warn('DATABASE_URL is not configured. Running with the temporary file store only.');
+    return;
+  }
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id BIGSERIAL PRIMARY KEY,
+      email TEXT NOT NULL UNIQUE,
+      role TEXT NOT NULL CHECK (role IN ('learner','teacher','admin')),
+      password_hash TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS materials (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      subject TEXT,
+      grade TEXT,
+      strand TEXT,
+      competency TEXT,
+      topic TEXT,
+      file_name TEXT,
+      file_type TEXT,
+      file_size BIGINT,
+      price NUMERIC(12,2) NOT NULL DEFAULT 0,
+      approval_status TEXT NOT NULL DEFAULT 'pending',
+      description TEXT,
+      teacher_email TEXT,
+      approved_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS transactions (
+      transaction_id TEXT PRIMARY KEY,
+      checkout_request_id TEXT UNIQUE,
+      merchant_request_id TEXT,
+      material_id TEXT,
+      title TEXT,
+      amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+      phone TEXT,
+      status TEXT NOT NULL DEFAULT 'pending',
+      result_code INTEGER,
+      result_description TEXT,
+      mpesa_receipt TEXT,
+      paid_amount NUMERIC(12,2),
+      paid_phone TEXT,
+      transaction_date TEXT,
+      user_email TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_materials_approval_status ON materials (approval_status);
+    CREATE INDEX IF NOT EXISTS idx_materials_teacher_email ON materials (teacher_email);
+    CREATE INDEX IF NOT EXISTS idx_transactions_user_email ON transactions (user_email);
+    CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions (status);
+  `);
+
+  // Seed/update the three current demo accounts from Render environment variables.
+  const adminEmail = String(process.env.ADMIN_EMAIL || 'admin@edushelf.com').trim().toLowerCase();
+  const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
+  const learnerPassword = process.env.DEMO_LEARNER_PASSWORD || 'learner123';
+  const teacherPassword = process.env.DEMO_TEACHER_PASSWORD || 'teacher123';
+  const seeds = [
+    { email: adminEmail, role: 'admin', passwordHash: hashPassword(adminPassword, 'edushelf-admin-salt-v1') },
+    { email: 'learner@edushelf.com', role: 'learner', passwordHash: hashPassword(learnerPassword, 'edushelf-learner-salt-v1') },
+    { email: 'teacher@edushelf.com', role: 'teacher', passwordHash: hashPassword(teacherPassword, 'edushelf-teacher-salt-v1') }
+  ];
+  for (const user of seeds) {
+    await db.query(`
+      INSERT INTO users (email, role, password_hash)
+      VALUES ($1, $2, $3)
+      ON CONFLICT (email) DO UPDATE
+      SET role = EXCLUDED.role, password_hash = EXCLUDED.password_hash, updated_at = NOW()
+    `, [user.email, user.role, user.passwordHash]);
+  }
+
+  // One-time migration of the old JSON transaction file into PostgreSQL.
+  const legacy = await readTx();
+  for (const tx of legacy) {
+    await db.query(`
+      INSERT INTO transactions
+        (transaction_id, checkout_request_id, merchant_request_id, material_id, title, amount, phone,
+         status, result_code, result_description, mpesa_receipt, paid_amount, paid_phone, transaction_date,
+         created_at, updated_at)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+      ON CONFLICT (transaction_id) DO NOTHING
+    `, [
+      String(tx.transactionId || `TX-${Date.now()}-${Math.random().toString(36).slice(2,8)}`),
+      tx.checkoutRequestId || null,
+      tx.merchantRequestId || null,
+      tx.materialId || null,
+      tx.title || null,
+      Number(tx.amount || 0),
+      tx.phone || null,
+      tx.status || 'pending',
+      Number.isFinite(Number(tx.resultCode)) ? Number(tx.resultCode) : null,
+      tx.resultDescription || null,
+      tx.mpesaReceipt || null,
+      tx.paidAmount != null ? Number(tx.paidAmount) : null,
+      tx.paidPhone || null,
+      tx.transactionDate || null,
+      tx.createdAt ? new Date(tx.createdAt) : new Date(),
+      tx.updatedAt ? new Date(tx.updatedAt) : new Date()
+    ]);
+  }
+
+  databaseReady = true;
+  console.log('PostgreSQL connected and EduShelf schema is ready.');
+}
+
+async function dbFindUser(email) {
+  if (!db || !databaseReady) return null;
+  const result = await db.query('SELECT email, role, password_hash AS "passwordHash" FROM users WHERE email = $1 LIMIT 1', [String(email || '').trim().toLowerCase()]);
+  return result.rows[0] || null;
+}
+
+async function dbCreateTransaction(tx, userEmail = null) {
+  if (!db || !databaseReady) return false;
+  await db.query(`
+    INSERT INTO transactions
+      (transaction_id, checkout_request_id, merchant_request_id, material_id, title, amount, phone, status, user_email, created_at, updated_at)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$10)
+    ON CONFLICT (transaction_id) DO UPDATE SET
+      checkout_request_id = EXCLUDED.checkout_request_id,
+      merchant_request_id = EXCLUDED.merchant_request_id,
+      material_id = EXCLUDED.material_id,
+      title = EXCLUDED.title,
+      amount = EXCLUDED.amount,
+      phone = EXCLUDED.phone,
+      status = EXCLUDED.status,
+      user_email = COALESCE(EXCLUDED.user_email, transactions.user_email),
+      updated_at = NOW()
+  `, [tx.transactionId, tx.checkoutRequestId || null, tx.merchantRequestId || null, tx.materialId || null, tx.title || null, Number(tx.amount || 0), tx.phone || null, tx.status || 'pending', userEmail, tx.createdAt ? new Date(tx.createdAt) : new Date()]);
+  return true;
+}
+
+async function dbUpdateTransaction(checkoutRequestId, patch) {
+  if (!db || !databaseReady) return false;
+  await db.query(`
+    UPDATE transactions SET
+      status = COALESCE($2, status),
+      result_code = $3,
+      result_description = $4,
+      mpesa_receipt = $5,
+      paid_amount = $6,
+      paid_phone = $7,
+      transaction_date = $8,
+      updated_at = NOW()
+    WHERE checkout_request_id = $1
+  `, [checkoutRequestId, patch.status || null, patch.resultCode ?? null, patch.resultDescription || null, patch.mpesaReceipt || null, patch.paidAmount ?? null, patch.paidPhone || null, patch.transactionDate || null]);
+  return true;
+}
+
+async function dbGetTransaction(checkoutRequestId) {
+  if (!db || !databaseReady) return null;
+  const result = await db.query(`
+    SELECT transaction_id AS "transactionId", status, phone, paid_phone AS "paidPhone",
+           mpesa_receipt AS "mpesaReceipt", result_description AS "resultDescription"
+    FROM transactions WHERE checkout_request_id = $1 LIMIT 1
+  `, [checkoutRequestId]);
+  return result.rows[0] || null;
 }
 
 function normalizePhone(phone) {
@@ -335,9 +520,9 @@ Selected subject: ${subject || 'General'}. Selected grade: ${grade || 'General'}
   throw new Error(`Gemini is temporarily busy. Automatic fallback was attempted across ${models.length} models. Please try again shortly. Last error: ${lastError?.message || 'unknown error'}`);
 }
 
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', async (req, res) => {
   const { email, password, role } = req.body || {};
-  const user = findUser(email);
+  const user = await findUser(email);
   if (!user || !verifyPassword(password, user.passwordHash)) return res.status(401).json({ error: 'Invalid email or password.' });
   if (!['learner', 'teacher', 'admin'].includes(String(role)) || user.role !== role) return res.status(403).json({ error: 'The selected account type does not match this account.' });
   setSessionCookie(res, user);
@@ -376,7 +561,8 @@ app.get('/api/health', async (_req, res) => {
     daraja: process.env.MPESA_ENV || 'sandbox',
     configured: missing.length === 0,
     missing,
-    ai: { configured: aiConfigured, provider: 'Gemini', model: process.env.GEMINI_MODEL || 'gemini-3.8-flash', fallbackModels: (process.env.GEMINI_FALLBACK_MODELS || 'gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash').split(',').map(x => x.trim()).filter(Boolean) }
+    ai: { configured: aiConfigured, provider: 'Gemini', model: process.env.GEMINI_MODEL || 'gemini-3.8-flash', fallbackModels: (process.env.GEMINI_FALLBACK_MODELS || 'gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash').split(',').map(x => x.trim()).filter(Boolean) },
+    database: { configured: Boolean(DATABASE_URL), connected: databaseReady, provider: 'PostgreSQL' }
   });
 });
 
@@ -426,9 +612,12 @@ app.post('/api/payments/stkpush', requireAuth, async (req, res) => {
       materialId, title, amount: numericAmount, phone: normalizedPhone,
       status: 'pending', createdAt: new Date().toISOString()
     };
-    const items = await readTx();
-    items.unshift(tx);
-    await writeTx(items);
+    if (databaseReady) await dbCreateTransaction(tx, req.user?.email || null);
+    else {
+      const items = await readTx();
+      items.unshift(tx);
+      await writeTx(items);
+    }
 
     res.json({
       ok: true,
@@ -446,23 +635,26 @@ app.post('/api/payments/callback', async (req, res) => {
     const stk = req.body?.Body?.stkCallback;
     if (!stk) return res.json({ ResultCode: 0, ResultDesc: 'Accepted' });
 
-    const items = await readTx();
-    const tx = items.find(x => x.checkoutRequestId === stk.CheckoutRequestID);
     const resultCode = Number(stk.ResultCode);
-
-    if (tx) {
-      tx.status = resultCode === 0 ? 'paid' : 'failed';
-      tx.resultCode = resultCode;
-      tx.resultDescription = stk.ResultDesc || '';
-      if (resultCode === 0) {
-        const meta = Object.fromEntries((stk.CallbackMetadata?.Item || []).map(x => [x.Name, x.Value]));
-        tx.mpesaReceipt = meta.MpesaReceiptNumber || '';
-        tx.paidAmount = meta.Amount || tx.amount;
-        tx.paidPhone = meta.PhoneNumber || tx.phone;
-        tx.transactionDate = meta.TransactionDate || '';
+    const meta = Object.fromEntries((stk.CallbackMetadata?.Item || []).map(x => [x.Name, x.Value]));
+    const patch = {
+      status: resultCode === 0 ? 'paid' : 'failed',
+      resultCode,
+      resultDescription: stk.ResultDesc || '',
+      mpesaReceipt: resultCode === 0 ? (meta.MpesaReceiptNumber || '') : null,
+      paidAmount: resultCode === 0 ? (meta.Amount ?? null) : null,
+      paidPhone: resultCode === 0 ? (meta.PhoneNumber || '') : null,
+      transactionDate: resultCode === 0 ? (meta.TransactionDate || '') : null
+    };
+    if (databaseReady) {
+      await dbUpdateTransaction(stk.CheckoutRequestID, patch);
+    } else {
+      const items = await readTx();
+      const tx = items.find(x => x.checkoutRequestId === stk.CheckoutRequestID);
+      if (tx) {
+        Object.assign(tx, patch, { updatedAt: new Date().toISOString() });
+        await writeTx(items);
       }
-      tx.updatedAt = new Date().toISOString();
-      await writeTx(items);
     }
     res.json({ ResultCode: 0, ResultDesc: 'Accepted' });
   } catch (e) {
@@ -472,8 +664,9 @@ app.post('/api/payments/callback', async (req, res) => {
 });
 
 app.get('/api/payments/status/:checkoutRequestId', requireAuth, async (req, res) => {
-  const items = await readTx();
-  const tx = items.find(x => x.checkoutRequestId === req.params.checkoutRequestId);
+  const tx = databaseReady
+    ? await dbGetTransaction(req.params.checkoutRequestId)
+    : (await readTx()).find(x => x.checkoutRequestId === req.params.checkoutRequestId);
   if (!tx) return res.status(404).json({ error: 'Transaction not found.' });
   res.json({
     status: tx.status,
@@ -485,5 +678,12 @@ app.get('/api/payments/status/:checkoutRequestId', requireAuth, async (req, res)
 });
 
 app.use(express.static(__dirname));
+
+try {
+  await initDatabase();
+} catch (e) {
+  console.error('PostgreSQL initialization failed:', e.message);
+  console.warn('The server will continue, but database-backed features will use the temporary file fallback until the database is reachable.');
+}
 
 app.listen(PORT, () => console.log(`Tusome EduShelf running at http://localhost:${PORT}`));

@@ -425,9 +425,11 @@ async function upload(e){
   finally{button.disabled=false;button.textContent='Upload Material'}
 }
 
-function getPurchases(){return JSON.parse(localStorage.getItem('tusomePurchases')||'[]')}
-function savePurchases(p){localStorage.setItem('tusomePurchases',JSON.stringify(p))}
-function isPurchased(id){return getPurchases().some(x=>String(x.materialId)===String(id)&&x.status==='paid')}
+let serverPurchases=[];
+function getPurchases(){return serverPurchases.length?serverPurchases:JSON.parse(localStorage.getItem('tusomePurchases')||'[]')}
+function savePurchases(p){serverPurchases=p;localStorage.setItem('tusomePurchases',JSON.stringify(p))}
+function isPurchased(id){return serverPurchases.some(x=>String(x.materialId)===String(id)) || getPurchases().some(x=>String(x.materialId)===String(id)&&x.status==='paid')}
+async function loadServerPurchases(){try{const r=await fetch('/api/payments/my',{credentials:'include'});if(!r.ok)return false;const d=await r.json();serverPurchases=Array.isArray(d.purchases)?d.purchases:[];localStorage.setItem('tusomePurchases',JSON.stringify(serverPurchases.map(x=>({id:x.transactionId,materialId:x.materialId,amount:Number(x.amount||0),status:'paid',mpesaReceipt:x.mpesaReceipt||'',time:x.createdAt||''}))));return true}catch(e){console.warn('Could not load purchases',e);return false}}
 function materialPrice(m){return Number(m.price||0)}
 function populateMaterialFilters(){
   const sets={subjectFilter:[...new Set(materials.map(m=>m.subject).filter(Boolean))].sort(),gradeFilter:[...new Set(materials.map(m=>m.grade).filter(Boolean))].sort((a,b)=>{const na=parseInt(a.match(/\d+/)?.[0]||0),nb=parseInt(b.match(/\d+/)?.[0]||0);return na-nb||a.localeCompare(b)}),topicFilter:[...new Set(materials.map(m=>m.topic).filter(Boolean))].sort()};
@@ -451,6 +453,7 @@ async function pollPayment(checkoutRequestId,m){
       const data=await r.json();
       if(data.status==='paid'){
         clearInterval(timer);
+        await loadServerPurchases();
         const platformRate=Number(localStorage.getItem('tusomePlatformRate')||10);
         const price=Number(m.price||0);
         const teacherShare=Math.round(price*(100-platformRate))/100;
@@ -655,13 +658,13 @@ function refreshProgress(){
 async function restoreServerSession(){
   try{
     const r=await fetch('/api/auth/me',{credentials:'include'});
-    if(r.ok){const d=await r.json();setSessionRole(d.user.role,d.user.email)}
+    if(r.ok){const d=await r.json();setSessionRole(d.user.role,d.user.email);if(d.user.role==='learner')await loadServerPurchases()}
     else{sessionStorage.removeItem('tusomeLoggedIn');sessionStorage.removeItem('tusomeRole');sessionStorage.removeItem('tusomeCurrentUser')}
   }catch{}
   updatePublicUi();
 }
 restoreServerSession();
-(async()=>{await loadServerMaterials();populateMaterialFilters();populateMaterialFilters();renderMaterials();renderTeacher();renderAdmin();refreshProgress();checkAIStatus()})();
+(async()=>{await loadServerMaterials();if(getSessionRole()==='learner')await loadServerPurchases();populateMaterialFilters();populateMaterialFilters();renderMaterials();renderTeacher();renderAdmin();refreshProgress();checkAIStatus()})();
 </script>
 <button id="communicationLaunch" class="btn primary communication-launch" onclick="openCommunicationCentre()" style="position:fixed;right:18px;bottom:18px;z-index:20;border-radius:24px">💬 Communication Centre</button>
 </body>

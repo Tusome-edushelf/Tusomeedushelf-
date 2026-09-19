@@ -152,3 +152,14 @@ The current free Render PostgreSQL plan is intended for testing/prototyping and 
 - Learners can open only approved materials; teachers can open their own uploads; admins can review all materials.
 - Approval status and KES pricing are updated through protected admin endpoints.
 - This database-backed file storage is suitable for the current prototype/testing stage. For larger production libraries, object storage (such as an S3-compatible service) is preferable to storing large files directly in PostgreSQL.
+
+## Step 2F — M-PESA + PostgreSQL
+
+The payment flow now stores transactions in PostgreSQL and ties each purchase to the authenticated learner. The STK Push endpoint reads the approved material price directly from PostgreSQL rather than trusting the browser. Payment status is restricted to the transaction owner (or administrator), and a paid transaction is required before a paid material can be opened. The learner purchase list is loaded from PostgreSQL.
+
+Environment variables retained for Daraja sandbox:
+- MPESA_CONSUMER_KEY
+- MPESA_CONSUMER_SECRET
+- MPESA_SHORTCODE
+- MPESA_PASSKEY
+- MPESA_CALLBACK_URL

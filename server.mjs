@@ -299,14 +299,33 @@ async function dbUpdateTransaction(checkoutRequestId, patch) {
   return true;
 }
 
-async function dbGetTransaction(checkoutRequestId) {
+async function dbGetTransaction(checkoutRequestId, user) {
   if (!db || !databaseReady) return null;
-  const result = await db.query(`
-    SELECT transaction_id AS "transactionId", status, phone, paid_phone AS "paidPhone",
-           mpesa_receipt AS "mpesaReceipt", result_description AS "resultDescription"
-    FROM transactions WHERE checkout_request_id = $1 LIMIT 1
-  `, [checkoutRequestId]);
+  const isAdmin = user?.role === 'admin';
+  const result = isAdmin
+    ? await db.query(`
+        SELECT transaction_id AS "transactionId", status, phone, paid_phone AS "paidPhone",
+               mpesa_receipt AS "mpesaReceipt", result_description AS "resultDescription", user_email AS "userEmail"
+        FROM transactions WHERE checkout_request_id = $1 LIMIT 1
+      `, [checkoutRequestId])
+    : await db.query(`
+        SELECT transaction_id AS "transactionId", status, phone, paid_phone AS "paidPhone",
+               mpesa_receipt AS "mpesaReceipt", result_description AS "resultDescription", user_email AS "userEmail"
+        FROM transactions WHERE checkout_request_id = $1 AND user_email = $2 LIMIT 1
+      `, [checkoutRequestId, user?.email || '']);
   return result.rows[0] || null;
+}
+
+async function dbGetPaidMaterials(userEmail) {
+  if (!db || !databaseReady) return [];
+  const result = await db.query(`
+    SELECT material_id AS "materialId", title, transaction_id AS "transactionId", amount,
+           mpesa_receipt AS "mpesaReceipt", created_at AS "createdAt"
+    FROM transactions
+    WHERE user_email = $1 AND status = 'paid' AND material_id IS NOT NULL
+    ORDER BY created_at DESC
+  `, [userEmail]);
+  return result.rows;
 }
 
 function normalizePhone(phone) {
@@ -671,12 +690,25 @@ app.get('/api/health', async (_req, res) => {
   });
 });
 
-app.post('/api/payments/stkpush', requireAuth, async (req, res) => {
+app.post('/api/payments/stkpush', requireRole('learner'), async (req, res) => {
   try {
-    const { materialId, title, amount, phone } = req.body || {};
-    const numericAmount = Math.round(Number(amount));
-    if (!materialId || !title || !Number.isFinite(numericAmount) || numericAmount < 1)
-      return res.status(400).json({ error: 'Invalid material or amount.' });
+    if (!databaseReady) return res.status(503).json({ error: 'Payment database is not ready.' });
+    const { materialId, phone } = req.body || {};
+    if (!materialId) return res.status(400).json({ error: 'A material is required.' });
+
+    // Never trust title or amount sent by the browser. Read the approved price from PostgreSQL.
+    const materialResult = await db.query(`
+      SELECT id, title, price, approval_status AS "approvalStatus"
+      FROM materials WHERE id = $1 LIMIT 1
+    `, [String(materialId)]);
+    const material = materialResult.rows[0];
+    if (!material) return res.status(404).json({ error: 'Material not found.' });
+    if (material.approvalStatus !== 'approved') return res.status(403).json({ error: 'This material is not approved for purchase.' });
+    const numericAmount = Math.round(Number(material.price));
+    if (!Number.isFinite(numericAmount) || numericAmount < 1) return res.status(400).json({ error: 'This material is free and does not require payment.' });
+
+    const existing = await db.query(`SELECT 1 FROM transactions WHERE user_email=$1 AND material_id=$2 AND status='paid' LIMIT 1`, [req.user.email, material.id]);
+    if (existing.rowCount) return res.status(409).json({ error: 'You have already purchased this material.' });
 
     const normalizedPhone = normalizePhone(phone);
     const shortcode = cfg('MPESA_SHORTCODE');
@@ -696,8 +728,8 @@ app.post('/api/payments/stkpush', requireAuth, async (req, res) => {
       PartyB: shortcode,
       PhoneNumber: normalizedPhone,
       CallBackURL: cfg('MPESA_CALLBACK_URL'),
-      AccountReference: String(materialId).slice(0, 12),
-      TransactionDesc: `Tusome EduShelf: ${String(title).slice(0, 80)}`
+      AccountReference: String(material.id).slice(0, 12),
+      TransactionDesc: `Tusome EduShelf: ${String(material.title).slice(0, 80)}`
     };
 
     const r = await fetch(`${base}/mpesa/stkpush/v1/processrequest`, {
@@ -714,7 +746,7 @@ app.post('/api/payments/stkpush', requireAuth, async (req, res) => {
       transactionId: `TX-${Date.now()}`,
       checkoutRequestId: data.CheckoutRequestID,
       merchantRequestId: data.MerchantRequestID,
-      materialId, title, amount: numericAmount, phone: normalizedPhone,
+      materialId: material.id, title: material.title, amount: numericAmount, phone: normalizedPhone,
       status: 'pending', createdAt: new Date().toISOString()
     };
     if (databaseReady) await dbCreateTransaction(tx, req.user?.email || null);
@@ -770,7 +802,7 @@ app.post('/api/payments/callback', async (req, res) => {
 
 app.get('/api/payments/status/:checkoutRequestId', requireAuth, async (req, res) => {
   const tx = databaseReady
-    ? await dbGetTransaction(req.params.checkoutRequestId)
+    ? await dbGetTransaction(req.params.checkoutRequestId, req.user)
     : (await readTx()).find(x => x.checkoutRequestId === req.params.checkoutRequestId);
   if (!tx) return res.status(404).json({ error: 'Transaction not found.' });
   res.json({
@@ -780,6 +812,17 @@ app.get('/api/payments/status/:checkoutRequestId', requireAuth, async (req, res)
     mpesaReceipt: tx.mpesaReceipt || '',
     resultDescription: tx.resultDescription || ''
   });
+});
+
+app.get('/api/payments/my', requireRole('learner'), async (req, res) => {
+  if (!databaseReady) return res.status(503).json({ error: 'Payment database is not ready.' });
+  try {
+    const purchases = await dbGetPaidMaterials(req.user.email);
+    res.json({ ok: true, purchases });
+  } catch (e) {
+    console.error('Purchase list error:', e);
+    res.status(500).json({ error: 'Could not load your purchases.' });
+  }
 });
 
 app.use(express.static(__dirname));

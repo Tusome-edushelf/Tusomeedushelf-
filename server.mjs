@@ -348,8 +348,19 @@ function timestamp() {
 }
 function cfg(name) {
   const v = process.env[name];
-  if (!v) throw new Error(`Missing ${name} in .env`);
-  return v;
+  if (v) return String(v).trim();
+
+  // Daraja sandbox has shared test credentials for the STK Push shortcode/passkey.
+  // Production values must always be supplied explicitly through Render env vars.
+  if ((process.env.MPESA_ENV || 'sandbox').toLowerCase() === 'sandbox') {
+    const sandboxDefaults = {
+      MPESA_SHORTCODE: '174379',
+      MPESA_PASSKEY: 'bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919'
+    };
+    if (sandboxDefaults[name]) return sandboxDefaults[name];
+  }
+
+  throw new Error(`Missing ${name} in Render environment variables.`);
 }
 
 async function getAccessToken() {
@@ -677,14 +688,18 @@ app.post('/api/ai', requireAuth, async (req, res) => {
 });
 
 app.get('/api/health', async (_req, res) => {
-  const required = ['MPESA_CONSUMER_KEY','MPESA_CONSUMER_SECRET','MPESA_SHORTCODE','MPESA_PASSKEY','MPESA_CALLBACK_URL'];
-  const aiConfigured = Boolean(process.env.GEMINI_API_KEY);
+  const env = (process.env.MPESA_ENV || 'sandbox').toLowerCase();
+  const required = ['MPESA_CONSUMER_KEY','MPESA_CONSUMER_SECRET','MPESA_CALLBACK_URL'];
   const missing = required.filter(name => !process.env[name]);
+  const sandboxDefaults = env === 'sandbox';
+  const aiConfigured = Boolean(process.env.GEMINI_API_KEY);
   res.json({
     ok: true,
-    daraja: process.env.MPESA_ENV || 'sandbox',
+    daraja: env,
     configured: missing.length === 0,
     missing,
+    shortcodeSource: process.env.MPESA_SHORTCODE ? 'render_env' : (sandboxDefaults ? 'sandbox_default' : 'missing'),
+    passkeySource: process.env.MPESA_PASSKEY ? 'render_env' : (sandboxDefaults ? 'sandbox_default' : 'missing'),
     ai: { configured: aiConfigured, provider: 'Gemini', model: process.env.GEMINI_MODEL || 'gemini-3.8-flash', fallbackModels: (process.env.GEMINI_FALLBACK_MODELS || 'gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash').split(',').map(x => x.trim()).filter(Boolean) },
     database: { configured: Boolean(DATABASE_URL), connected: databaseReady, provider: 'PostgreSQL' }
   });

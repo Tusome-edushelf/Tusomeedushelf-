@@ -296,7 +296,7 @@ footer{text-align:center;padding:30px;color:#687386}.ai-answer{line-height:1.75;
 
 <section id="payments" class="page">
   <div class="topline"><div><h2>💳 Tusome EduShelf Payments</h2><p>Buy learning materials and track teacher earnings.</p></div><button class="btn primary" onclick="show('learner')">Back to Materials</button></div>
-  <div class="notice"><b>Daraja sandbox:</b> Payments are sent through the server to Safaricom Daraja. Sandbox credentials stay on the server in <code>.env</code>. A public HTTPS callback URL is required for payment confirmation.</div>
+  <div class="notice"><b>Daraja sandbox:</b> Payments are sent through the server to Safaricom Daraja. Consumer credentials and the HTTPS callback URL stay in Render environment variables. In sandbox mode, the standard Safaricom test shortcode/passkey are supplied by the server unless you explicitly override them.</div>
   <div id="paymentMaterial" class="card" style="max-width:700px;margin:20px auto"><h3>Select a paid material</h3><p>Paid materials will ask for the learner's M-PESA number before unlocking.</p></div>
   <div class="cards">
     <div class="card"><h3>🧾 My Purchases</h3><div id="purchaseList"></div></div>

@@ -130,3 +130,7 @@ Approval state is respected by the learner-facing material catalogue. Existing D
 - Learner, Teacher, Administrator and Communication Centre remain behind login/role routing.
 - The floating Communication Centre button is hidden on the public Home screen and shown only after a user is logged in.
 - Public feature cards use general learning language rather than exposing role-specific dashboard destinations.
+
+
+### Security Step 1 — Server-side authentication
+Login is now verified by the Express server. Sessions use an HttpOnly signed cookie. AI and M-PESA actions require authentication. The temporary user store is `data/users.json`; the planned database step can replace it later. Configure `AUTH_SESSION_SECRET`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD` in `.env`.

@@ -94,3 +94,13 @@ Approval state is respected by the learner-facing material catalogue. Existing D
 - Newly uploaded learning materials start as **pending** and remain hidden from the learner catalogue until approved.
 - Admin can set or change the KES selling price before or after approval.
 - Daraja/payment integration was not changed.
+
+
+## Proper Notes Library v1
+- Materials are organized as Subject → Grade → Topic → Material.
+- Instant search across title, subject, grade and topic.
+- Browse tree for fast navigation by subject, grade and topic.
+- Every note card shows title, subject, grade, topic, Teacher/System generated, price, approval status, preview and download controls.
+- PDF preview opens in an in-app preview window for uploaded PDFs.
+- Paid notes require purchase before preview/download; free notes can be previewed/downloaded directly.
+- Learner catalogue only exposes approved materials.

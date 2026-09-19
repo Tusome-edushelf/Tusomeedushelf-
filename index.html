@@ -37,18 +37,6 @@ footer{text-align:center;padding:30px;color:#687386}.ai-answer{line-height:1.75;
   <div class="logo">Edu<span>Shelf</span></div>
   <nav>
     <button onclick="show('home')">Home</button>
-    <button onclick="show('learner')">Learner</button>
-    <button onclick="show('ai')">AI Assistant</button>
-    <button onclick="show('cbe')">CBE Guide</button>
-    <button onclick="show('curriculum');loadCurriculumCatalogue()">Curriculum</button>
-    <button onclick="show('teacher')">Teacher</button>
-    <button onclick="show('lesson')">Lesson Plans</button>
-    <button onclick="show('assessment')">Assessment</button>
-    <button onclick="show('progress')">Progress</button>
-    <button onclick="show('parent')">Parent</button>
-    <button onclick="show('payments')">💳 Payments</button>
-    <button onclick="show('notifications')">🔔</button>
-    <button onclick="show('admin')">Admin</button>
     <button onclick="show('login')">Login</button>
   </nav>
 </header>
@@ -59,7 +47,7 @@ footer{text-align:center;padding:30px;color:#687386}.ai-answer{line-height:1.75;
     <h1>Learn. Share. Grow.</h1>
     <p>A simple learning-materials platform where learners can access reading resources and teachers can upload and organize materials.</p>
     <button class="btn light" onclick="show('login')">Get Started</button>
-    <button class="btn light" onclick="show('learner')">View Materials</button>
+    <button class="btn light" onclick="show('login')">Login to Learn</button>
   </div>
   <div class="cards">
     <div class="card"><h3>📚 Reading Materials</h3><p>Find learning resources organized by subject, grade, strand and topic.</p></div>
@@ -74,7 +62,7 @@ footer{text-align:center;padding:30px;color:#687386}.ai-answer{line-height:1.75;
 <section id="login" class="page">
   <form onsubmit="login(event)">
     <h2>Login to EduShelf</h2>
-    <p>Choose your account type to enter the prototype.</p><div class="notice"><b>Prototype admin:</b> admin@edushelf.com &nbsp; <b>Password:</b> admin123</div>
+    <p>Choose your account type. After login, EduShelf will take you directly to the correct dashboard.</p><div class="notice"><b>Prototype admin:</b> admin@edushelf.com &nbsp; <b>Password:</b> admin123</div>
     <label>Email</label><input type="email" required placeholder="you@example.com">
     <label>Password</label><input type="password" required placeholder="••••••••">
     <label>Account type</label>
@@ -84,8 +72,8 @@ footer{text-align:center;padding:30px;color:#687386}.ai-answer{line-height:1.75;
 </section>
 
 <section id="learner" class="page">
-  <div class="topline"><div><h2>Learner Dashboard</h2><p>Access your available learning materials.</p></div>
-  <button class="btn primary" onclick="show('login')">Logout</button></div>
+  <div class="topline"><div><h2>🎓 Learner Dashboard</h2><p>Welcome to your learner space — notes, AI support and progress.</p></div>
+  <button class="btn primary" onclick="logoutUser()">Logout</button></div>
   <div class="cards">
     <div class="card"><h3>📘 Mathematics</h3><p>12 materials</p></div>
     <div class="card"><h3>🧬 Biology</h3><p>8 materials</p></div>
@@ -315,7 +303,7 @@ footer{text-align:center;padding:30px;color:#687386}.ai-answer{line-height:1.75;
 </section>
 
 <section id="teacher" class="page">
-  <div class="topline"><div><h2>Teacher Dashboard</h2><p>Manage the materials you have uploaded.</p></div>
+  <div class="topline"><div><h2>👨‍🏫 Teacher Dashboard</h2><p>Manage the materials you have uploaded.</p></div>
   <button class="btn primary" onclick="show('upload')">+ Upload Material</button></div>
   <div class="cards">
     <div class="card"><h3>📤 Uploaded</h3><p><b id="count">3</b> materials</p></div>
@@ -528,7 +516,7 @@ function renderAdminFeedback(){
 }
 function updateFeedbackStatus(id,status){const a=feedbackStore(),x=a.find(v=>v.id===id);if(!x)return;x.status=status;saveFeedbackStore(a);renderAdminFeedback();renderMyFeedback()}
 function replyToFeedback(id){const a=feedbackStore(),x=a.find(v=>v.id===id);if(!x)return;const r=(document.getElementById('reply_'+id)?.value||'').trim();if(!r)return;x.reply=r;x.status='Resolved';saveFeedbackStore(a);renderAdminFeedback();renderMyFeedback()}
-function openCommunicationCentre(){show('communication');renderMyFeedback();renderAdminFeedback()}
+function openCommunicationCentre(){show('communication')}
 function adminTab(tab){
   document.querySelectorAll('.admin-panel').forEach(x=>x.style.display='none');
   const el=document.getElementById('adminApprovals');if(el)el.style.display='block';
@@ -580,8 +568,53 @@ function sendAdminNotification(e){e.preventDefault();const v=document.getElement
 function renderAdmin(){adminRefreshAll()}
 function clearActivity(){localStorage.removeItem('edushelfActivity');renderAdmin();refreshProgress()}
 async function upload(e){e.preventDefault();const f=document.getElementById('file').files[0];if(!f)return;const fileId=materialKey();try{await saveUploadedFile(fileId,f);const m={id:Date.now(),fileId,title:title.value.trim(),subject:subject.value,grade:grade.value,strand:strand.value,competency:competency.value,topic:topic.value,file:f.name,fileType:f.type,fileSize:f.size,price:Number(price.value||0),approvalStatus:'pending',description:desc.value};materials.unshift(m);save();logActivity('Uploaded material: '+m.title+' ('+m.subject+', '+m.grade+')');logNotification('New learning material uploaded: '+m.title);e.target.reset();renderTeacher();populateMaterialFilters();filterMaterials();show('teacher')}catch(err){alert('Upload failed. Your browser could not store the file. Please try again or use a modern browser.')}}
-function login(e){e.preventDefault();const role=document.getElementById('role').value;if(role==='admin'){const email=e.target.querySelector('input[type="email"]').value.trim();const password=e.target.querySelector('input[type="password"]').value;if(email==='admin@edushelf.com'&&password==='admin123')show('admin');else alert('Invalid administrator credentials. Prototype account: admin@edushelf.com / admin123')}else show(role==='teacher'?'teacher':'learner')}
-function show(id){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));const el=document.getElementById(id);if(el)el.classList.add('active');if(id==='teacher')renderTeacher();if(id==='admin')renderAdmin();if(id==='notifications')renderNotifications();if(id==='progress'||id==='parent')refreshProgress();if(id==='payments')renderPayments();if(id==='curriculum')loadCurriculumCatalogue();window.scrollTo(0,0)}
+function setSessionRole(role,email){
+  sessionStorage.setItem('tusomeLoggedIn','true');
+  sessionStorage.setItem('tusomeRole',role);
+  sessionStorage.setItem('tusomeCurrentUser',email||role);
+  localStorage.setItem('tusomeCurrentUser',email||role);
+}
+function getSessionRole(){return sessionStorage.getItem('tusomeLoggedIn')==='true'?sessionStorage.getItem('tusomeRole'):null}
+function login(e){
+  e.preventDefault();
+  const role=document.getElementById('role').value;
+  const email=e.target.querySelector('input[type="email"]').value.trim();
+  const password=e.target.querySelector('input[type="password"]').value;
+  if(role==='admin'){
+    if(email!=='admin@edushelf.com'||password!=='admin123'){
+      alert('Invalid administrator credentials. Prototype account: admin@edushelf.com / admin123');return;
+    }
+  }
+  setSessionRole(role,email);
+  show(role==='admin'?'admin':role==='teacher'?'teacher':'learner');
+}
+function logoutUser(){
+  sessionStorage.removeItem('tusomeLoggedIn');
+  sessionStorage.removeItem('tusomeRole');
+  sessionStorage.removeItem('tusomeCurrentUser');
+  localStorage.removeItem('tusomeCurrentUser');
+  show('home');
+}
+function show(id){
+  const protectedRoles={learner:'learner',teacher:'teacher',admin:'admin',communication:'user'};
+  if(protectedRoles[id]){
+    const role=getSessionRole();
+    if(!role){show('login');return}
+    if(id==='learner'&&role!=='learner'){alert('This dashboard is for learners.');return}
+    if(id==='teacher'&&role!=='teacher'){alert('This dashboard is for teachers.');return}
+    if(id==='admin'&&role!=='admin'){alert('Administrator access is required.');return}
+  }
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  const el=document.getElementById(id);if(el)el.classList.add('active');
+  if(id==='teacher')renderTeacher();
+  if(id==='admin')renderAdmin();
+  if(id==='communication'){renderMyFeedback();renderAdminFeedback()}
+  if(id==='notifications')renderNotifications();
+  if(id==='progress'||id==='parent')refreshProgress();
+  if(id==='payments')renderPayments();
+  if(id==='curriculum')loadCurriculumCatalogue();
+  window.scrollTo(0,0);
+}
 function copyAI(){navigator.clipboard?.writeText(document.getElementById('aiAnswer').textContent);alert('Response copied.')}
 async function checkAIStatus(){const el=document.getElementById('aiStatus');if(!el)return;try{const r=await fetch('/api/health');const d=await r.json();el.className=d.ai?.configured?'success':'notice';el.textContent=d.ai?.configured?'🟢 Gemini AI connected • '+d.ai.model:'🟠 AI service is not configured. Add GEMINI_API_KEY to Render Environment.'}catch(e){el.className='notice';el.textContent='🔴 EduShelf server is not running. Start it with: npm install && npm start'}}
 async function askAI(e){e.preventDefault();const subject=document.getElementById('aiSubject').value,grade=document.getElementById('aiGrade').value,mode=document.getElementById('aiMode').value,focus=document.getElementById('cbeFocus').value,prompt=document.getElementById('aiPrompt').value.trim(),qFile=document.getElementById('aiQuestionFile')?.files?.[0],wFile=document.getElementById('aiWorkingFile')?.files?.[0],box=document.getElementById('aiResult'),answer=document.getElementById('aiAnswer'),button=e.target.querySelector('button[type="submit"]');if(!prompt&&!qFile&&!wFile){alert('Enter a question or upload a question paper first.');return}if(mode==='mark'&&!qFile&&!wFile){alert('For Mark My Work, upload your question paper and/or your working.');return}button.disabled=true;button.textContent='⏳ Gemini is working...';answer.textContent='Gemini is preparing your response...';box.style.display='block';try{const readFile=async(file)=>{if(!file)return null;if(file.size>12*1024*1024)throw new Error('Please keep each uploaded file below 12 MB.');const dataUrl=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error('Could not read the selected file.'));reader.readAsDataURL(file)});return{name:file.name,mimeType:file.type,data:dataUrl}};const [questionFile,workingFile]=await Promise.all([readFile(qFile),readFile(wFile)]);const res=await fetch('/api/ai',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({subject,grade,mode,focus,prompt,file:questionFile,questionFile,workingFile})});const data=await res.json();if(!res.ok)throw new Error(data.error||'The Gemini service could not respond.');answer.textContent=data.answer;if(mode==='mark')saveMarkAttempt(subject,grade,prompt,data.answer);logActivity('Used Gemini AI Study Assistant: '+mode+' / '+subject+' / '+grade);logNotification('Gemini response generated for '+subject+' ('+grade+').');refreshProgress();renderNotifications()}catch(err){answer.textContent='Sorry, Gemini could not respond.\n\n'+err.message;checkAIStatus()}finally{button.disabled=false;button.textContent='✨ Ask AI'}}

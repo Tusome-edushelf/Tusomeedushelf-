@@ -112,3 +112,14 @@ Approval state is respected by the learner-facing material catalogue. Existing D
 - Users can view message status and admin responses.
 - Admin can review all submissions, mark Reviewing/Resolved, and respond.
 - Prototype data is stored locally in localStorage.
+
+
+## Home Screen + Role-Based Dashboard Routing v1
+- The public home screen is always the first screen when the site is opened or the page is refreshed.
+- Login is the gateway to the protected dashboards.
+- Learner login routes directly to the Learner Dashboard.
+- Teacher login routes directly to the Teacher Dashboard; teacher approval is not required.
+- Administrator login routes directly to the Administrator Dashboard.
+- Direct navigation to protected dashboards is blocked unless the matching role is logged in.
+- Logout clears the session and returns the user to the Home screen.
+- Prototype sessions use sessionStorage/localStorage; production should later move authentication and authorization to the server.

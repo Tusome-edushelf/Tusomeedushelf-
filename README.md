@@ -123,3 +123,10 @@ Approval state is respected by the learner-facing material catalogue. Existing D
 - Direct navigation to protected dashboards is blocked unless the matching role is logged in.
 - Logout clears the session and returns the user to the Home screen.
 - Prototype sessions use sessionStorage/localStorage; production should later move authentication and authorization to the server.
+
+
+## Public Home Screen Isolation v2
+- Public Home shows no role dashboard links or dashboard launch controls.
+- Learner, Teacher, Administrator and Communication Centre remain behind login/role routing.
+- The floating Communication Centre button is hidden on the public Home screen and shown only after a user is logged in.
+- Public feature cards use general learning language rather than exposing role-specific dashboard destinations.

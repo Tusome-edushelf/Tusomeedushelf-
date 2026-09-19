@@ -1,24 +1,40 @@
-# Tusome EduShelf — Teacher Revenue & Admin Payments v8
+# Tusome EduShelf — Automatic Teacher Payouts v9
 
-This version adds a PostgreSQL-backed payment and teacher revenue management layer.
+This version adds automatic teacher revenue payouts using Safaricom M-PESA Daraja B2C.
 
-## Added
-- Admin **Purchases & Payments** tab showing confirmed purchases, learner, teacher, sale amount, teacher share, and platform revenue.
-- Admin **Revenue & Teacher Payouts** tab.
-- Configurable teacher revenue percentage; platform automatically receives the remaining percentage.
-- Teacher dashboard earnings showing total earned, paid out, available balance, and sales by material.
-- Admin can create a teacher payout record and mark it paid after the actual transfer is completed.
-- Revenue percentages are stored in PostgreSQL.
-- Paid M-PESA transactions store the revenue split used at the time of payment.
+## Flow
+1. Learner completes an approved material purchase.
+2. The confirmed transaction locks the teacher/platform revenue split.
+3. Teacher saves a payout M-PESA number in the Teacher Dashboard.
+4. Admin sets a minimum automatic payout balance and enables automatic payouts.
+5. The server checks balances periodically.
+6. When a teacher reaches the threshold, the server creates a processing payout and submits it to Daraja B2C.
+7. Daraja calls the result callback; successful payouts are marked paid automatically, while failed payouts are recorded as failed.
 
-## Default split
-- Teacher: 80%
-- Platform: 20%
+## Required Render environment variables for live automatic B2C payouts
+- `MPESA_ENV=production` when going live
+- `MPESA_CONSUMER_KEY`
+- `MPESA_CONSUMER_SECRET`
+- `MPESA_B2C_SHORTCODE`
+- `MPESA_INITIATOR_NAME`
+- `MPESA_SECURITY_CREDENTIAL`
+- `MPESA_RESULT_URL` (public HTTPS URL ending in `/api/mpesa/b2c/result`)
+- `MPESA_QUEUE_TIMEOUT_URL` (public HTTPS URL ending in `/api/mpesa/b2c/timeout`)
 
-The admin can change the split before future purchases.
+Optional:
+- `MPESA_COMMAND_ID` (defaults to `BusinessPayment`)
+- `MPESA_B2C_ENDPOINT` (defaults to the Daraja B2C v3 payment endpoint)
+- `AUTO_PAYOUT_ENABLED=true` to enable by environment; admin can also enable it in the dashboard
+- `AUTO_PAYOUT_THRESHOLD=500`
+- `AUTO_PAYOUT_INTERVAL_MS=300000` (5 minutes)
+
+Do not invent Daraja credentials or security credentials. Obtain and configure the appropriate B2C credentials in your Safaricom Daraja account before enabling automatic payouts.
 
 ## Important
-The payout records do **not** send money automatically. They record and track a payout after the administrator completes the real transfer. Automatic M-PESA B2C disbursement can be added separately when the required Daraja business credentials and configuration are available.
+- Automatic payouts are OFF by default unless `AUTO_PAYOUT_ENABLED=true` is configured or the admin enables them after B2C configuration is present.
+- The server will not automatically send money without B2C configuration.
+- Payouts use whole Kenyan shillings (`Math.floor(balance)`). Any remainder below KES 1 stays in the teacher balance.
+- The system treats `paid` and `processing` payouts as already allocated so it does not create duplicate automatic payouts.
+- Sandbox/live B2C behavior depends on the Daraja application and credentials. Test in sandbox before production.
 
-## Deploy
-Deploy the entire project to Render and hard-refresh the browser with Ctrl+Shift+R.
+Official Daraja documentation: https://developer.safaricom.co.ke/apis/BusinessToCustomer

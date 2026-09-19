@@ -185,6 +185,8 @@ async function initDatabase() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT;
+
     ALTER TABLE materials ADD COLUMN IF NOT EXISTS file_id TEXT;
 
     CREATE INDEX IF NOT EXISTS idx_materials_approval_status ON materials (approval_status);
@@ -219,6 +221,13 @@ async function initDatabase() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       paid_at TIMESTAMPTZ
     );
+    ALTER TABLE teacher_payouts ADD COLUMN IF NOT EXISTS phone TEXT;
+    ALTER TABLE teacher_payouts ADD COLUMN IF NOT EXISTS conversation_id TEXT;
+    ALTER TABLE teacher_payouts ADD COLUMN IF NOT EXISTS originator_conversation_id TEXT;
+    ALTER TABLE teacher_payouts ADD COLUMN IF NOT EXISTS result_code INTEGER;
+    ALTER TABLE teacher_payouts ADD COLUMN IF NOT EXISTS result_description TEXT;
+    ALTER TABLE teacher_payouts ADD COLUMN IF NOT EXISTS mpesa_receipt TEXT;
+    ALTER TABLE teacher_payouts ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
     CREATE INDEX IF NOT EXISTS idx_transactions_user_email ON transactions (user_email);
     CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions (status);
@@ -228,6 +237,7 @@ async function initDatabase() {
 
   const defaultTeacherRevenue = Math.min(100, Math.max(0, Number(process.env.TEACHER_REVENUE_PERCENT || 80)));
   await db.query(`INSERT INTO platform_settings(setting_key,setting_value) VALUES ('teacher_revenue_percentage',$1),('platform_revenue_percentage',$2) ON CONFLICT(setting_key) DO NOTHING`, [String(defaultTeacherRevenue), String(100-defaultTeacherRevenue)]);
+  await db.query(`INSERT INTO platform_settings(setting_key,setting_value) VALUES ('auto_payout_enabled',$1),('auto_payout_threshold',$2) ON CONFLICT(setting_key) DO NOTHING`, [String(process.env.AUTO_PAYOUT_ENABLED === 'true' ? 'true' : 'false'), String(Math.max(1, Number(process.env.AUTO_PAYOUT_THRESHOLD || 500)))]);
 
 
   // Seed/update the three current demo accounts from Render environment variables.
@@ -242,8 +252,8 @@ async function initDatabase() {
   ];
   for (const user of seeds) {
     await db.query(`
-      INSERT INTO users (email, role, password_hash)
-      VALUES ($1, $2, $3)
+      INSERT INTO users (email, role, password_hash, phone)
+      VALUES ($1, $2, $3, NULL)
       ON CONFLICT (email) DO UPDATE
       SET role = EXCLUDED.role, password_hash = EXCLUDED.password_hash, updated_at = NOW()
     `, [user.email, user.role, user.passwordHash]);
@@ -403,7 +413,78 @@ async function getAccessToken() {
   return data.access_token;
 }
 
+async function getPayoutSettings() {
+  const defaults = {
+    enabled: process.env.AUTO_PAYOUT_ENABLED === 'true',
+    threshold: Math.max(1, Number(process.env.AUTO_PAYOUT_THRESHOLD || 500))
+  };
+  if (!db || !databaseReady) return defaults;
+  const r = await db.query(`SELECT setting_key, setting_value FROM platform_settings WHERE setting_key IN ('auto_payout_enabled','auto_payout_threshold')`);
+  const map = Object.fromEntries(r.rows.map(x => [x.setting_key, x.setting_value]));
+  return {
+    enabled: map.auto_payout_enabled === undefined ? defaults.enabled : String(map.auto_payout_enabled).toLowerCase() === 'true',
+    threshold: map.auto_payout_threshold === undefined ? defaults.threshold : Math.max(1, Number(map.auto_payout_threshold) || defaults.threshold)
+  };
+}
 
+function hasB2CConfig() {
+  const required = ['MPESA_INITIATOR_NAME','MPESA_SECURITY_CREDENTIAL','MPESA_RESULT_URL','MPESA_QUEUE_TIMEOUT_URL'];
+  return required.every(k => Boolean(process.env[k]));
+}
+
+async function sendB2CPayout({phone, amount, payoutId}) {
+  if (!hasB2CConfig()) throw new Error('Automatic payout is not configured. Add the Daraja B2C initiator, security credential and callback URLs.');
+  const token = await getAccessToken();
+  const base = (process.env.MPESA_BASE_URL || 'https://sandbox.safaricom.co.ke').replace(/\/$/, '');
+  const body = {
+    InitiatorName: process.env.MPESA_INITIATOR_NAME,
+    SecurityCredential: process.env.MPESA_SECURITY_CREDENTIAL,
+    CommandID: process.env.MPESA_COMMAND_ID || 'BusinessPayment',
+    Amount: Math.floor(Number(amount)),
+    PartyA: process.env.MPESA_B2C_SHORTCODE || cfg('MPESA_SHORTCODE'),
+    PartyB: normalizePhone(phone),
+    Remarks: `Tusome teacher payout ${payoutId}`.slice(0, 100),
+    QueueTimeOutURL: process.env.MPESA_QUEUE_TIMEOUT_URL,
+    ResultURL: process.env.MPESA_RESULT_URL,
+    Occasion: `TeacherPayout-${payoutId}`.slice(0, 100)
+  };
+  const endpoint = process.env.MPESA_B2C_ENDPOINT || `${base}/mpesa/b2c/v3/paymentrequest`;
+  const r = await fetch(endpoint, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const data = await r.json();
+  if (!r.ok || (data.ResponseCode && String(data.ResponseCode) !== '0')) throw new Error(data.errorMessage || data.ResponseDescription || 'Daraja rejected the B2C payout.');
+  return data;
+}
+
+async function getTeacherBalance(teacherEmail) {
+  const r = await db.query(`WITH settings AS (SELECT COALESCE(MAX(CASE WHEN setting_key='teacher_revenue_percentage' THEN setting_value::numeric END),80) AS teacher_pct) SELECT COALESCE(SUM(CASE WHEN t.status='paid' THEN COALESCE(t.teacher_amount,ROUND(COALESCE(t.paid_amount,t.amount)*s.teacher_pct/100,2)) ELSE 0 END),0) AS earned FROM transactions t CROSS JOIN settings s JOIN materials m ON m.id=t.material_id WHERE m.teacher_email=$1`, [teacherEmail]);
+  const p = await db.query(`SELECT COALESCE(SUM(amount),0) AS paid FROM teacher_payouts WHERE teacher_email=$1 AND status IN ('paid','processing')`, [teacherEmail]);
+  return Math.max(0, Number(r.rows[0]?.earned || 0) - Number(p.rows[0]?.paid || 0));
+}
+
+async function runAutomaticTeacherPayouts() {
+  if (!db || !databaseReady) return;
+  const settings = await getPayoutSettings();
+  if (!settings.enabled || !hasB2CConfig()) return;
+  const teachers = await db.query(`SELECT email FROM users WHERE role='teacher' ORDER BY email`);
+  for (const teacher of teachers.rows) {
+    try {
+      const balance = await getTeacherBalance(teacher.email);
+      if (balance < settings.threshold) continue;
+      const profile = await db.query(`SELECT email, phone FROM users WHERE email=$1 LIMIT 1`, [teacher.email]);
+      const phone = profile.rows[0]?.phone;
+      if (!phone) continue;
+      const payoutId = 'AUTO-PO-' + Date.now() + '-' + Math.random().toString(36).slice(2,7).toUpperCase();
+      const amount = Math.floor(balance);
+      await db.query(`INSERT INTO teacher_payouts(payout_id,teacher_email,phone,amount,status,notes) VALUES($1,$2,$3,$4,'processing',$5)`, [payoutId, teacher.email, normalizePhone(phone), amount, 'Automatic payout']);
+      try {
+        const data = await sendB2CPayout({phone, amount, payoutId});
+        await db.query(`UPDATE teacher_payouts SET conversation_id=$2, originator_conversation_id=$3, result_description=$4, updated_at=NOW() WHERE payout_id=$1`, [payoutId, data.ConversationID || null, data.OriginatorConversationID || null, data.ResponseDescription || 'B2C payout submitted']);
+      } catch (e) {
+        await db.query(`UPDATE teacher_payouts SET status='failed', result_description=$2, updated_at=NOW() WHERE payout_id=$1`, [payoutId, e.message]);
+      }
+    } catch (e) { console.error('Automatic teacher payout error:', teacher.email, e.message); }
+  }
+}
 
 function curriculumContext(subject, grade, focus) {
   const g = String(grade || '').trim();
@@ -860,8 +941,8 @@ app.get('/api/admin/payments', requireRole('admin'), async (req,res)=>{
   try{
     const settings=await getRevenueSettings();
     const tx=await db.query(`WITH settings AS (SELECT COALESCE(MAX(CASE WHEN setting_key='teacher_revenue_percentage' THEN setting_value::numeric END),80) AS teacher_pct FROM platform_settings) SELECT t.transaction_id AS "transactionId",t.title,t.amount,t.status,t.mpesa_receipt AS "mpesaReceipt",t.paid_phone AS "paidPhone",t.user_email AS "learnerEmail",t.created_at AS "createdAt",t.transaction_date AS "transactionDate",COALESCE(t.teacher_percentage,s.teacher_pct) AS "teacherPercentage",COALESCE(t.teacher_amount,ROUND(COALESCE(t.paid_amount,t.amount)*s.teacher_pct/100,2)) AS "teacherAmount",COALESCE(t.platform_percentage,100-s.teacher_pct) AS "platformPercentage",COALESCE(t.platform_amount,ROUND(COALESCE(t.paid_amount,t.amount)*(100-s.teacher_pct)/100,2)) AS "platformAmount",m.teacher_email AS "teacherEmail" FROM transactions t CROSS JOIN settings s LEFT JOIN materials m ON m.id=t.material_id ORDER BY t.created_at DESC`);
-    const payouts=await db.query(`SELECT payout_id AS "payoutId",teacher_email AS "teacherEmail",amount,status,notes,created_at AS "createdAt",paid_at AS "paidAt" FROM teacher_payouts ORDER BY created_at DESC`);
-    res.json({ok:true,settings,transactions:tx.rows,payouts:payouts.rows});
+    const payouts=await db.query(`SELECT payout_id AS "payoutId",teacher_email AS "teacherEmail",phone,amount,status,notes,created_at AS "createdAt",paid_at AS "paidAt" FROM teacher_payouts ORDER BY created_at DESC`);
+    res.json({ok:true,settings,autoPayout:await getPayoutSettings(),b2cConfigured:hasB2CConfig(),transactions:tx.rows,payouts:payouts.rows});
   }catch(e){console.error(e);res.status(500).json({error:'Could not load payment records.'})}
 });
 
@@ -872,10 +953,49 @@ app.patch('/api/admin/revenue-settings', requireRole('admin'), async (req,res)=>
   }catch(e){console.error(e);res.status(500).json({error:'Could not save revenue settings.'})}
 });
 
+app.get('/api/admin/automatic-payout-settings', requireRole('admin'), async (_req,res)=>{
+  try { res.json({ok:true,settings:await getPayoutSettings(),b2cConfigured:hasB2CConfig()}); } catch(e){ res.status(500).json({error:'Could not load automatic payout settings.'}); }
+});
+
+app.patch('/api/admin/automatic-payout-settings', requireRole('admin'), async (req,res)=>{
+  try {
+    const enabled = Boolean(req.body?.enabled);
+    const threshold = Number(req.body?.threshold);
+    if(!Number.isFinite(threshold) || threshold < 1) return res.status(400).json({error:'Minimum payout threshold must be at least KES 1.'});
+    if(enabled && !hasB2CConfig()) return res.status(400).json({error:'Add the Daraja B2C environment variables before enabling automatic payouts.'});
+    await db.query(`INSERT INTO platform_settings(setting_key,setting_value) VALUES ('auto_payout_enabled',$1),('auto_payout_threshold',$2) ON CONFLICT(setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value,updated_at=NOW()`, [String(enabled), String(threshold)]);
+    res.json({ok:true,settings:{enabled,threshold},b2cConfigured:hasB2CConfig()});
+  } catch(e){ console.error(e); res.status(500).json({error:'Could not save automatic payout settings.'}); }
+});
+
+app.post('/api/teacher/payout-profile', requireRole('teacher'), async (req,res)=>{
+  try { const phone=normalizePhone(req.body?.phone); await db.query(`UPDATE users SET phone=$2, updated_at=NOW() WHERE email=$1`,[req.user.email,phone]); res.json({ok:true,phone}); }
+  catch(e){res.status(400).json({error:e.message||'Could not save payout phone.'})}
+});
+
+app.get('/api/teacher/payout-profile', requireRole('teacher'), async (req,res)=>{
+  try { const r=await db.query(`SELECT phone FROM users WHERE email=$1 LIMIT 1`,[req.user.email]); res.json({ok:true,phone:r.rows[0]?.phone||''}); } catch(e){res.status(500).json({error:'Could not load payout profile.'})}
+});
+
+app.post('/api/mpesa/b2c/result', express.json({type:'application/json'}), async (req,res)=>{
+  try {
+    const r=req.body?.Result||{}; const code=Number(r.ResultCode); const desc=r.ResultDesc||'';
+    const receipt=(r.ResultParameters?.ResultParameter||[]).find(x=>x.Key==='TransactionReceipt')?.Value || null;
+    const conversation=r.ConversationID||null; const originator=r.OriginatorConversationID||null;
+    if(db && databaseReady){
+      if(code===0){ await db.query(`UPDATE teacher_payouts SET status='paid',paid_at=NOW(),result_code=$2,result_description=$3,mpesa_receipt=$4,conversation_id=COALESCE($5,conversation_id),originator_conversation_id=COALESCE($6,originator_conversation_id),updated_at=NOW() WHERE conversation_id=$5 OR originator_conversation_id=$6`,['',code,desc,receipt,conversation,originator]); }
+      else { await db.query(`UPDATE teacher_payouts SET status='failed',result_code=$2,result_description=$3,conversation_id=COALESCE($4,conversation_id),originator_conversation_id=COALESCE($5,originator_conversation_id),updated_at=NOW() WHERE conversation_id=$4 OR originator_conversation_id=$5`,['',code,desc,conversation,originator]); }
+    }
+    res.json({ResultCode:0,ResultDesc:'Accepted'});
+  }catch(e){console.error('B2C result callback error:',e);res.json({ResultCode:0,ResultDesc:'Accepted'});}
+});
+
+app.post('/api/mpesa/b2c/timeout', express.json({type:'application/json'}), async (_req,res)=>res.json({ResultCode:0,ResultDesc:'Accepted'}));
+
 app.post('/api/admin/teacher-payouts', requireRole('admin'), async (req,res)=>{
   try{const teacherEmail=String(req.body?.teacherEmail||'').trim().toLowerCase();const amount=Number(req.body?.amount);if(!teacherEmail||!Number.isFinite(amount)||amount<=0)return res.status(400).json({error:'Teacher email and a positive payout amount are required.'});
     const payoutId='PO-'+Date.now()+'-'+Math.random().toString(36).slice(2,7).toUpperCase();
-    const r=await db.query(`INSERT INTO teacher_payouts(payout_id,teacher_email,amount,status,notes) VALUES($1,$2,$3,'pending',$4) RETURNING payout_id AS "payoutId",teacher_email AS "teacherEmail",amount,status,notes,created_at AS "createdAt"`,[payoutId,teacherEmail,amount,String(req.body?.notes||'')]);
+    const r=await db.query(`INSERT INTO teacher_payouts(payout_id,teacher_email,phone,amount,status,notes) VALUES($1,$2,$3,$4,'pending',$5) RETURNING payout_id AS "payoutId",teacher_email AS "teacherEmail",amount,status,notes,created_at AS "createdAt"`,[payoutId,teacherEmail,req.body?.phone ? normalizePhone(req.body.phone) : null,amount,String(req.body?.notes||'')]);
     res.status(201).json({ok:true,payout:r.rows[0]});
   }catch(e){console.error(e);res.status(500).json({error:'Could not create teacher payout.'})}
 });
@@ -909,4 +1029,8 @@ try {
   console.warn('The server will continue, but database-backed features will use the temporary file fallback until the database is reachable.');
 }
 
-app.listen(PORT, () => console.log(`Tusome EduShelf running at http://localhost:${PORT}`));
+app.listen(PORT, () => {
+  console.log(`Tusome EduShelf running at http://localhost:${PORT}`);
+  setTimeout(() => runAutomaticTeacherPayouts().catch(e => console.error('Automatic payout startup check failed:', e)), 5000);
+  setInterval(() => runAutomaticTeacherPayouts().catch(e => console.error('Automatic payout check failed:', e)), Math.max(60000, Number(process.env.AUTO_PAYOUT_INTERVAL_MS || 300000)));
+});

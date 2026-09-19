@@ -31,6 +31,9 @@ footer{text-align:center;padding:30px;color:#687386}.ai-answer{line-height:1.7;b
 .feedback-type{display:grid;grid-template-columns:1fr 1fr;gap:8px}.feedback-type button{border:1px solid #dfe5ee;background:#fff;border-radius:10px;padding:11px;cursor:pointer}.feedback-type button.active{background:#e8f0ff;border-color:#5b7fc9;color:#173f8a;font-weight:700}
 .complaint-item{border:1px solid #e5e9f0;border-radius:12px;padding:14px;margin:10px 0}.complaint-head{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}.feedback-status{padding:4px 8px;border-radius:20px;font-size:11px;font-weight:800;background:#fff4d6;color:#795400}.feedback-status.resolved{background:#e8f8ee;color:#176b3a}.feedback-status.reviewing{background:#e8f0ff;color:#173f8a}.reply-box{background:#f7f9fc;border-radius:10px;padding:10px;margin-top:10px}
 @media(max-width:800px){.communication-grid{grid-template-columns:1fr}}
+
+.home-ai{margin-top:24px;background:linear-gradient(180deg,#ffffff,#f7faff);border:1px solid #dfe7f3;border-radius:18px;padding:24px;box-shadow:0 4px 18px #0000000b}.home-ai-head{display:flex;justify-content:space-between;align-items:center;gap:15px;flex-wrap:wrap}.home-ai-head h2{margin:0}.home-ai-sub{color:#687386;margin:6px 0 0}.home-ai-chips{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}.home-ai-chip{border:1px solid #cbd6e5;background:#fff;color:#173f8a;border-radius:999px;padding:8px 12px;cursor:pointer;font-weight:700}.home-ai-chat{background:#fff;border:1px solid #e1e6ef;border-radius:14px;padding:14px;min-height:70px;max-height:360px;overflow:auto;margin-bottom:12px}.home-ai-msg{padding:10px 12px;border-radius:12px;margin:8px 0;line-height:1.55;white-space:pre-wrap}.home-ai-msg.user{background:#eaf1ff;margin-left:12%;}.home-ai-msg.bot{background:#f3f6fa;margin-right:12%;}.home-ai-msg.bot table{width:100%;border-collapse:collapse;margin:8px 0}.home-ai-msg.bot th,.home-ai-msg.bot td{border:1px solid #d9e0ea;padding:7px;text-align:left;vertical-align:top}.home-ai-msg.bot th{background:#eef3f8}.home-ai-form{display:flex;gap:8px;align-items:flex-end}.home-ai-form textarea{margin:0;min-height:48px;resize:vertical}.home-ai-form button{flex:0 0 auto}.home-ai-note{font-size:12px;color:#687386;margin-top:10px}
+@media(max-width:600px){.home-ai-form{flex-direction:column}.home-ai-form button{width:100%}.home-ai-msg.user,.home-ai-msg.bot{margin-left:0;margin-right:0}}
 </style>
 </head>
 <body>
@@ -50,6 +53,27 @@ footer{text-align:center;padding:30px;color:#687386}.ai-answer{line-height:1.7;b
     <button class="btn light" onclick="show('login')">Get Started</button>
     <button class="btn light" onclick="show('login')">Login to Learn</button>
   </div>
+  <div class="home-ai">
+    <div class="home-ai-head">
+      <div><h2>🤖 Ask Tusome EduShelf</h2><p class="home-ai-sub">New here? Ask me how Tusome EduShelf works and I’ll guide you step by step.</p></div>
+      <span class="tag">No login required</span>
+    </div>
+    <div class="home-ai-chips">
+      <button class="home-ai-chip" type="button" onclick="askHomeAIQuick('How do I create an account and get started?')">How do I get started?</button>
+      <button class="home-ai-chip" type="button" onclick="askHomeAIQuick('How can a learner find and buy learning materials?')">How do I get materials?</button>
+      <button class="home-ai-chip" type="button" onclick="askHomeAIQuick('How can a teacher upload a learning material?')">How does a teacher upload?</button>
+      <button class="home-ai-chip" type="button" onclick="askHomeAIQuick('What can the AI assistant help me do?')">What can AI do?</button>
+    </div>
+    <div id="homeAIChat" class="home-ai-chat" aria-live="polite">
+      <div class="home-ai-msg bot"><b>Tusome EduShelf AI:</b> Hi! I can explain how to use the platform, including getting started, learner materials, teacher uploads, dashboards, AI tools and the general purchase flow. What would you like to know?</div>
+    </div>
+    <form class="home-ai-form" onsubmit="askHomeAI(event)">
+      <textarea id="homeAIPrompt" rows="2" maxlength="800" placeholder="Ask: How do I use Tusome EduShelf?"></textarea>
+      <button id="homeAISend" class="btn primary" type="submit">✨ Ask</button>
+    </form>
+    <div class="home-ai-note">For account-specific actions, you may need to log in. Do not enter passwords, payment PINs or other private information here.</div>
+  </div>
+
   <div class="cards">
     <div class="card"><h3>📚 Reading Materials</h3><p>Find learning resources organized by subject, grade, strand and topic.</p></div>
     <div class="card"><h3>📚 Learning Resources</h3><p>Access organized notes, revision materials, activities and other study resources.</p></div>
@@ -662,6 +686,47 @@ async function logoutUser(){
   localStorage.removeItem('tusomeCurrentUser');
   show('home');
 }
+
+function escapeHomeAIText(value){return String(value||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function renderHomeAIAnswer(text){
+  const raw=String(text||'').trim();
+  const safe=escapeHomeAIText(raw);
+  return safe.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/^### (.*)$/gm,'<h4>$1</h4>').replace(/^## (.*)$/gm,'<h3>$1</h3>').replace(/\n/g,'<br>');
+}
+function appendHomeAIMessage(kind,text){
+  const box=document.getElementById('homeAIChat');
+  const el=document.createElement('div');
+  el.className='home-ai-msg '+kind;
+  el.innerHTML=kind==='bot'?'<b>Tusome EduShelf AI:</b> '+renderHomeAIAnswer(text):'<b>You:</b> '+escapeHomeAIText(text).replace(/\n/g,'<br>');
+  box.appendChild(el);
+  box.scrollTop=box.scrollHeight;
+  return el;
+}
+async function askHomeAIQuick(question){
+  const input=document.getElementById('homeAIPrompt');
+  input.value=question;
+  await askHomeAI();
+}
+async function askHomeAI(e){
+  if(e&&e.preventDefault)e.preventDefault();
+  const input=document.getElementById('homeAIPrompt');
+  const button=document.getElementById('homeAISend');
+  const prompt=input.value.trim();
+  if(!prompt){input.focus();return;}
+  if(prompt.length>800){alert('Please keep your question below 800 characters.');return;}
+  appendHomeAIMessage('user',prompt);
+  input.value=''; button.disabled=true; button.textContent='⏳ Thinking...';
+  const pending=appendHomeAIMessage('bot','Let me check how Tusome EduShelf can help...');
+  try{
+    const res=await fetch('/api/home-ai',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})});
+    const data=await res.json();
+    if(!res.ok)throw new Error(data.error||'The AI assistant could not respond.');
+    pending.innerHTML='<b>Tusome EduShelf AI:</b> '+renderHomeAIAnswer(data.answer);
+  }catch(err){
+    pending.innerHTML='<b>Tusome EduShelf AI:</b> Sorry, I could not respond right now. '+escapeHomeAIText(err.message);
+  }finally{button.disabled=false;button.textContent='✨ Ask';}
+}
+
 function show(id){
   const protectedRoles={learner:'learner',teacher:'teacher',admin:'admin',communication:'user'};
   if(protectedRoles[id]){

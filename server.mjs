@@ -199,9 +199,36 @@ async function initDatabase() {
       file_data BYTEA NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+    ALTER TABLE transactions ADD COLUMN IF NOT EXISTS teacher_percentage NUMERIC(5,2);
+    ALTER TABLE transactions ADD COLUMN IF NOT EXISTS teacher_amount NUMERIC(12,2);
+    ALTER TABLE transactions ADD COLUMN IF NOT EXISTS platform_percentage NUMERIC(5,2);
+    ALTER TABLE transactions ADD COLUMN IF NOT EXISTS platform_amount NUMERIC(12,2);
+
+    CREATE TABLE IF NOT EXISTS platform_settings (
+      setting_key TEXT PRIMARY KEY,
+      setting_value TEXT NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS teacher_payouts (
+      payout_id TEXT PRIMARY KEY,
+      teacher_email TEXT NOT NULL,
+      amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'pending',
+      notes TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      paid_at TIMESTAMPTZ
+    );
+
     CREATE INDEX IF NOT EXISTS idx_transactions_user_email ON transactions (user_email);
     CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions (status);
+    CREATE INDEX IF NOT EXISTS idx_transactions_teacher_amount ON transactions (teacher_amount);
+    CREATE INDEX IF NOT EXISTS idx_teacher_payouts_teacher_email ON teacher_payouts (teacher_email);
   `);
+
+  const defaultTeacherRevenue = Math.min(100, Math.max(0, Number(process.env.TEACHER_REVENUE_PERCENT || 80)));
+  await db.query(`INSERT INTO platform_settings(setting_key,setting_value) VALUES ('teacher_revenue_percentage',$1),('platform_revenue_percentage',$2) ON CONFLICT(setting_key) DO NOTHING`, [String(defaultTeacherRevenue), String(100-defaultTeacherRevenue)]);
+
 
   // Seed/update the three current demo accounts from Render environment variables.
   const adminEmail = String(process.env.ADMIN_EMAIL || 'admin@edushelf.com').trim().toLowerCase();
@@ -286,16 +313,14 @@ async function dbUpdateTransaction(checkoutRequestId, patch) {
   if (!db || !databaseReady) return false;
   await db.query(`
     UPDATE transactions SET
-      status = COALESCE($2, status),
-      result_code = $3,
-      result_description = $4,
-      mpesa_receipt = $5,
-      paid_amount = $6,
-      paid_phone = $7,
-      transaction_date = $8,
-      updated_at = NOW()
+      status = COALESCE($2, status), result_code = $3, result_description = $4, mpesa_receipt = $5,
+      paid_amount = $6, paid_phone = $7, transaction_date = $8, updated_at = NOW()
     WHERE checkout_request_id = $1
   `, [checkoutRequestId, patch.status || null, patch.resultCode ?? null, patch.resultDescription || null, patch.mpesaReceipt || null, patch.paidAmount ?? null, patch.paidPhone || null, patch.transactionDate || null]);
+  if (patch.status === 'paid') {
+    const settings = await getRevenueSettings();
+    await db.query(`UPDATE transactions SET teacher_percentage=$2, platform_percentage=$3, teacher_amount=ROUND(COALESCE(paid_amount,amount)*$2/100,2), platform_amount=ROUND(COALESCE(paid_amount,amount)*$3/100,2) WHERE checkout_request_id=$1`, [checkoutRequestId, settings.teacherPercentage, settings.platformPercentage]);
+  }
   return true;
 }
 
@@ -654,8 +679,7 @@ app.get('/api/materials/:id/file', requireAuth, async (req, res) => {
     const allowed = req.user.role === 'admin' || (req.user.role === 'teacher' && row.teacherEmail === req.user.email) || (req.user.role === 'learner' && row.approvalStatus === 'approved');
     if (!allowed) return res.status(403).json({ error: 'This material is not available to your account.' });
     res.setHeader('Content-Type', row.mimeType || 'application/octet-stream');
-    const disposition = String(req.query.download || '') === '1' ? 'attachment' : 'inline';
-    res.setHeader('Content-Disposition', `${disposition}; filename="${String(row.fileName).replace(/"/g, '')}"`);
+    res.setHeader('Content-Disposition', `inline; filename="${String(row.fileName).replace(/"/g, '')}"`);
     res.send(row.fileData);
   } catch (e) {
     console.error('Material file error:', e);
@@ -830,6 +854,39 @@ app.get('/api/payments/status/:checkoutRequestId', requireAuth, async (req, res)
     mpesaReceipt: tx.mpesaReceipt || '',
     resultDescription: tx.resultDescription || ''
   });
+});
+
+app.get('/api/admin/payments', requireRole('admin'), async (req,res)=>{
+  try{
+    const settings=await getRevenueSettings();
+    const tx=await db.query(`WITH settings AS (SELECT COALESCE(MAX(CASE WHEN setting_key='teacher_revenue_percentage' THEN setting_value::numeric END),80) AS teacher_pct FROM platform_settings) SELECT t.transaction_id AS "transactionId",t.title,t.amount,t.status,t.mpesa_receipt AS "mpesaReceipt",t.paid_phone AS "paidPhone",t.user_email AS "learnerEmail",t.created_at AS "createdAt",t.transaction_date AS "transactionDate",COALESCE(t.teacher_percentage,s.teacher_pct) AS "teacherPercentage",COALESCE(t.teacher_amount,ROUND(COALESCE(t.paid_amount,t.amount)*s.teacher_pct/100,2)) AS "teacherAmount",COALESCE(t.platform_percentage,100-s.teacher_pct) AS "platformPercentage",COALESCE(t.platform_amount,ROUND(COALESCE(t.paid_amount,t.amount)*(100-s.teacher_pct)/100,2)) AS "platformAmount",m.teacher_email AS "teacherEmail" FROM transactions t CROSS JOIN settings s LEFT JOIN materials m ON m.id=t.material_id ORDER BY t.created_at DESC`);
+    const payouts=await db.query(`SELECT payout_id AS "payoutId",teacher_email AS "teacherEmail",amount,status,notes,created_at AS "createdAt",paid_at AS "paidAt" FROM teacher_payouts ORDER BY created_at DESC`);
+    res.json({ok:true,settings,transactions:tx.rows,payouts:payouts.rows});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not load payment records.'})}
+});
+
+app.patch('/api/admin/revenue-settings', requireRole('admin'), async (req,res)=>{
+  try{const teacher=Number(req.body?.teacherPercentage);if(!Number.isFinite(teacher)||teacher<0||teacher>100)return res.status(400).json({error:'Teacher revenue percentage must be between 0 and 100.'});
+    await db.query(`INSERT INTO platform_settings(setting_key,setting_value) VALUES ('teacher_revenue_percentage',$1),('platform_revenue_percentage',$2) ON CONFLICT(setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value,updated_at=NOW()`,[String(teacher),String(100-teacher)]);
+    res.json({ok:true,settings:{teacherPercentage:teacher,platformPercentage:100-teacher}});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not save revenue settings.'})}
+});
+
+app.post('/api/admin/teacher-payouts', requireRole('admin'), async (req,res)=>{
+  try{const teacherEmail=String(req.body?.teacherEmail||'').trim().toLowerCase();const amount=Number(req.body?.amount);if(!teacherEmail||!Number.isFinite(amount)||amount<=0)return res.status(400).json({error:'Teacher email and a positive payout amount are required.'});
+    const payoutId='PO-'+Date.now()+'-'+Math.random().toString(36).slice(2,7).toUpperCase();
+    const r=await db.query(`INSERT INTO teacher_payouts(payout_id,teacher_email,amount,status,notes) VALUES($1,$2,$3,'pending',$4) RETURNING payout_id AS "payoutId",teacher_email AS "teacherEmail",amount,status,notes,created_at AS "createdAt"`,[payoutId,teacherEmail,amount,String(req.body?.notes||'')]);
+    res.status(201).json({ok:true,payout:r.rows[0]});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not create teacher payout.'})}
+});
+
+app.patch('/api/admin/teacher-payouts/:id/paid', requireRole('admin'), async (req,res)=>{
+  try{const r=await db.query(`UPDATE teacher_payouts SET status='paid',paid_at=NOW() WHERE payout_id=$1 RETURNING payout_id AS "payoutId",teacher_email AS "teacherEmail",amount,status,notes,created_at AS "createdAt",paid_at AS "paidAt"`,[req.params.id]);if(!r.rowCount)return res.status(404).json({error:'Payout not found.'});res.json({ok:true,payout:r.rows[0]})}
+  catch(e){console.error(e);res.status(500).json({error:'Could not mark payout as paid.'})}
+});
+
+app.get('/api/teacher/earnings', requireRole('teacher'), async (req,res)=>{
+  try{const settings=await getRevenueSettings();const sales=await db.query(`WITH settings AS (SELECT COALESCE(MAX(CASE WHEN setting_key='teacher_revenue_percentage' THEN setting_value::numeric END),80) AS teacher_pct FROM platform_settings) SELECT t.transaction_id AS "transactionId",t.title,t.amount,t.status,COALESCE(t.teacher_amount,ROUND(COALESCE(t.paid_amount,t.amount)*s.teacher_pct/100,2)) AS "teacherAmount",COALESCE(t.platform_amount,ROUND(COALESCE(t.paid_amount,t.amount)*(100-s.teacher_pct)/100,2)) AS "platformAmount",t.created_at AS "createdAt",m.teacher_email AS "teacherEmail" FROM transactions t CROSS JOIN settings s JOIN materials m ON m.id=t.material_id WHERE m.teacher_email=$1 ORDER BY t.created_at DESC`,[req.user.email]);const totals=await db.query(`WITH settings AS (SELECT COALESCE(MAX(CASE WHEN setting_key='teacher_revenue_percentage' THEN setting_value::numeric END),80) AS teacher_pct FROM platform_settings) SELECT COALESCE(SUM(COALESCE(t.teacher_amount,ROUND(COALESCE(t.paid_amount,t.amount)*s.teacher_pct/100,2))),0) AS earned FROM transactions t CROSS JOIN settings s JOIN materials m ON m.id=t.material_id WHERE m.teacher_email=$1 AND t.status='paid'`,[req.user.email]);const payouts=await db.query(`SELECT COALESCE(SUM(amount),0) AS paid FROM teacher_payouts WHERE teacher_email=$1 AND status='paid'`,[req.user.email]);res.json({ok:true,settings,sales:sales.rows,earned:Number(totals.rows[0]?.earned||0),paidOut:Number(payouts.rows[0]?.paid||0),balance:Math.max(0,Number(totals.rows[0]?.earned||0)-Number(payouts.rows[0]?.paid||0))})}catch(e){console.error(e);res.status(500).json({error:'Could not load teacher earnings.'})}
 });
 
 app.get('/api/payments/my', requireRole('learner'), async (req, res) => {

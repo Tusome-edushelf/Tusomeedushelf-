@@ -1,11 +1,24 @@
-# Tusome EduShelf — M-PESA Buy Button Fixed v5
+# Tusome EduShelf — Teacher Revenue & Admin Payments v8
 
-This version fixes a JavaScript syntax error in the main `index.html` that prevented the browser from executing the page script. Because that script contained the login handler and dashboard button handlers, the Login button and other buttons could appear unresponsive.
+This version adds a PostgreSQL-backed payment and teacher revenue management layer.
 
-The fix preserves the existing dashboard structure and M-PESA changes.
+## Added
+- Admin **Purchases & Payments** tab showing confirmed purchases, learner, teacher, sale amount, teacher share, and platform revenue.
+- Admin **Revenue & Teacher Payouts** tab.
+- Configurable teacher revenue percentage; platform automatically receives the remaining percentage.
+- Teacher dashboard earnings showing total earned, paid out, available balance, and sales by material.
+- Admin can create a teacher payout record and mark it paid after the actual transfer is completed.
+- Revenue percentages are stored in PostgreSQL.
+- Paid M-PESA transactions store the revenue split used at the time of payment.
+
+## Default split
+- Teacher: 80%
+- Platform: 20%
+
+The admin can change the split before future purchases.
+
+## Important
+The payout records do **not** send money automatically. They record and track a payout after the administrator completes the real transfer. Automatic M-PESA B2C disbursement can be added separately when the required Daraja business credentials and configuration are available.
 
 ## Deploy
-1. Upload/deploy this project to Render.
-2. Keep your existing environment variables.
-3. For M-PESA sandbox, do not invent shortcode/passkey values.
-4. After deployment, hard-refresh the browser before testing.
+Deploy the entire project to Render and hard-refresh the browser with Ctrl+Shift+R.

@@ -312,8 +312,10 @@ footer{text-align:center;padding:30px;color:#687386}.ai-answer{line-height:1.75;
     <div class="card"><h3>📤 Uploaded</h3><p><b id="count">3</b> materials</p></div>
     <div class="card"><h3>👁 Views</h3><p>128 learner views</p></div>
     <div class="card"><h3>📚 Subjects</h3><p>3 subjects</p></div>
+    <div class="card"><h3>💰 Earnings</h3><p><b id="teacherBalance">KES 0.00</b> available</p><small id="teacherRevenueRate">Teacher share: 80%</small></div>
     <div class="card"><h3>🤖 AI Assistant</h3><p>Create lesson plans, assessments, notes and learning activities.</p><button class="btn primary" onclick="openAIAssistant('teacher')">Open AI Assistant</button></div>
   </div>
+  <div class="card" style="margin-top:22px"><h3>💰 Sales & Earnings</h3><div id="teacherEarningsPanel"><p>Loading earnings...</p></div></div>
   <div class="card" style="margin-top:22px"><h3>Your Recent Uploads</h3><div id="teacherMaterials"></div></div>
 </section>
 
@@ -345,6 +347,16 @@ footer{text-align:center;padding:30px;color:#687386}.ai-answer{line-height:1.75;
   </div>
   <div class="admin-tabs">
     <button class="btn primary" onclick="adminTab('approvals')">Learning Materials</button>
+    <button class="btn" onclick="adminTab('payments')">💳 Purchases & Payments</button>
+    <button class="btn" onclick="adminTab('revenue')">💰 Revenue & Teacher Payouts</button>
+  </div>
+
+  <div id="adminPayments" class="admin-panel" style="display:none">
+    <div class="card"><h3>💳 Purchases & Payment Records</h3><p>Every confirmed purchase is listed here with the learner, teacher, amount and revenue split.</p><div id="adminPaymentSummary" class="small"></div><div class="table-like"><table><thead><tr><th>Date</th><th>Material</th><th>Learner</th><th>Teacher</th><th>Amount</th><th>Teacher share</th><th>Platform revenue</th><th>Status</th></tr></thead><tbody id="adminPaymentsTable"></tbody></table></div></div>
+  </div>
+  <div id="adminRevenue" class="admin-panel" style="display:none">
+    <div class="card"><h3>⚙️ Revenue Split</h3><p>Set the percentage paid to teachers. The remaining percentage is the platform revenue.</p><div class="admin-action-row"><label>Teacher percentage <input id="teacherRevenuePercent" type="number" min="0" max="100" step="1" value="80" style="width:100px"></label><span id="platformRevenuePercent">Platform: 20%</span><button class="btn primary" onclick="saveRevenueSettings()">Save Split</button></div><p class="small">Example: 80% teacher / 20% platform on a KES 100 sale = KES 80 teacher earnings and KES 20 platform revenue.</p></div>
+    <div class="card" style="margin-top:16px"><h3>👨‍🏫 Teacher Payouts</h3><div class="admin-action-row"><input id="payoutTeacherEmail" type="email" placeholder="teacher@example.com" style="max-width:240px"><input id="payoutAmount" type="number" min="1" step="0.01" placeholder="Amount (KES)" style="max-width:160px"><input id="payoutNotes" placeholder="Notes" style="max-width:240px"><button class="btn primary" onclick="createTeacherPayout()">Create Payout</button></div><div id="adminPayoutsList" style="margin-top:14px"></div></div>
   </div>
 
   <div class="card" style="margin-top:18px"><h3>💬 Communication Centre — User Feedback</h3><p>Review complaints and suggestions, update status and respond to users.</p><div id="adminFeedbackList"></div></div>
@@ -435,9 +447,8 @@ function populateMaterialFilters(){
   const sets={subjectFilter:[...new Set(materials.map(m=>m.subject).filter(Boolean))].sort(),gradeFilter:[...new Set(materials.map(m=>m.grade).filter(Boolean))].sort((a,b)=>{const na=parseInt(a.match(/\d+/)?.[0]||0),nb=parseInt(b.match(/\d+/)?.[0]||0);return na-nb||a.localeCompare(b)}),topicFilter:[...new Set(materials.map(m=>m.topic).filter(Boolean))].sort()};
   Object.entries(sets).forEach(([id,values])=>{const el=document.getElementById(id);if(!el)return;const current=el.value;el.innerHTML='<option value="">'+(id==='subjectFilter'?'All subjects':id==='gradeFilter'?'All grades':'All topics')+'</option>'+values.map(v=>`<option value="${String(v).replace(/"/g,'&quot;')}">${v}</option>`).join('');if(values.includes(current))el.value=current});
 }
-function renderMaterials(list=materials.filter(m=>(m.approvalStatus||'approved')==='approved')){const box=document.getElementById('materials');if(!box)return;const count=document.getElementById('materialResultCount');if(count)count.textContent=`Showing ${list.length} of ${materials.length} material${materials.length===1?'':'s'}`;box.innerHTML=list.length?list.map(m=>{const paid=isPurchased(m.id),price=materialPrice(m);const id=String(m.id).replace(/'/g,"\\'");const action=(price===0||paid)?`<button class="btn primary" type="button" onclick="handleMaterialButton('${id}')">Open</button><button class="btn" type="button" onclick="downloadMaterial('${id}')">Download</button>`:`<button class="btn primary" type="button" onclick="handleMaterialButton('${id}')">Buy</button>`;return `<div class="material"><div style="min-width:0"><b>${escHtml(m.title||'Untitled material')}</b><br><span class="tag">${escHtml(m.subject||'General')}</span> <span class="tag">${escHtml(m.grade||'All grades')}</span> <span class="tag">${price>0?'KES '+price:'FREE'}</span> <small>${escHtml(m.topic||'')}</small><br><small>📎 ${escHtml(m.file||'Uploaded material')}</small></div><div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">${action}</div></div>`}).join(''):'<div class="notice">No materials match your search. Try a different keyword or reset the filters.</div>'}
+function renderMaterials(list=materials.filter(m=>(m.approvalStatus||'approved')==='approved')){const box=document.getElementById('materials');if(!box)return;const count=document.getElementById('materialResultCount');if(count)count.textContent=`Showing ${list.length} of ${materials.length} material${materials.length===1?'':'s'}`;box.innerHTML=list.length?list.map(m=>{const paid=isPurchased(m.id),price=materialPrice(m);const id=String(m.id).replace(/'/g,"\\'");return `<div class="material"><div style="min-width:0"><b>${escHtml(m.title||'Untitled material')}</b><br><span class="tag">${escHtml(m.subject||'General')}</span> <span class="tag">${escHtml(m.grade||'All grades')}</span> <span class="tag">${price>0?'KES '+price:'FREE'}</span> <small>${escHtml(m.topic||'')}</small><br><small>📎 ${escHtml(m.file||'Uploaded material')}</small></div><button class="btn primary" type="button" onclick="handleMaterialButton('${id}')">${price===0||paid?'Open':'Buy'}</button></div>`}).join(''):'<div class="notice">No materials match your search. Try a different keyword or reset the filters.</div>'}
 function handleMaterialButton(materialId){const m=materials.find(x=>String(x.id)===String(materialId));if(!m){alert('Material not found. Please refresh the learner dashboard.');return}if(materialPrice(m)>0&&!isPurchased(m.id)){showPaymentForMaterial(m);return}openMaterial(materials.indexOf(m))}
-function downloadMaterial(materialId){const m=materials.find(x=>String(x.id)===String(materialId));if(!m)return;if(materialPrice(m)>0&&!isPurchased(m.id)){showPaymentForMaterial(m);return}window.open('/api/materials/'+encodeURIComponent(materialId)+'/file?download=1','_blank')}
 function filterMaterials(){
   const q=(document.getElementById('search')?.value||'').trim().toLowerCase(),subject=document.getElementById('subjectFilter')?.value||'',grade=document.getElementById('gradeFilter')?.value||'',topic=document.getElementById('topicFilter')?.value||'',sort=document.getElementById('materialSort')?.value||'newest';
   let list=materials.filter(m=>(m.approvalStatus||'approved')==='approved').filter(m=>{const text=[m.title,m.subject,m.grade,m.topic,m.strand,m.competency,m.description,m.file].filter(Boolean).join(' ').toLowerCase();return (!q||text.includes(q))&&(!subject||m.subject===subject)&&(!grade||m.grade===grade)&&(!topic||m.topic===topic)});
@@ -552,11 +563,51 @@ function replyToFeedback(id){const a=feedbackStore(),x=a.find(v=>v.id===id);if(!
 function openCommunicationCentre(){show('communication')}
 function adminTab(tab){
   document.querySelectorAll('.admin-panel').forEach(x=>x.style.display='none');
-  const el=document.getElementById('adminApprovals');if(el)el.style.display='block';
+  const map={approvals:'adminApprovals',payments:'adminPayments',revenue:'adminRevenue'};
+  const el=document.getElementById(map[tab]||'adminApprovals');if(el)el.style.display='block';
   adminRefreshAll();
+  if(tab==='payments'||tab==='revenue')loadAdminPayments();
 }
 
 async function loadServerMaterials(){try{const r=await fetch('/api/materials',{credentials:'include'});if(!r.ok)return false;const d=await r.json();materials=Array.isArray(d.materials)?d.materials:[];return true}catch(e){console.warn('Could not load server materials',e);return false}}
+async function loadAdminPayments(){
+  try{
+    const r=await fetch('/api/admin/payments',{credentials:'include'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load payment records.');
+    const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v};
+    set('teacherRevenuePercent',d.settings.teacherPercentage);set('platformRevenuePercent','Platform: '+d.settings.platformPercentage+'%');
+    const tx=(d.transactions||[]).filter(x=>x.status==='paid');
+    const total=tx.reduce((a,x)=>a+Number(x.amount||0),0), teacher=tx.reduce((a,x)=>a+Number(x.teacherAmount||0),0), platform=tx.reduce((a,x)=>a+Number(x.platformAmount||0),0);
+    set('adminPaymentSummary',`Confirmed purchases: ${tx.length} • Sales: KES ${total.toFixed(2)} • Teacher earnings: KES ${teacher.toFixed(2)} • Platform revenue: KES ${platform.toFixed(2)}`);
+    const body=document.getElementById('adminPaymentsTable');if(body)body.innerHTML=tx.length?tx.map(x=>`<tr><td>${new Date(x.createdAt).toLocaleString()}</td><td>${escHtml(x.title||'')}</td><td>${escHtml(x.learnerEmail||'')}</td><td>${escHtml(x.teacherEmail||'')}</td><td>KES ${Number(x.amount||0).toFixed(2)}</td><td>KES ${Number(x.teacherAmount||0).toFixed(2)} (${Number(x.teacherPercentage||0)}%)</td><td>KES ${Number(x.platformAmount||0).toFixed(2)} (${Number(x.platformPercentage||0)}%)</td><td>${escHtml(x.status||'')}</td></tr>`).join(''):'<tr><td colspan="8">No confirmed purchases yet.</td></tr>';
+    const payouts=d.payouts||[], pb=document.getElementById('adminPayoutsList');
+    if(pb)pb.innerHTML=payouts.length?payouts.map(x=>`<div class="material"><div><b>${escHtml(x.teacherEmail)}</b><br><small>${new Date(x.createdAt).toLocaleString()} • KES ${Number(x.amount||0).toFixed(2)} • ${escHtml(x.status)}</small>${x.notes?`<br><small>${escHtml(x.notes)}</small>`:''}</div>${x.status!=='paid'?`<button class="btn" onclick="markTeacherPayoutPaid('${escHtml(x.payoutId)}')">Mark Paid</button>`:''}</div>`).join(''):'<p>No teacher payouts recorded.</p>';
+  }catch(e){console.warn(e);}
+}
+async function saveRevenueSettings(){
+  const teacher=Number(document.getElementById('teacherRevenuePercent')?.value);if(!Number.isFinite(teacher)||teacher<0||teacher>100){alert('Enter a teacher percentage from 0 to 100.');return}
+  try{const r=await fetch('/api/admin/revenue-settings',{method:'PATCH',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({teacherPercentage:teacher})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not save revenue split.');document.getElementById('platformRevenuePercent').textContent='Platform: '+d.settings.platformPercentage+'%';alert('Revenue split saved. New purchases will use '+d.settings.teacherPercentage+'% for teachers and '+d.settings.platformPercentage+'% for the platform.');}catch(e){alert(e.message)}
+}
+async function createTeacherPayout(){
+  const teacherEmail=(document.getElementById('payoutTeacherEmail')?.value||'').trim(),amount=Number(document.getElementById('payoutAmount')?.value||0),notes=(document.getElementById('payoutNotes')?.value||'').trim();if(!teacherEmail||!amount||amount<=0){alert('Enter the teacher email and payout amount.');return}
+  try{const r=await fetch('/api/admin/teacher-payouts',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({teacherEmail,amount,notes})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not create payout.');document.getElementById('payoutAmount').value='';document.getElementById('payoutNotes').value='';loadAdminPayments();alert('Teacher payout record created. You can mark it Paid after the actual transfer is completed.');}catch(e){alert(e.message)}
+}
+async function markTeacherPayoutPaid(id){if(!confirm('Mark this teacher payout as paid?'))return;try{const r=await fetch('/api/admin/teacher-payouts/'+encodeURIComponent(id)+'/paid',{method:'PATCH',credentials:'include'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not update payout.');loadAdminPayments()}catch(e){alert(e.message)}}
+async function loadTeacherEarnings(){
+  try{
+    const r=await fetch('/api/teacher/earnings',{credentials:'include'});
+    const d=await r.json();
+    if(!r.ok)throw new Error(d.error||'Could not load earnings.');
+    const b=document.getElementById('teacherBalance');if(b)b.textContent='KES '+Number(d.balance||0).toFixed(2);
+    const rate=document.getElementById('teacherRevenueRate');if(rate)rate.textContent='Teacher share: '+d.settings.teacherPercentage+'%';
+    const box=document.getElementById('teacherEarningsPanel');
+    if(box){
+      const sales=d.sales||[];
+      const rows=sales.length?sales.map(x=>`<tr><td>${escHtml(x.title||'')}</td><td>KES ${Number(x.amount||0).toFixed(2)}</td><td>KES ${Number(x.teacherAmount||0).toFixed(2)}</td><td>${new Date(x.createdAt).toLocaleString()}</td></tr>`).join(''):'<tr><td colspan="4">No sales yet.</td></tr>';
+      box.innerHTML=`<p><b>Total earned:</b> KES ${Number(d.earned||0).toFixed(2)} &nbsp; <b>Paid out:</b> KES ${Number(d.paidOut||0).toFixed(2)} &nbsp; <b>Balance:</b> KES ${Number(d.balance||0).toFixed(2)}</p><div class="table-like"><table><thead><tr><th>Material</th><th>Sale</th><th>Your share</th><th>Date</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    }
+  }catch(e){console.warn(e)}
+}
+
 async function adminRefreshAll(){
   await loadServerMaterials();
   renderAdminFeedback();
@@ -633,7 +684,7 @@ function show(id){
   }
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   const el=document.getElementById(id);if(el)el.classList.add('active');
-  if(id==='teacher'){loadServerMaterials().then(renderTeacher)}
+  if(id==='teacher'){loadServerMaterials().then(renderTeacher);loadTeacherEarnings()}
   if(id==='admin'){adminRefreshAll()}
   if(id==='communication'){renderMyFeedback();renderAdminFeedback()}
   if(id==='notifications')renderNotifications();

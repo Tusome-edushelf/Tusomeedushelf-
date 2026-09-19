@@ -516,6 +516,12 @@ async function adminRefreshAll(){
 async function adminSetMaterialPrice(i,value){if(!materials[i])return;const price=Math.max(0,Number(value)||0);try{const r=await fetch('/api/materials/'+encodeURIComponent(materials[i].id)+'/review',{method:'PATCH',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({approvalStatus:materials[i].approvalStatus||'pending',price})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not update price.');materials[i].price=price;logActivity(`Set material price: ${materials[i].title} = KES ${price.toFixed(2)}`);adminRefreshAll();renderMaterials()}catch(e){alert(e.message)}}
 async function adminPreviewMaterial(i){const m=materials[i];if(!m)return;try{const r=await fetch('/api/materials/'+encodeURIComponent(m.id)+'/file',{credentials:'include'});if(!r.ok){const d=await r.json().catch(()=>({}));throw new Error(d.error||'Unable to open the material.')}const blob=await r.blob();const url=URL.createObjectURL(blob);const opened=window.open(url,'_blank');if(!opened){const a=document.createElement('a');a.href=url;a.download=m.file||'material';a.click()}setTimeout(()=>URL.revokeObjectURL(url),60000);logActivity('Admin reviewed material: '+m.title)}catch(err){alert(err.message||'Unable to open the material for review.')}}
 async function adminMaterialApproval(i,status){if(!materials[i])return;try{const r=await fetch('/api/materials/'+encodeURIComponent(materials[i].id)+'/review',{method:'PATCH',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({approvalStatus:status,price:Number(materials[i].price||0)})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not update material.');materials[i].approvalStatus=status;materials[i].approvedAt=d.material?.approvedAt||null;logActivity(`${status==='approved'?'Approved':'Rejected'} material: ${materials[i].title}`);logNotification(`Material ${materials[i].title}: ${status}`);adminRefreshAll();renderMaterials()}catch(e){alert(e.message)}}
+function setSessionRole(role,email){
+  sessionStorage.setItem('tusomeLoggedIn','true');
+  sessionStorage.setItem('tusomeRole',role);
+  sessionStorage.setItem('tusomeCurrentUser',email||role);
+  localStorage.setItem('tusomeCurrentUser',email||role);
+}
 function getSessionRole(){return sessionStorage.getItem('tusomeLoggedIn')==='true'?sessionStorage.getItem('tusomeRole'):null}
 async function login(e){
   e.preventDefault();

@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
@@ -11,6 +12,92 @@ app.use(express.json({ limit: '18mb' }));
 const PORT = Number(process.env.PORT || 3000);
 const DATA_DIR = path.join(__dirname, 'data');
 const TX_FILE = path.join(DATA_DIR, 'transactions.json');
+
+const AUTH_COOKIE = 'tusome_session';
+const AUTH_SESSION_SECRET = process.env.AUTH_SESSION_SECRET || crypto.randomBytes(32).toString('hex');
+
+if (!process.env.AUTH_SESSION_SECRET) {
+  console.warn('AUTH_SESSION_SECRET is not configured. A temporary secret will be generated and sessions will reset when the server restarts.');
+}
+
+function b64url(value) { return Buffer.from(value).toString('base64url'); }
+
+function signSession(payload) {
+  const encoded = b64url(JSON.stringify(payload));
+  const signature = crypto.createHmac('sha256', AUTH_SESSION_SECRET).update(encoded).digest('base64url');
+  return `${encoded}.${signature}`;
+}
+
+function verifySession(token) {
+  try {
+    const [encoded, signature] = String(token || '').split('.');
+    if (!encoded || !signature) return null;
+    const expected = crypto.createHmac('sha256', AUTH_SESSION_SECRET).update(encoded).digest('base64url');
+    const a = Buffer.from(signature); const b = Buffer.from(expected);
+    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+    const payload = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8'));
+    if (!payload?.email || !payload?.role || Number(payload.exp) < Date.now()) return null;
+    return payload;
+  } catch { return null; }
+}
+
+function getCookie(req, name) {
+  const header = req.headers.cookie || '';
+  const item = header.split(';').map(x => x.trim()).find(x => x.startsWith(`${name}=`));
+  return item ? decodeURIComponent(item.slice(name.length + 1)) : '';
+}
+
+function setSessionCookie(res, user) {
+  const token = signSession({ email: user.email, role: user.role, exp: Date.now() + 8 * 60 * 60 * 1000 });
+  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
+  res.setHeader('Set-Cookie', `${AUTH_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=28800${secure}`);
+}
+
+function clearSessionCookie(res) {
+  res.setHeader('Set-Cookie', `${AUTH_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
+}
+
+function currentUser(req) { return verifySession(getCookie(req, AUTH_COOKIE)); }
+
+function requireAuth(req, res, next) {
+  const user = currentUser(req);
+  if (!user) return res.status(401).json({ error: 'Please log in to continue.' });
+  req.user = user;
+  next();
+}
+
+function hashPassword(password, salt) {
+  const actualSalt = salt || crypto.randomBytes(16).toString('hex');
+  return `${actualSalt}:${crypto.scryptSync(String(password), actualSalt, 64).toString('hex')}`;
+}
+
+function verifyPassword(password, stored) {
+  try {
+    const [salt, expectedHex] = String(stored || '').split(':');
+    if (!salt || !expectedHex) return false;
+    const actual = crypto.scryptSync(String(password), salt, 64);
+    const expected = Buffer.from(expectedHex, 'hex');
+    return expected.length === actual.length && crypto.timingSafeEqual(actual, expected);
+  } catch { return false; }
+}
+
+function authUsers() {
+  const adminEmail = String(process.env.ADMIN_EMAIL || 'admin@edushelf.com').trim().toLowerCase();
+  const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
+  const learnerPassword = process.env.DEMO_LEARNER_PASSWORD || 'learner123';
+  const teacherPassword = process.env.DEMO_TEACHER_PASSWORD || 'teacher123';
+  if (!process.env.ADMIN_PASSWORD) console.warn('ADMIN_PASSWORD is not configured. Temporary default admin password is active; set ADMIN_PASSWORD in Render immediately.');
+  return [
+    { email: adminEmail, role: 'admin', passwordHash: hashPassword(adminPassword, 'edushelf-admin-salt-v1') },
+    { email: 'learner@edushelf.com', role: 'learner', passwordHash: hashPassword(learnerPassword, 'edushelf-learner-salt-v1') },
+    { email: 'teacher@edushelf.com', role: 'teacher', passwordHash: hashPassword(teacherPassword, 'edushelf-teacher-salt-v1') }
+  ];
+}
+
+function findUser(email) {
+  const normalized = String(email || '').trim().toLowerCase();
+  return authUsers().find(u => u.email === normalized);
+}
 
 await fs.mkdir(DATA_DIR, { recursive: true });
 try { await fs.access(TX_FILE); } catch { await fs.writeFile(TX_FILE, '[]', 'utf8'); }
@@ -248,7 +335,27 @@ Selected subject: ${subject || 'General'}. Selected grade: ${grade || 'General'}
   throw new Error(`Gemini is temporarily busy. Automatic fallback was attempted across ${models.length} models. Please try again shortly. Last error: ${lastError?.message || 'unknown error'}`);
 }
 
-app.post('/api/ai', async (req, res) => {
+app.post('/api/auth/login', (req, res) => {
+  const { email, password, role } = req.body || {};
+  const user = findUser(email);
+  if (!user || !verifyPassword(password, user.passwordHash)) return res.status(401).json({ error: 'Invalid email or password.' });
+  if (!['learner', 'teacher', 'admin'].includes(String(role)) || user.role !== role) return res.status(403).json({ error: 'The selected account type does not match this account.' });
+  setSessionCookie(res, user);
+  res.json({ ok: true, user: { email: user.email, role: user.role } });
+});
+
+app.get('/api/auth/me', (req, res) => {
+  const user = currentUser(req);
+  if (!user) return res.status(401).json({ error: 'Not logged in.' });
+  res.json({ ok: true, user: { email: user.email, role: user.role } });
+});
+
+app.post('/api/auth/logout', (_req, res) => {
+  clearSessionCookie(res);
+  res.json({ ok: true });
+});
+
+app.post('/api/ai', requireAuth, async (req, res) => {
   try {
     const answer = await callGemini(req.body || {});
     res.json({ ok: true, answer });
@@ -273,7 +380,7 @@ app.get('/api/health', async (_req, res) => {
   });
 });
 
-app.post('/api/payments/stkpush', async (req, res) => {
+app.post('/api/payments/stkpush', requireAuth, async (req, res) => {
   try {
     const { materialId, title, amount, phone } = req.body || {};
     const numericAmount = Math.round(Number(amount));
@@ -364,7 +471,7 @@ app.post('/api/payments/callback', async (req, res) => {
   }
 });
 
-app.get('/api/payments/status/:checkoutRequestId', async (req, res) => {
+app.get('/api/payments/status/:checkoutRequestId', requireAuth, async (req, res) => {
   const items = await readTx();
   const tx = items.find(x => x.checkoutRequestId === req.params.checkoutRequestId);
   if (!tx) return res.status(404).json({ error: 'Transaction not found.' });

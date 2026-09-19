@@ -589,7 +589,9 @@ async function login(e){
   button.disabled=true;button.textContent='Logging in...';
   try{
     const res=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({email,password,role})});
-    const data=await res.json();
+    const raw=await res.text();
+    let data={};
+    try{data=JSON.parse(raw)}catch{throw new Error('The EduShelf server returned an unexpected response. Please redeploy the latest EduShelf files on Render and try again.')} 
     if(!res.ok)throw new Error(data.error||'Login failed.');
     setSessionRole(data.user.role,data.user.email);
     show(data.user.role==='admin'?'admin':data.user.role==='teacher'?'teacher':'learner');

@@ -357,7 +357,7 @@ footer{text-align:center;padding:30px;color:#687386}.ai-answer{line-height:1.75;
 <section id="upload" class="page">
   <form onsubmit="upload(event)">
     <h2>Upload Learning Material</h2>
-    <div class="notice">Prototype mode: the file is recorded in this browser only. A real version will store files on a server/cloud database.</div>
+    <div class="notice">Files are stored securely on the EduShelf server and linked to PostgreSQL. Maximum file size: 12 MB.</div>
     <label>Material title</label><input id="title" required placeholder="e.g. Linear Functions Notes">
     <label>Subject / Learning Area</label><select id="subject">
       <option>Mathematics</option><option>English</option><option>Kiswahili</option>
@@ -409,7 +409,7 @@ function populateMaterialFilters(){
   const sets={subjectFilter:[...new Set(materials.map(m=>m.subject).filter(Boolean))].sort(),gradeFilter:[...new Set(materials.map(m=>m.grade).filter(Boolean))].sort((a,b)=>{const na=parseInt(a.match(/\d+/)?.[0]||0),nb=parseInt(b.match(/\d+/)?.[0]||0);return na-nb||a.localeCompare(b)}),topicFilter:[...new Set(materials.map(m=>m.topic).filter(Boolean))].sort()};
   Object.entries(sets).forEach(([id,values])=>{const el=document.getElementById(id);if(!el)return;const current=el.value;el.innerHTML='<option value="">'+(id==='subjectFilter'?'All subjects':id==='gradeFilter'?'All grades':'All topics')+'</option>'+values.map(v=>`<option value="${String(v).replace(/"/g,'&quot;')}">${v}</option>`).join('');if(values.includes(current))el.value=current});
 }
-function renderMaterials(list=materials.filter(m=>(m.approvalStatus||'approved')==='approved')){const box=document.getElementById('materials');if(!box)return;const count=document.getElementById('materialResultCount');if(count)count.textContent=`Showing ${list.length} of ${materials.length} material${materials.length===1?'':'s'}`;box.innerHTML=list.length?list.map(m=>{const idx=materials.indexOf(m);const paid=isPurchased(m.id),price=materialPrice(m);return `<div class="material"><div style="min-width:0"><b>${m.title||'Untitled material'}</b><br><span class="tag">${m.subject||'General'}</span> <span class="tag">${m.grade||'All grades'}</span> <span class="tag">${price>0?'KES '+price:'FREE'}</span> <small>${m.topic||''}</small><br><small>📎 ${m.file||'Uploaded material'}</small></div><button class="btn primary" onclick="openMaterial(${idx})">${price===0||paid?'Open':'Buy'}</button></div>`}).join(''):'<div class="notice">No materials match your search. Try a different keyword or reset the filters.</div>'}
+function renderMaterials(list=materials.filter(m=>(m.approvalStatus||'approved')==='approved')){const box=document.getElementById('materials');if(!box)return;const count=document.getElementById('materialResultCount');if(count)count.textContent=`Showing ${list.length} of ${materials.length} material${materials.length===1?'':'s'}`;box.innerHTML=list.length?list.map(m=>{const idx=materials.indexOf(m);const paid=isPurchased(m.id),price=materialPrice(m);return `<div class="material"><div style="min-width:0"><b>${escHtml(m.title||'Untitled material')}</b><br><span class="tag">${escHtml(m.subject||'General')}</span> <span class="tag">${escHtml(m.grade||'All grades')}</span> <span class="tag">${price>0?'KES '+price:'FREE'}</span> <small>${escHtml(m.topic||'')}</small><br><small>📎 ${escHtml(m.file||'Uploaded material')}</small></div><button class="btn primary" onclick="openMaterial(${idx})">${price===0||paid?'Open':'Buy'}</button></div>`}).join(''):'<div class="notice">No materials match your search. Try a different keyword or reset the filters.</div>'}
 function filterMaterials(){
   const q=(document.getElementById('search')?.value||'').trim().toLowerCase(),subject=document.getElementById('subjectFilter')?.value||'',grade=document.getElementById('gradeFilter')?.value||'',topic=document.getElementById('topicFilter')?.value||'',sort=document.getElementById('materialSort')?.value||'newest';
   let list=materials.filter(m=>(m.approvalStatus||'approved')==='approved').filter(m=>{const text=[m.title,m.subject,m.grade,m.topic,m.strand,m.competency,m.description,m.file].filter(Boolean).join(' ').toLowerCase();return (!q||text.includes(q))&&(!subject||m.subject===subject)&&(!grade||m.grade===grade)&&(!topic||m.topic===topic)});
@@ -417,32 +417,7 @@ function filterMaterials(){
   renderMaterials(list)
 }
 function resetMaterialFilters(){['search','subjectFilter','gradeFilter','topicFilter'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=''});const sort=document.getElementById('materialSort');if(sort)sort.value='newest';filterMaterials()}
-async function openMaterial(i){const m=materials[i];if(!m)return;const price=materialPrice(m);if(price>0&&!isPurchased(m.id)){showPaymentForMaterial(m);return}localStorage.setItem('tusomeViews',String(Number(localStorage.getItem('tusomeViews')||0)+1));logActivity('Viewed material: '+m.title);logNotification('Opened learning material: '+m.title);refreshProgress();try{if(m.fileId){const stored=await getUploadedFile(m.fileId);if(!stored){alert('The stored file could not be found. Please upload the material again.');return}const url=URL.createObjectURL(stored.blob);const opened=window.open(url,'_blank');if(!opened){const a=document.createElement('a');a.href=url;a.download=stored.name||m.file;a.click()}setTimeout(()=>URL.revokeObjectURL(url),60000);return}alert('This is a sample material. Upload a real file to open it.')}catch(err){alert('Unable to open the material. Please try uploading it again.')}}
-function showPaymentForMaterial(m){const box=document.getElementById('paymentMaterial');if(!box)return;box.innerHTML=`<h3>Purchase: ${m.title}</h3><p>Price: <b>KES ${materialPrice(m)}</b></p><p>The learner pays through the platform collection account, and the teacher earns the configured share after the purchase is confirmed.</p><label>M-PESA phone number</label><input id="payPhone" type="tel" placeholder="07XXXXXXXX" maxlength="13"><button class="btn primary" onclick="startDarajaPayment('${String(m.id)}')">📲 Pay with M-PESA</button><button class="btn" onclick="show('learner')">Cancel</button>`;show('payments')}
-async function startDarajaPayment(materialId){
-  const m=materials.find(x=>String(x.id)===String(materialId));
-  if(!m)return;
-  const phone=(document.getElementById('payPhone')?.value||'').trim();
-  if(!/^(\+?254|0)7\d{8}$/.test(phone)){
-    alert('Enter a valid Kenyan mobile number, for example 07XXXXXXXX.');
-    return;
-  }
-  const price=materialPrice(m);
-  if(price<=0){show('learner');return;}
-  try{
-    const r=await fetch('/api/payments/stkpush',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({materialId:m.id,title:m.title,amount:price,phone})
-    });
-    const data=await r.json();
-    if(!r.ok)throw new Error(data.error||'Unable to start payment.');
-    alert(data.message||'Check the phone for the M-PESA payment prompt.');
-    if(data.checkoutRequestId)pollPayment(data.checkoutRequestId,m);
-  }catch(err){
-    alert(err.message||'Unable to start the M-PESA payment.');
-  }
-}
+async function openMaterial(i){const m=materials[i];if(!m)return;const price=materialPrice(m);if(price>0&&!isPurchased(m.id)){showPaymentForMaterial(m);return}localStorage.setItem('tusomeViews',String(Number(localStorage.getItem('tusomeViews')||0)+1));logActivity('Viewed material: '+m.title);logNotification('Opened learning material: '+m.title);refreshProgress();try{const r=await fetch('/api/materials/'+encodeURIComponent(m.id)+'/file',{credentials:'include'});if(!r.ok){const d=await r.json().catch(()=>({}));throw new Error(d.error||'Unable to open the material.')}const blob=await r.blob();const url=URL.createObjectURL(blob);const opened=window.open(url,'_blank');if(!opened){const a=document.createElement('a');a.href=url;a.download=m.file||'material';a.click()}setTimeout(()=>URL.revokeObjectURL(url),60000)}catch(err){alert(err.message||'Unable to open the material.')}}
 async function pollPayment(checkoutRequestId,m){
   let attempts=0;
   const timer=setInterval(async()=>{
@@ -476,25 +451,7 @@ async function pollPayment(checkoutRequestId,m){
 }
 function renderPayments(){const ps=getPurchases(),box=document.getElementById('purchaseList');if(box)box.innerHTML=ps.length?ps.map(p=>`<div class="material"><div><b>${p.title}</b><br><small>${p.time} • ${p.status.toUpperCase()} • KES ${p.amount}</small></div><span class="tag">Teacher KES ${p.teacherShare}</span></div>`).join(''):'<p>No purchases yet.</p>';const e=document.getElementById('teacherEarnings');if(e)e.textContent='KES '+Number(localStorage.getItem('tusomeTeacherEarnings')||0).toFixed(2);const r=document.getElementById('platformRevenue');if(r)r.textContent='KES '+Number(localStorage.getItem('tusomeRevenue')||0).toFixed(2)}
 function filterMaterials(){const q=(document.getElementById('search')?.value||'').toLowerCase();renderMaterials(materials.filter(m=>Object.values(m).join(' ').toLowerCase().includes(q)))}
-function renderTeacher(){const c=document.getElementById('count');if(c)c.textContent=materials.length;const box=document.getElementById('teacherMaterials');if(box)box.innerHTML=materials.length?materials.map((m,i)=>`<div class="material"><div><b>${m.title}</b><br><small>${m.subject} • ${m.grade} • ${m.topic}${m.strand?' • '+m.strand:''}</small></div><button class="btn" onclick="removeMaterial(${i})">Delete</button></div>`).join(''):'<p>No materials uploaded.</p>'}
-function getAdminState(){
-  const teachers=JSON.parse(localStorage.getItem('tusomeTeachers')||'null')||[
-    {id:'T001',name:'Teacher Demo',email:'teacher@edushelf.com',status:'pending',joined:'2026-09-18'},
-    {id:'T002',name:'Mary Wanjiku',email:'mary@edushelf.com',status:'approved',joined:'2026-09-12'},
-    {id:'T003',name:'John Otieno',email:'john@edushelf.com',status:'pending',joined:'2026-09-17'}
-  ];
-  const users=JSON.parse(localStorage.getItem('tusomeUsers')||'null')||[
-    {id:'U001',name:'Teacher Demo',email:'teacher@edushelf.com',role:'teacher',status:'pending'},
-    {id:'U002',name:'Mary Wanjiku',email:'mary@edushelf.com',role:'teacher',status:'active'},
-    {id:'U003',name:'Learner Demo',email:'learner@edushelf.com',role:'learner',status:'active'},
-    {id:'U004',name:'Parent Demo',email:'parent@edushelf.com',role:'parent',status:'active'},
-    {id:'U005',name:'Administrator',email:'admin@edushelf.com',role:'admin',status:'active'}
-  ];
-  const notes=JSON.parse(localStorage.getItem('tusomeSystemNotes')||'null')||[
-    {id:'N001',title:'Grade 8 Mathematics: Linear Functions',subject:'Mathematics',grade:'Grade 8',status:'pending',price:100,created:'2026-09-18',source:'AI'}
-  ];
-  return {teachers,users,notes};
-}
+function renderTeacher(){const c=document.getElementById('count');if(c)c.textContent=materials.length;const box=document.getElementById('teacherMaterials');if(box)box.innerHTML=materials.length?materials.map(m=>`<div class="material"><div><b>${escHtml(m.title)}</b><br><small>${escHtml(m.subject||'')} • ${escHtml(m.grade||'')} • ${escHtml(m.topic||'')}</small><br><span class="tag">${escHtml(m.approvalStatus||'pending').toUpperCase()}</span></div></div>`).join(''):'<p>No materials uploaded.</p>'}
 function saveAdminState(st){localStorage.setItem('tusomeTeachers',JSON.stringify(st.teachers));localStorage.setItem('tusomeUsers',JSON.stringify(st.users));localStorage.setItem('tusomeSystemNotes',JSON.stringify(st.notes))}
 
 let feedbackType='Complaint';
@@ -527,7 +484,10 @@ function adminTab(tab){
   const el=document.getElementById('adminApprovals');if(el)el.style.display='block';
   adminRefreshAll();
 }
-function adminRefreshAll(){
+
+async function loadServerMaterials(){try{const r=await fetch('/api/materials',{credentials:'include'});if(!r.ok)return false;const d=await r.json();materials=Array.isArray(d.materials)?d.materials:[];return true}catch(e){console.warn('Could not load server materials',e);return false}}
+async function adminRefreshAll(){
+  await loadServerMaterials();
   renderAdminFeedback();
   const pendingM=materials.filter(m=>(m.approvalStatus||'pending')!=='approved').length;
   const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v};
@@ -553,57 +513,9 @@ function adminRefreshAll(){
     </div>`;
   }).join(''):'<p>No learning materials have been uploaded yet.</p>';
 }
-function adminSetMaterialPrice(i,value){
-  if(!materials[i])return;
-  const price=Math.max(0,Number(value)||0);
-  materials[i].price=price;
-  save();
-  logActivity(`Set material price: ${materials[i].title} = KES ${price.toFixed(2)}`);
-  logNotification(`Material price updated: ${materials[i].title} — KES ${price.toFixed(2)}`);
-  adminRefreshAll();
-  renderMaterials();
-}
-async function adminPreviewMaterial(i){
-  const m=materials[i];
-  if(!m)return;
-  try{
-    if(m.fileId){
-      const stored=await getUploadedFile(m.fileId);
-      if(!stored){alert('The stored file could not be found. Please upload the material again.');return}
-      const url=URL.createObjectURL(stored.blob);
-      const opened=window.open(url,'_blank');
-      if(!opened){
-        const a=document.createElement('a');
-        a.href=url; a.target='_blank';
-        a.download=stored.name||m.file||'material';
-        a.click();
-      }
-      setTimeout(()=>URL.revokeObjectURL(url),60000);
-      logActivity('Admin reviewed material: '+m.title);
-      return;
-    }
-    alert('No uploaded file is attached to this material.');
-  }catch(err){
-    alert('Unable to open the material for review. Please upload it again.');
-  }
-}
-function adminMaterialApproval(i,status){if(!materials[i])return;materials[i].approvalStatus=status;materials[i].approvedAt=status==='approved'?new Date().toISOString():null;save();logActivity(`${status==='approved'?'Approved':'Rejected'} material: ${materials[i].title}`);logNotification(`Material ${materials[i].title}: ${status}`);adminRefreshAll();renderMaterials()}
-function adminNote(i,status){const st=getAdminState();st.notes[i].status=status==='unpublished'?'unpublished':status;saveAdminState(st);logActivity(`${status==='approved'?'Approved':status==='rejected'?'Rejected':'Unpublished'} system note: ${st.notes[i].title}`);logNotification(`System note ${st.notes[i].title}: ${st.notes[i].status}`);adminRefreshAll()}
-function setNotePrice(i,v){const st=getAdminState();st.notes[i].price=Math.max(0,Number(v||0));saveAdminState(st);logActivity(`Changed system note price: ${st.notes[i].title} to KES ${st.notes[i].price}`);adminRefreshAll()}
-function seedSystemNote(){const st=getAdminState();st.notes.unshift({id:'N'+Date.now(),title:'AI-Generated Revision Notes',subject:'General',grade:'Grade 8',status:'pending',price:100,created:new Date().toISOString().slice(0,10),source:'AI'});saveAdminState(st);logActivity('Created system-generated note for admin approval');adminRefreshAll()}
-function toggleUser(i){const st=getAdminState();if(st.users[i].role==='admin')return alert('The administrator account cannot be suspended here.');st.users[i].status=st.users[i].status==='suspended'?'active':'suspended';saveAdminState(st);logActivity(`${st.users[i].status==='active'?'Activated':'Suspended'} user: ${st.users[i].email}`);adminRefreshAll()}
-function changeUserRole(i,role){const st=getAdminState();if(st.users[i].role==='admin'&&role!=='admin')return alert('The primary administrator role cannot be changed here.');st.users[i].role=role;saveAdminState(st);logActivity(`Changed role for ${st.users[i].email} to ${role}`);adminRefreshAll()}
-function adminTransaction(i,status){const ps=getPurchases();if(!ps[i])return;ps[i].status=status;localStorage.setItem('tusomePurchases',JSON.stringify(ps));logActivity(`${status==='confirmed'?'Confirmed':'Refunded'} transaction: ${ps[i].title}`);logNotification(`Transaction ${ps[i].title}: ${status}`);adminRefreshAll();renderPayments()}
-function sendAdminNotification(e){e.preventDefault();const v=document.getElementById('adminNotificationText').value.trim();if(!v)return;logNotification('ADMIN: '+v);logActivity('Sent admin notification: '+v);e.target.reset();adminRefreshAll()}
-function renderAdmin(){adminRefreshAll()}
-function clearActivity(){localStorage.removeItem('edushelfActivity');renderAdmin();refreshProgress()}
-async function upload(e){e.preventDefault();const f=document.getElementById('file').files[0];if(!f)return;const fileId=materialKey();try{await saveUploadedFile(fileId,f);const m={id:Date.now(),fileId,title:title.value.trim(),subject:subject.value,grade:grade.value,strand:strand.value,competency:competency.value,topic:topic.value,file:f.name,fileType:f.type,fileSize:f.size,price:Number(price.value||0),approvalStatus:'pending',description:desc.value};materials.unshift(m);save();logActivity('Uploaded material: '+m.title+' ('+m.subject+', '+m.grade+')');logNotification('New learning material uploaded: '+m.title);e.target.reset();renderTeacher();populateMaterialFilters();filterMaterials();show('teacher')}catch(err){alert('Upload failed. Your browser could not store the file. Please try again or use a modern browser.')}}
-function setSessionRole(role,email){
-  sessionStorage.setItem('tusomeLoggedIn','true');
-  sessionStorage.setItem('tusomeRole',role);
-  sessionStorage.setItem('tusomeCurrentUser',email||role);
-  localStorage.setItem('tusomeCurrentUser',email||role);
-}
+async function adminSetMaterialPrice(i,value){if(!materials[i])return;const price=Math.max(0,Number(value)||0);try{const r=await fetch('/api/materials/'+encodeURIComponent(materials[i].id)+'/review',{method:'PATCH',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({approvalStatus:materials[i].approvalStatus||'pending',price})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not update price.');materials[i].price=price;logActivity(`Set material price: ${materials[i].title} = KES ${price.toFixed(2)}`);adminRefreshAll();renderMaterials()}catch(e){alert(e.message)}}
+async function adminPreviewMaterial(i){const m=materials[i];if(!m)return;try{const r=await fetch('/api/materials/'+encodeURIComponent(m.id)+'/file',{credentials:'include'});if(!r.ok){const d=await r.json().catch(()=>({}));throw new Error(d.error||'Unable to open the material.')}const blob=await r.blob();const url=URL.createObjectURL(blob);const opened=window.open(url,'_blank');if(!opened){const a=document.createElement('a');a.href=url;a.download=m.file||'material';a.click()}setTimeout(()=>URL.revokeObjectURL(url),60000);logActivity('Admin reviewed material: '+m.title)}catch(err){alert(err.message||'Unable to open the material for review.')}}
+async function adminMaterialApproval(i,status){if(!materials[i])return;try{const r=await fetch('/api/materials/'+encodeURIComponent(materials[i].id)+'/review',{method:'PATCH',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({approvalStatus:status,price:Number(materials[i].price||0)})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not update material.');materials[i].approvalStatus=status;materials[i].approvedAt=d.material?.approvedAt||null;logActivity(`${status==='approved'?'Approved':'Rejected'} material: ${materials[i].title}`);logNotification(`Material ${materials[i].title}: ${status}`);adminRefreshAll();renderMaterials()}catch(e){alert(e.message)}}
 function getSessionRole(){return sessionStorage.getItem('tusomeLoggedIn')==='true'?sessionStorage.getItem('tusomeRole'):null}
 async function login(e){
   e.preventDefault();
@@ -644,8 +556,8 @@ function show(id){
   }
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   const el=document.getElementById(id);if(el)el.classList.add('active');
-  if(id==='teacher')renderTeacher();
-  if(id==='admin')renderAdmin();
+  if(id==='teacher'){loadServerMaterials().then(renderTeacher)}
+  if(id==='admin'){adminRefreshAll()}
   if(id==='communication'){renderMyFeedback();renderAdminFeedback()}
   if(id==='notifications')renderNotifications();
   if(id==='progress'||id==='parent')refreshProgress();
@@ -719,7 +631,7 @@ async function restoreServerSession(){
   updatePublicUi();
 }
 restoreServerSession();
-populateMaterialFilters();populateMaterialFilters();renderMaterials();renderTeacher();renderAdmin();refreshProgress();checkAIStatus();
+(async()=>{await loadServerMaterials();populateMaterialFilters();populateMaterialFilters();renderMaterials();renderTeacher();renderAdmin();refreshProgress();checkAIStatus()})();
 </script>
 <button id="communicationLaunch" class="btn primary communication-launch" onclick="openCommunicationCentre()" style="position:fixed;right:18px;bottom:18px;z-index:20;border-radius:24px">💬 Communication Centre</button>
 </body>

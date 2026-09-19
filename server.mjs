@@ -158,6 +158,8 @@ async function initDatabase() {
       approval_status TEXT NOT NULL DEFAULT 'pending',
       description TEXT,
       teacher_email TEXT,
+      file_id TEXT,
+
       approved_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -183,8 +185,20 @@ async function initDatabase() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
+    ALTER TABLE materials ADD COLUMN IF NOT EXISTS file_id TEXT;
+
     CREATE INDEX IF NOT EXISTS idx_materials_approval_status ON materials (approval_status);
     CREATE INDEX IF NOT EXISTS idx_materials_teacher_email ON materials (teacher_email);
+
+    CREATE TABLE IF NOT EXISTS material_files (
+      file_id TEXT PRIMARY KEY,
+      material_id TEXT NOT NULL UNIQUE REFERENCES materials(id) ON DELETE CASCADE,
+      file_name TEXT NOT NULL,
+      mime_type TEXT NOT NULL,
+      file_size BIGINT NOT NULL,
+      file_data BYTEA NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
     CREATE INDEX IF NOT EXISTS idx_transactions_user_email ON transactions (user_email);
     CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions (status);
   `);
@@ -538,6 +552,97 @@ app.get('/api/auth/me', (req, res) => {
 app.post('/api/auth/logout', (_req, res) => {
   clearSessionCookie(res);
   res.json({ ok: true });
+});
+
+
+function requireRole(...roles) {
+  return (req, res, next) => {
+    const user = currentUser(req);
+    if (!user) return res.status(401).json({ error: 'Please log in to continue.' });
+    if (!roles.includes(user.role)) return res.status(403).json({ error: 'You do not have permission to perform this action.' });
+    req.user = user;
+    next();
+  };
+}
+
+function decodeDataUrl(dataUrl) {
+  const match = String(dataUrl || '').match(/^data:([^;,]+)?;base64,(.+)$/s);
+  if (!match) throw new Error('Invalid uploaded file data.');
+  return { mimeType: match[1] || 'application/octet-stream', buffer: Buffer.from(match[2], 'base64') };
+}
+
+app.get('/api/materials', requireAuth, async (req, res) => {
+  if (!databaseReady) return res.status(503).json({ error: 'Database is not ready.' });
+  try {
+    let sql = `SELECT id,title,subject,grade,strand,competency,topic,file_name AS file,"file_type" AS "fileType",file_size AS "fileSize",price,approval_status AS "approvalStatus",description,teacher_email AS "teacherEmail",file_id AS "fileId",approved_at AS "approvedAt",created_at AS "createdAt" FROM materials`;
+    const params = [];
+    if (req.user.role === 'learner') {
+      sql += ` WHERE approval_status = 'approved'`;
+    } else if (req.user.role === 'teacher') {
+      sql += ` WHERE teacher_email = $1`;
+      params.push(req.user.email);
+    }
+    sql += ` ORDER BY created_at DESC`;
+    const result = await db.query(sql, params);
+    res.json({ ok: true, materials: result.rows });
+  } catch (e) {
+    console.error('Materials list error:', e);
+    res.status(500).json({ error: 'Could not load learning materials.' });
+  }
+});
+
+app.post('/api/materials', requireRole('teacher'), async (req, res) => {
+  if (!databaseReady) return res.status(503).json({ error: 'Database is not ready.' });
+  try {
+    const { title, subject, grade, strand, competency, topic, price, description, file } = req.body || {};
+    if (!title || !topic || !file?.data || !file?.name) return res.status(400).json({ error: 'Title, topic and a file are required.' });
+    const { mimeType, buffer } = decodeDataUrl(file.data);
+    if (!buffer.length) return res.status(400).json({ error: 'The uploaded file is empty.' });
+    if (buffer.length > 12 * 1024 * 1024) return res.status(413).json({ error: 'Please keep each learning material below 12 MB.' });
+    const id = `MAT-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
+    const fileId = `FILE-${crypto.randomBytes(12).toString('hex')}`;
+    await db.query('BEGIN');
+    await db.query(`INSERT INTO materials (id,title,subject,grade,strand,competency,topic,file_name,file_type,file_size,price,approval_status,description,teacher_email,file_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'pending',$12,$13,$14)`, [id, String(title).trim(), subject || null, grade || null, strand || null, competency || null, topic || null, file.name, mimeType, buffer.length, Math.max(0, Number(price || 0)), description || null, req.user.email, fileId]);
+    await db.query(`INSERT INTO material_files (file_id,material_id,file_name,mime_type,file_size,file_data) VALUES ($1,$2,$3,$4,$5,$6)`, [fileId, id, file.name, mimeType, buffer.length, buffer]);
+    await db.query('COMMIT');
+    res.status(201).json({ ok: true, material: { id, title: String(title).trim(), subject, grade, strand, competency, topic, file: file.name, fileType: mimeType, fileSize: buffer.length, price: Math.max(0, Number(price || 0)), approvalStatus: 'pending', description, teacherEmail: req.user.email, fileId } });
+  } catch (e) {
+    try { await db.query('ROLLBACK'); } catch {}
+    console.error('Material upload error:', e);
+    res.status(500).json({ error: 'Could not save the learning material.' });
+  }
+});
+
+app.get('/api/materials/:id/file', requireAuth, async (req, res) => {
+  if (!databaseReady) return res.status(503).json({ error: 'Database is not ready.' });
+  try {
+    const result = await db.query(`SELECT m.approval_status AS "approvalStatus",m.teacher_email AS "teacherEmail",f.file_name AS "fileName",f.mime_type AS "mimeType",f.file_data AS "fileData" FROM materials m JOIN material_files f ON f.material_id=m.id WHERE m.id=$1 LIMIT 1`, [req.params.id]);
+    const row = result.rows[0];
+    if (!row) return res.status(404).json({ error: 'Material file not found.' });
+    const allowed = req.user.role === 'admin' || (req.user.role === 'teacher' && row.teacherEmail === req.user.email) || (req.user.role === 'learner' && row.approvalStatus === 'approved');
+    if (!allowed) return res.status(403).json({ error: 'This material is not available to your account.' });
+    res.setHeader('Content-Type', row.mimeType || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `inline; filename="${String(row.fileName).replace(/"/g, '')}"`);
+    res.send(row.fileData);
+  } catch (e) {
+    console.error('Material file error:', e);
+    res.status(500).json({ error: 'Could not open the learning material.' });
+  }
+});
+
+app.patch('/api/materials/:id/review', requireRole('admin'), async (req, res) => {
+  if (!databaseReady) return res.status(503).json({ error: 'Database is not ready.' });
+  const status = String(req.body?.approvalStatus || '').toLowerCase();
+  if (!['pending','approved','rejected'].includes(status)) return res.status(400).json({ error: 'Invalid approval status.' });
+  const price = Math.max(0, Number(req.body?.price ?? 0));
+  try {
+    const result = await db.query(`UPDATE materials SET approval_status=$2,price=$3,approved_at=CASE WHEN $2='approved' THEN NOW() ELSE NULL END,updated_at=NOW() WHERE id=$1 RETURNING id,title,price,approval_status AS "approvalStatus",approved_at AS "approvedAt"`, [req.params.id, status, price]);
+    if (!result.rowCount) return res.status(404).json({ error: 'Material not found.' });
+    res.json({ ok: true, material: result.rows[0] });
+  } catch (e) {
+    console.error('Material review error:', e);
+    res.status(500).json({ error: 'Could not update the material.' });
+  }
 });
 
 app.post('/api/ai', requireAuth, async (req, res) => {

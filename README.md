@@ -141,3 +141,14 @@ Tusome EduShelf now connects to Render PostgreSQL through the `DATABASE_URL` env
 For a Render-hosted EduShelf service, use the database's **Internal Database URL** as `DATABASE_URL`. Keep this value server-side and never place it in frontend code. The existing `MPESA_SHORTCODE` and `MPESA_PASSKEY` variables remain unchanged.
 
 The current free Render PostgreSQL plan is intended for testing/prototyping and expires according to the database plan shown in Render. Upgrade to a persistent database before production use.
+
+
+## Step 2E — Server-side learning-material files
+- Teacher uploads now send the selected file to the Express server instead of storing the file in browser IndexedDB.
+- The material metadata is stored in PostgreSQL `materials`.
+- The actual file bytes are stored in PostgreSQL `material_files` and linked to the material.
+- Files are limited to 12 MB per material in this build.
+- Admins can review material files through a protected server endpoint.
+- Learners can open only approved materials; teachers can open their own uploads; admins can review all materials.
+- Approval status and KES pricing are updated through protected admin endpoints.
+- This database-backed file storage is suitable for the current prototype/testing stage. For larger production libraries, object storage (such as an S3-compatible service) is preferable to storing large files directly in PostgreSQL.

@@ -85,3 +85,12 @@ The Administrator Control Center now provides centralized prototype controls for
 - Audit activity logging
 
 Approval state is respected by the learner-facing material catalogue. Existing Daraja/payment integration remains unchanged for the later payment-improvement phase.
+
+
+## Direct Teacher Joining + Admin Material Approval
+- Teacher accounts can join directly without administrator approval.
+- Teachers can access the teacher area and upload learning materials immediately.
+- Administrator control is limited to learning-material approval/rejection and material pricing.
+- Newly uploaded learning materials start as **pending** and remain hidden from the learner catalogue until approved.
+- Admin can set or change the KES selling price before or after approval.
+- Daraja/payment integration was not changed.

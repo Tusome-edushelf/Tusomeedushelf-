@@ -323,49 +323,18 @@ footer{text-align:center;padding:30px;color:#687386}.ai-answer{line-height:1.75;
 <section id="admin" class="page">
   <div class="topline"><div><h2>🛡️ Administrator Control Center</h2><p>Central control for approvals, users, AI-generated notes, pricing, reports, transactions and platform revenue.</p></div><button class="btn primary" onclick="adminRefreshAll()">Refresh</button></div>
   <div class="cards">
-    <div class="card"><h3>📚 Materials</h3><p><b id="adminCount">0</b> total • <b id="adminPendingMaterials">0</b> pending</p></div>
-    <div class="card"><h3>👨‍🏫 Teachers</h3><p><b id="adminPendingTeachers">0</b> awaiting approval</p></div>
-    <div class="card"><h3>👥 Users</h3><p><b id="adminUsers">0</b> registered</p></div>
-    <div class="card"><h3>💰 Revenue</h3><p><b id="adminRevenue">KES 0.00</b></p></div>
+    <div class="card"><h3>📚 Learning Materials</h3><p><b id="adminCount">0</b> total • <b id="adminPendingMaterials">0</b> active</p></div>
+    <div class="card"><h3>💰 Material Prices</h3><p>Admin reviews and sets the selling price before publication.</p></div>
+    <div class="card"><h3>👨‍🏫 Teachers</h3><p>Teachers can join directly and upload materials without teacher access.</p></div>
   </div>
   <div class="admin-tabs">
-    <button class="btn primary" onclick="adminTab('approvals')">Approvals</button>
-    <button class="btn" onclick="adminTab('notes')">System Notes</button>
-    <button class="btn" onclick="adminTab('users')">Users</button>
-    <button class="btn" onclick="adminTab('reports')">Reports</button>
-    <button class="btn" onclick="adminTab('transactions')">Transactions</button>
-    <button class="btn" onclick="adminTab('notifications')">Notifications</button>
+    <button class="btn primary" onclick="adminTab('approvals')">Learning Materials</button>
   </div>
 
   <div id="adminApprovals" class="admin-panel">
-    <div class="card"><h3>👨‍🏫 Teacher Approval</h3><div id="teacherApprovalList"></div></div>
-    <div class="card" style="margin-top:18px"><h3>📚 Material Approval / Rejection</h3><div id="materialApprovalList"></div></div>
+    <div class="card"><h3>📚 Learning Material Approval & Pricing</h3><p>Admin only approves/rejects learning materials and sets or changes their prices. Teacher accounts do not require approval.</p><div id="materialApprovalList"></div></div>
   </div>
 
-  <div id="adminNotes" class="admin-panel" style="display:none">
-    <div class="card"><div class="topline"><div><h3>🤖 System-Generated Notes</h3><p>Approve, reject, publish or set the selling price of AI-generated notes.</p></div><button class="btn" onclick="seedSystemNote()">Add Demo Note</button></div><div id="systemNotesList"></div></div>
-  </div>
-
-  <div id="adminUsersPanel" class="admin-panel" style="display:none">
-    <div class="card"><h3>👥 User Management</h3><p>Activate, suspend or change account roles.</p><div id="userManagementList"></div></div>
-  </div>
-
-  <div id="adminReports" class="admin-panel" style="display:none">
-    <div class="cards">
-      <div class="card"><h3>Total Transactions</h3><p><b id="reportTransactions">0</b></p></div><div class="card"><h3>Confirmed Sales</h3><p><b id="reportConfirmed">0</b></p></div><div class="card"><h3>Teacher Earnings</h3><p><b id="reportTeacherRevenue">KES 0.00</b></p></div><div class="card"><h3>Platform Revenue</h3><p><b id="reportPlatformRevenue">KES 0.00</b></p></div>
-    </div>
-    <div class="card" style="margin-top:18px"><h3>📊 Platform Report</h3><div id="platformReport"></div></div>
-  </div>
-
-  <div id="adminTransactions" class="admin-panel" style="display:none">
-    <div class="card"><h3>💳 Transaction Control</h3><div id="adminTransactionsList"></div></div>
-  </div>
-
-  <div id="adminNotifications" class="admin-panel" style="display:none">
-    <div class="card"><h3>🔔 Notification Control</h3><form onsubmit="sendAdminNotification(event)"><input id="adminNotificationText" required placeholder="Write a platform notification"><button class="btn primary" type="submit">Send Notification</button></form><div id="adminNotificationList" style="margin-top:15px"></div></div>
-  </div>
-
-  <div class="card" style="margin-top:22px"><h3>🧾 Audit Activity</h3><div id="activity"></div><button class="btn" onclick="clearActivity()">Clear Activity Log</button></div>
 </section>
 
 <section id="upload" class="page">
@@ -512,30 +481,43 @@ function getAdminState(){
 function saveAdminState(st){localStorage.setItem('tusomeTeachers',JSON.stringify(st.teachers));localStorage.setItem('tusomeUsers',JSON.stringify(st.users));localStorage.setItem('tusomeSystemNotes',JSON.stringify(st.notes))}
 function adminTab(tab){
   document.querySelectorAll('.admin-panel').forEach(x=>x.style.display='none');
-  const map={approvals:'adminApprovals',notes:'adminNotes',users:'adminUsersPanel',reports:'adminReports',transactions:'adminTransactions',notifications:'adminNotifications'};
-  const el=document.getElementById(map[tab]);if(el)el.style.display='block';
+  const el=document.getElementById('adminApprovals');if(el)el.style.display='block';
   adminRefreshAll();
 }
 function adminRefreshAll(){
-  const st=getAdminState();saveAdminState(st);
-  const logs=JSON.parse(localStorage.getItem('edushelfActivity')||'[]');
-  const ps=getPurchases();const confirmed=ps.filter(x=>String(x.status).toLowerCase()==='confirmed');
-  const revenue=confirmed.reduce((a,x)=>a+Number(x.amount||0)-Number(x.teacherShare||0),0);
   const pendingM=materials.filter(m=>(m.approvalStatus||'pending')!=='approved').length;
-  const pendingT=st.teachers.filter(x=>x.status==='pending').length;
   const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v};
-  set('adminCount',materials.length);set('adminPendingMaterials',pendingM);set('adminPendingTeachers',pendingT);set('adminUsers',st.users.length);set('adminRevenue','KES '+revenue.toFixed(2));
-  set('reportTransactions',ps.length);set('reportConfirmed',confirmed.length);set('reportTeacherRevenue','KES '+confirmed.reduce((a,x)=>a+Number(x.teacherShare||0),0).toFixed(2));set('reportPlatformRevenue','KES '+revenue.toFixed(2));
-  const ta=document.getElementById('teacherApprovalList');if(ta)ta.innerHTML=st.teachers.map((t,i)=>`<div class="material"><div><b>${escHtml(t.name)}</b><br><small>${escHtml(t.email)} • Joined ${escHtml(t.joined)} • <span class="${t.status==='approved'?'status-approved':t.status==='rejected'?'status-rejected':'status-pending'}">${t.status.toUpperCase()}</span></small></div><div class="admin-action-row">${t.status!=='approved'?`<button class="btn" onclick="adminTeacher(${i},'approved')">Approve</button>`:''}${t.status!=='rejected'?`<button class="btn" onclick="adminTeacher(${i},'rejected')">Reject</button>`:''}</div></div>`).join('');
-  const ma=document.getElementById('materialApprovalList');if(ma)ma.innerHTML=materials.length?materials.map((m,i)=>`<div class="material"><div><b>${escHtml(m.title)}</b><br><small>${escHtml(m.subject)} • ${escHtml(m.grade)} • ${escHtml(m.topic||'')} • <span class="${m.approvalStatus==='approved'?'status-approved':m.approvalStatus==='rejected'?'status-rejected':'status-pending'}">${(m.approvalStatus||'pending').toUpperCase()}</span></small></div><div class="admin-action-row"><button class="btn" onclick="adminMaterialApproval(${i},'approved')">Approve</button><button class="btn" onclick="adminMaterialApproval(${i},'rejected')">Reject</button><button class="btn" onclick="adminDelete(${i})">Delete</button></div></div>`).join(''):'<p>No materials.</p>';
-  const nl=document.getElementById('systemNotesList');if(nl)nl.innerHTML=st.notes.map((n,i)=>`<div class="material"><div><b>${escHtml(n.title)}</b><br><small>${escHtml(n.subject)} • ${escHtml(n.grade)} • AI • <span class="${n.status==='approved'?'status-approved':n.status==='rejected'?'status-rejected':'status-pending'}">${n.status.toUpperCase()}</span></small></div><div class="admin-action-row"><input class="price-input" type="number" min="0" value="${Number(n.price||0)}" onchange="setNotePrice(${i},this.value)" title="Price in KES"><button class="btn" onclick="adminNote(${i},'approved')">Approve</button><button class="btn" onclick="adminNote(${i},'rejected')">Reject</button>${n.status==='approved'?'<button class="btn" onclick="adminNote('+i+',\'unpublished\')">Unpublish</button>':''}</div></div>`).join('')||'<p>No system-generated notes.</p>';
-  const ul=document.getElementById('userManagementList');if(ul)ul.innerHTML=st.users.map((u,i)=>`<div class="material"><div><b>${escHtml(u.name)}</b><br><small>${escHtml(u.email)} • ${escHtml(u.role)} • <span class="${u.status==='active'?'status-approved':u.status==='suspended'?'status-suspended':'status-pending'}">${u.status.toUpperCase()}</span></small></div><div class="admin-action-row"><select onchange="changeUserRole(${i},this.value)"><option ${u.role==='learner'?'selected':''}>learner</option><option ${u.role==='teacher'?'selected':''}>teacher</option><option ${u.role==='parent'?'selected':''}>parent</option><option ${u.role==='admin'?'selected':''}>admin</option></select><button class="btn" onclick="toggleUser(${i})">${u.status==='suspended'?'Activate':'Suspend'}</button></div></div>`).join('');
-  const tx=document.getElementById('adminTransactionsList');if(tx)tx.innerHTML=ps.length?`<div class="table-like"><table><tr><th>Material</th><th>Amount</th><th>Status</th><th>Time</th><th>Control</th></tr>${ps.map((x,i)=>`<tr><td>${escHtml(x.title)}</td><td>KES ${Number(x.amount||0).toFixed(2)}</td><td>${escHtml(x.status)}</td><td>${escHtml(x.time||'')}</td><td>${String(x.status).toLowerCase()!=='confirmed'?`<button class="btn" onclick="adminTransaction(${i},'confirmed')">Confirm</button>`:`<button class="btn" onclick="adminTransaction(${i},'refunded')">Refund</button>`}</td></tr>`).join('')}</table></div>`:'<p>No transactions recorded.</p>';
-  const report=document.getElementById('platformReport');if(report)report.innerHTML=`<p><span class="admin-stat">${materials.length} materials</span><span class="admin-stat">${st.teachers.filter(x=>x.status==='approved').length} approved teachers</span><span class="admin-stat">${st.users.length} users</span><span class="admin-stat">${st.notes.filter(x=>x.status==='approved').length} approved system notes</span></p><p>Pending material approvals: <b>${pendingM}</b>. Pending teacher approvals: <b>${pendingT}</b>. Confirmed transaction value: <b>KES ${confirmed.reduce((a,x)=>a+Number(x.amount||0),0).toFixed(2)}</b>. Platform revenue: <b>KES ${revenue.toFixed(2)}</b>.</p>`;
-  const an=document.getElementById('adminNotificationList');if(an){const ns=JSON.parse(localStorage.getItem('edushelfNotifications')||'[]');an.innerHTML=ns.length?ns.slice(0,15).map(x=>`<div class="material"><div>${escHtml(x.message)}<br><small>${escHtml(x.time)}</small></div></div>`).join(''):'<p>No notifications.</p>'}
-  const act=document.getElementById('activity');if(act)act.innerHTML=logs.length?logs.slice(0,15).map(x=>`<div class="material"><div>📝 ${escHtml(x.action)}</div><small>${escHtml(x.time)}</small></div>`).join(''):'<p>No activity recorded yet.</p>';
+  set('adminCount',materials.length);
+  set('adminPendingMaterials',pendingM);
+  const ma=document.getElementById('materialApprovalList');
+  if(ma)ma.innerHTML=materials.length?materials.map((m,i)=>{
+    const status=m.approvalStatus||'pending';
+    const price=Number(m.price||0);
+    return `<div class="material">
+      <div style="min-width:0">
+        <b>${escHtml(m.title||'Untitled material')}</b><br>
+        <small>${escHtml(m.subject||'General')} • ${escHtml(m.grade||'All grades')} • ${escHtml(m.file||'Uploaded material')}</small><br>
+        <span class="${status==='approved'?'status-approved':status==='rejected'?'status-rejected':'status-pending'}">${status.toUpperCase()}</span>
+        <span class="tag">Current price: KES ${price.toFixed(2)}</span>
+      </div>
+      <div class="admin-action-row">
+        <label style="display:flex;align-items:center;gap:6px">KES <input type="number" min="0" step="1" value="${price}" style="width:110px" onchange="adminSetMaterialPrice(${i},this.value)" aria-label="Material price"></label>
+        ${status!=='approved'?`<button class="btn" onclick="adminMaterialApproval(${i},'approved')">Approve</button>`:''}
+        ${status!=='rejected'?`<button class="btn" onclick="adminMaterialApproval(${i},'rejected')">Reject</button>`:''}
+      </div>
+    </div>`;
+  }).join(''):'<p>No learning materials have been uploaded yet.</p>';
 }
-function adminTeacher(i,status){const st=getAdminState();st.teachers[i].status=status;const u=st.users.find(x=>x.email===st.teachers[i].email);if(u)u.status=status==='approved'?'active':'suspended';saveAdminState(st);logActivity(`${status==='approved'?'Approved':'Rejected'} teacher: ${st.teachers[i].name}`);logNotification(`Teacher ${st.teachers[i].name}: ${status}`);adminRefreshAll()}
+function adminSetMaterialPrice(i,value){
+  if(!materials[i])return;
+  const price=Math.max(0,Number(value)||0);
+  materials[i].price=price;
+  save();
+  logActivity(`Set material price: ${materials[i].title} = KES ${price.toFixed(2)}`);
+  logNotification(`Material price updated: ${materials[i].title} — KES ${price.toFixed(2)}`);
+  adminRefreshAll();
+  renderMaterials();
+}
 function adminMaterialApproval(i,status){if(!materials[i])return;materials[i].approvalStatus=status;materials[i].approvedAt=status==='approved'?new Date().toISOString():null;save();logActivity(`${status==='approved'?'Approved':'Rejected'} material: ${materials[i].title}`);logNotification(`Material ${materials[i].title}: ${status}`);adminRefreshAll();renderMaterials()}
 function adminNote(i,status){const st=getAdminState();st.notes[i].status=status==='unpublished'?'unpublished':status;saveAdminState(st);logActivity(`${status==='approved'?'Approved':status==='rejected'?'Rejected':'Unpublished'} system note: ${st.notes[i].title}`);logNotification(`System note ${st.notes[i].title}: ${st.notes[i].status}`);adminRefreshAll()}
 function setNotePrice(i,v){const st=getAdminState();st.notes[i].price=Math.max(0,Number(v||0));saveAdminState(st);logActivity(`Changed system note price: ${st.notes[i].title} to KES ${st.notes[i].price}`);adminRefreshAll()}
@@ -546,7 +528,7 @@ function adminTransaction(i,status){const ps=getPurchases();if(!ps[i])return;ps[
 function sendAdminNotification(e){e.preventDefault();const v=document.getElementById('adminNotificationText').value.trim();if(!v)return;logNotification('ADMIN: '+v);logActivity('Sent admin notification: '+v);e.target.reset();adminRefreshAll()}
 function renderAdmin(){adminRefreshAll()}
 function clearActivity(){localStorage.removeItem('edushelfActivity');renderAdmin();refreshProgress()}
-async function upload(e){e.preventDefault();const f=document.getElementById('file').files[0];if(!f)return;const fileId=materialKey();try{await saveUploadedFile(fileId,f);const m={id:Date.now(),fileId,title:title.value.trim(),subject:subject.value,grade:grade.value,strand:strand.value,competency:competency.value,topic:topic.value,file:f.name,fileType:f.type,fileSize:f.size,price:Number(price.value||0),description:desc.value};materials.unshift(m);save();logActivity('Uploaded material: '+m.title+' ('+m.subject+', '+m.grade+')');logNotification('New learning material uploaded: '+m.title);e.target.reset();renderTeacher();populateMaterialFilters();filterMaterials();show('teacher')}catch(err){alert('Upload failed. Your browser could not store the file. Please try again or use a modern browser.')}}
+async function upload(e){e.preventDefault();const f=document.getElementById('file').files[0];if(!f)return;const fileId=materialKey();try{await saveUploadedFile(fileId,f);const m={id:Date.now(),fileId,title:title.value.trim(),subject:subject.value,grade:grade.value,strand:strand.value,competency:competency.value,topic:topic.value,file:f.name,fileType:f.type,fileSize:f.size,price:Number(price.value||0),approvalStatus:'pending',description:desc.value};materials.unshift(m);save();logActivity('Uploaded material: '+m.title+' ('+m.subject+', '+m.grade+')');logNotification('New learning material uploaded: '+m.title);e.target.reset();renderTeacher();populateMaterialFilters();filterMaterials();show('teacher')}catch(err){alert('Upload failed. Your browser could not store the file. Please try again or use a modern browser.')}}
 function login(e){e.preventDefault();const role=document.getElementById('role').value;if(role==='admin'){const email=e.target.querySelector('input[type="email"]').value.trim();const password=e.target.querySelector('input[type="password"]').value;if(email==='admin@edushelf.com'&&password==='admin123')show('admin');else alert('Invalid administrator credentials. Prototype account: admin@edushelf.com / admin123')}else show(role==='teacher'?'teacher':'learner')}
 function show(id){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));const el=document.getElementById(id);if(el)el.classList.add('active');if(id==='teacher')renderTeacher();if(id==='admin')renderAdmin();if(id==='notifications')renderNotifications();if(id==='progress'||id==='parent')refreshProgress();if(id==='payments')renderPayments();if(id==='curriculum')loadCurriculumCatalogue();window.scrollTo(0,0)}
 function copyAI(){navigator.clipboard?.writeText(document.getElementById('aiAnswer').textContent);alert('Response copied.')}

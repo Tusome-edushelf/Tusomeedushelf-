@@ -347,19 +347,21 @@ function timestamp() {
   ].join('');
 }
 function cfg(name) {
-  const v = process.env[name];
-  if (v) return String(v).trim();
+  const env = (process.env.MPESA_ENV || 'sandbox').toLowerCase();
 
-  // Daraja sandbox has shared test credentials for the STK Push shortcode/passkey.
-  // Production values must always be supplied explicitly through Render env vars.
-  if ((process.env.MPESA_ENV || 'sandbox').toLowerCase() === 'sandbox') {
+  // In sandbox, always use the standard Daraja STK test shortcode/passkey.
+  // This intentionally ignores any manually entered MPESA_SHORTCODE/MPESA_PASSKEY
+  // values in Render so an invalid value cannot override the sandbox test pair.
+  if (env === 'sandbox' && (name === 'MPESA_SHORTCODE' || name === 'MPESA_PASSKEY')) {
     const sandboxDefaults = {
       MPESA_SHORTCODE: '174379',
       MPESA_PASSKEY: 'bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919'
     };
-    if (sandboxDefaults[name]) return sandboxDefaults[name];
+    return sandboxDefaults[name];
   }
 
+  const v = process.env[name];
+  if (v) return String(v).trim();
   throw new Error(`Missing ${name} in Render environment variables.`);
 }
 

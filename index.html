@@ -24,7 +24,7 @@ label{font-weight:700;font-size:14px}.topline{display:flex;justify-content:space
 .notice{padding:13px;background:#fff7df;border-radius:10px;margin:15px 0}
 footer{text-align:center;padding:30px;color:#687386}.ai-answer{line-height:1.75;white-space:pre-wrap;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:#fbfcff;border:1px solid #e1e6ef;border-radius:12px;padding:18px;overflow:auto;font-size:15px}
 @media(max-width:600px){.hero h1{font-size:31px}.hero{padding:40px 25px}nav button{margin-left:5px}}
-.cards .card{min-width:0}.small{font-size:12px;color:#687386}.material>b{word-break:break-word}.success{background:#e8f8ee;color:#176b3a;padding:8px 12px;border-radius:8px}\n</style>
+.cards .card{min-width:0}.small{font-size:12px;color:#687386}.material>b{word-break:break-word}.success{background:#e8f8ee;color:#176b3a;padding:8px 12px;border-radius:8px}\n.progress-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}.progress-row{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:11px 0;border-bottom:1px solid #e8edf3}.progress-row:last-child{border-bottom:0}.progress-bar{height:8px;border-radius:99px;background:#e8edf3;overflow:hidden;margin-top:7px}.progress-fill{height:100%;background:#2563eb;border-radius:99px}.score-good{color:#15803d;font-weight:700}.score-mid{color:#b45309;font-weight:700}.score-low{color:#b91c1c;font-weight:700}@media(max-width:760px){.progress-grid{grid-template-columns:1fr}}</style>
 </head>
 <body>
 <header>
@@ -173,24 +173,16 @@ footer{text-align:center;padding:30px;color:#687386}.ai-answer{line-height:1.75;
     <input id="aiQuestionFile" type="file" accept="application/pdf,image/png,image/jpeg,image/webp,image/heic,image/heif">
     <small>Upload the question paper here when you want the AI to solve or mark a specific question.</small>
 
-    <div id="workingUploadPanel" class="card" style="margin:10px 0 18px;padding:18px;background:#f8fbff;border:1px solid #dbe7fb">
-      <label>✏️ Upload Your Working</label>
-      <input id="aiWorkingFile" type="file" accept="application/pdf,image/png,image/jpeg,image/webp,image/heic,image/heif">
-      <small id="aiFileHint">For <b>Mark My Work — Check & Correct</b>, upload the question paper above and your working here. EduShelf will compare the working with the actual question and mark the steps.</small>
-      <div class="small" style="margin-top:8px">Supported: PDF, PNG, JPG, WEBP, HEIC • Maximum 12 MB</div>
-    </div>
+    <label style="margin-top:10px">✏️ Upload Your Working (optional)</label>
+    <input id="aiWorkingFile" type="file" accept="application/pdf,image/png,image/jpeg,image/webp,image/heic,image/heif">
+    <small id="aiFileHint">For <b>Mark My Work — Check & Correct</b>, upload your question paper above and your working here. The AI will compare your working with the actual questions.</small>
 
     <button class="btn primary" type="submit">✨ Ask AI</button>
   </form>
 
   <div id="aiResult" class="card" style="max-width:800px;margin:20px auto;display:none">
-    <div class="topline"><h3 style="margin:0">AI Study Response</h3><span id="aiScoreBadge" class="tag" style="display:none"></span></div>
-    <div id="markSummary" style="display:none;margin-top:12px"></div>
+    <h3>AI Study Response</h3>
     <div id="aiAnswer" class="ai-answer"></div>
-    <div id="markActions" style="display:none;margin-top:12px">
-      <button class="btn primary" onclick="retryMarkWork()">🔄 Try Again</button>
-      <button class="btn" onclick="generateSimilarFromMark()">❓ Similar Question</button>
-    </div>
     <button class="btn" onclick="copyAI()">Copy Response</button>
   </div>
 </section>
@@ -264,14 +256,29 @@ footer{text-align:center;padding:30px;color:#687386}.ai-answer{line-height:1.75;
 </section>
 
 <section id="progress" class="page">
-  <div class="topline"><div><h2>📈 Learner Progress</h2><p>A prototype view of learning activity and study progress.</p></div><button class="btn primary" onclick="refreshProgress()">Refresh</button></div>
+  <div class="topline"><div><h2>📈 My Learning Progress</h2><p>See your learning activity, AI-marked work, strengths and areas that need more practice.</p></div><button class="btn primary" onclick="refreshProgress()">Refresh</button></div>
   <div class="cards">
     <div class="card"><h3>Materials Viewed</h3><p><b id="progressViews">0</b></p></div>
     <div class="card"><h3>AI Sessions</h3><p><b id="progressAI">0</b></p></div>
-    <div class="card"><h3>Practice Tasks</h3><p><b id="progressPractice">0</b></p></div>
-    <div class="card"><h3>Study Streak</h3><p><b id="progressStreak">1 day</b></p></div>
+    <div class="card"><h3>Marked Attempts</h3><p><b id="progressAttempts">0</b></p></div>
+    <div class="card"><h3>Average Score</h3><p><b id="progressAverage">—</b></p></div>
   </div>
-  <div class="card" style="margin-top:22px"><h3>Recent Learning Activity</h3><div id="progressActivity"></div></div>
+  <div class="cards" style="margin-top:16px">
+    <div class="card"><h3>Questions Attempted</h3><p><b id="progressQuestions">0</b></p></div>
+    <div class="card"><h3>Topics Practised</h3><p><b id="progressTopics">0</b></p></div>
+    <div class="card"><h3>Topics Mastered</h3><p><b id="progressMastered">0</b></p></div>
+    <div class="card"><h3>Study Streak</h3><p><b id="progressStreak">0 days</b></p></div>
+  </div>
+  <div class="progress-grid" style="margin-top:22px">
+    <div class="card"><h3>📚 Progress by Subject</h3><div id="progressSubjects"></div></div>
+    <div class="card"><h3>🎯 Recommended Practice</h3><div id="progressRecommendations"></div></div>
+  </div>
+  <div class="progress-grid" style="margin-top:18px">
+    <div class="card"><h3>⚠️ Areas to Improve</h3><div id="progressWeak"></div></div>
+    <div class="card"><h3>🏆 Mastered Topics</h3><div id="progressStrong"></div></div>
+  </div>
+  <div class="card" style="margin-top:18px"><h3>📝 Recent AI Marking History</h3><div id="progressAttemptsList"></div></div>
+  <div class="card" style="margin-top:18px"><h3>🕒 Recent Learning Activity</h3><div id="progressActivity"></div></div>
 </section>
 
 <section id="parent" class="page">
@@ -480,46 +487,48 @@ function login(e){e.preventDefault();const role=document.getElementById('role').
 function show(id){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));const el=document.getElementById(id);if(el)el.classList.add('active');if(id==='teacher')renderTeacher();if(id==='admin')renderAdmin();if(id==='notifications')renderNotifications();if(id==='progress'||id==='parent')refreshProgress();if(id==='payments')renderPayments();if(id==='curriculum')loadCurriculumCatalogue();window.scrollTo(0,0)}
 function copyAI(){navigator.clipboard?.writeText(document.getElementById('aiAnswer').textContent);alert('Response copied.')}
 async function checkAIStatus(){const el=document.getElementById('aiStatus');if(!el)return;try{const r=await fetch('/api/health');const d=await r.json();el.className=d.ai?.configured?'success':'notice';el.textContent=d.ai?.configured?'🟢 Gemini AI connected • '+d.ai.model:'🟠 AI service is not configured. Add GEMINI_API_KEY to Render Environment.'}catch(e){el.className='notice';el.textContent='🔴 EduShelf server is not running. Start it with: npm install && npm start'}}
-async function askAI(e){
-  e.preventDefault();
-  const subject=document.getElementById('aiSubject').value,grade=document.getElementById('aiGrade').value,mode=document.getElementById('aiMode').value,focus=document.getElementById('cbeFocus').value,prompt=document.getElementById('aiPrompt').value.trim(),qFile=document.getElementById('aiQuestionFile')?.files?.[0],wFile=document.getElementById('aiWorkingFile')?.files?.[0],box=document.getElementById('aiResult'),answer=document.getElementById('aiAnswer'),summary=document.getElementById('markSummary'),badge=document.getElementById('aiScoreBadge'),actions=document.getElementById('markActions'),button=e.target.querySelector('button[type="submit"]');
-  if(!prompt&&!qFile&&!wFile){alert('Enter a question or upload a question paper first.');return}
-  if(mode==='mark'&&!qFile&&!wFile){alert('For Mark My Work, upload your question paper and/or your working.');return}
-  if(mode==='mark'&&!wFile){alert('Please upload your working in the Upload Your Working slot so EduShelf can mark it.');return}
-  button.disabled=true;button.textContent=mode==='mark'?'⏳ AI is marking...':'⏳ AI is working...';answer.textContent=mode==='mark'?'Reading the question and checking each step...':'Preparing your response...';box.style.display='block';summary.style.display='none';badge.style.display='none';actions.style.display='none';
-  try{
-    const readFile=async(file)=>{if(!file)return null;if(file.size>12*1024*1024)throw new Error('Please keep each uploaded file below 12 MB.');const dataUrl=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error('Could not read the selected file.'));reader.readAsDataURL(file)});return{name:file.name,mimeType:file.type,data:dataUrl}};
-    const [questionFile,workingFile]=await Promise.all([readFile(qFile),readFile(wFile)]);
-    const res=await fetch('/api/ai',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({subject,grade,mode,focus,prompt,file:questionFile,questionFile,workingFile})});
-    const data=await res.json();if(!res.ok)throw new Error(data.error||'The AI service could not respond.');
-    if(mode==='mark'){renderMarkingResult(data.marking||data.answer,{subject,grade,prompt,questionFileName:qFile?.name||'',workingFileName:wFile?.name||''});logActivity('Marked learner working: '+subject+' / '+grade);logNotification('AI marked learner working for '+subject+' ('+grade+').');}
-    else{answer.textContent=data.answer||'';logActivity('Used AI Study Assistant: '+mode+' / '+subject+' / '+grade);logNotification('AI response generated for '+subject+' ('+grade+').');}
-    refreshProgress();renderNotifications();
-  }catch(err){answer.textContent='Sorry, the AI could not respond.\n\n'+err.message;checkAIStatus()}
-  finally{button.disabled=false;button.textContent='✨ Ask AI'}
-}
-function renderMarkingResult(marking,meta){
-  const answer=document.getElementById('aiAnswer'),summary=document.getElementById('markSummary'),badge=document.getElementById('aiScoreBadge'),actions=document.getElementById('markActions');
-  let obj=marking;if(typeof marking==='string'){try{obj=JSON.parse(marking.replace(/^```json\s*/i,'').replace(/\s*```$/,''))}catch{obj=null}}
-  if(!obj||typeof obj!=='object'){answer.textContent=String(marking||'');actions.style.display='block';return}
-  const score=Number(obj.score),max=Number(obj.maxScore),percent=Number.isFinite(score)&&Number.isFinite(max)&&max>0?Math.round(score/max*100):null;
-  if(Number.isFinite(score)&&Number.isFinite(max)){badge.textContent=`Score: ${score}/${max}${percent!==null?' • '+percent+'%':''}`;badge.style.display='inline-block';summary.style.display='block';summary.innerHTML=`<div class="cards" style="margin-top:0"><div class="card"><h3>📊 Mark</h3><p style="font-size:24px;font-weight:800;margin:0">${score}/${max}</p></div><div class="card"><h3>🧠 Overall feedback</h3><p>${escapeHtml(obj.overallFeedback||'Review the corrections below and retry the question.')}</p></div><div class="card"><h3>🎯 Next step</h3><p>${escapeHtml(obj.nextStep||'Try the question again using the corrections.')}</p></div></div>`}
-  const qs=Array.isArray(obj.questions)?obj.questions:[];let text='';
-  if(qs.length){text=qs.map((q,i)=>{const steps=Array.isArray(q.steps)?q.steps.map(st=>`  ${st.status||'Check'}: ${st.working||''}${st.correction?'\n  Correction: '+st.correction:''}`).join('\n'):'  '+(q.workingCheck||'');return `Question ${q.number||i+1}\nStatus: ${q.status||'Reviewed'}\nMarks: ${q.marksAwarded??'-'}/${q.marksAvailable??'-'}\n${steps}\nFinal answer: ${q.finalAnswer||'-'}${q.feedback?'\nFeedback: '+q.feedback:''}`}).join('\n\n')}
-  else{text=obj.detailedFeedback||obj.feedback||obj.answer||'No structured marking details were returned.'}
-  answer.textContent=text;actions.style.display='block';localStorage.setItem('edushelfLastMarking',JSON.stringify({meta,marking:obj,score,maxScore:max,percent,at:new Date().toISOString()}));
-}
-function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-function retryMarkWork(){document.getElementById('aiPrompt').value='Recheck my uploaded working carefully. Focus on the steps I got wrong and show me how to correct them.';document.getElementById('aiMode').value='mark';document.getElementById('aiWorkingFile')?.scrollIntoView({behavior:'smooth',block:'center'})}
-function generateSimilarFromMark(){document.getElementById('aiMode').value='practice';document.getElementById('aiPrompt').value='Create one similar practice question based on my last marked work. Keep the same topic and difficulty, but use different numbers. Do not give the answer until I attempt it.';document.getElementById('aiResult').style.display='none';window.scrollTo({top:0,behavior:'smooth'})}
-
+async function askAI(e){e.preventDefault();const subject=document.getElementById('aiSubject').value,grade=document.getElementById('aiGrade').value,mode=document.getElementById('aiMode').value,focus=document.getElementById('cbeFocus').value,prompt=document.getElementById('aiPrompt').value.trim(),qFile=document.getElementById('aiQuestionFile')?.files?.[0],wFile=document.getElementById('aiWorkingFile')?.files?.[0],box=document.getElementById('aiResult'),answer=document.getElementById('aiAnswer'),button=e.target.querySelector('button[type="submit"]');if(!prompt&&!qFile&&!wFile){alert('Enter a question or upload a question paper first.');return}if(mode==='mark'&&!qFile&&!wFile){alert('For Mark My Work, upload your question paper and/or your working.');return}button.disabled=true;button.textContent='⏳ Gemini is working...';answer.textContent='Gemini is preparing your response...';box.style.display='block';try{const readFile=async(file)=>{if(!file)return null;if(file.size>12*1024*1024)throw new Error('Please keep each uploaded file below 12 MB.');const dataUrl=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error('Could not read the selected file.'));reader.readAsDataURL(file)});return{name:file.name,mimeType:file.type,data:dataUrl}};const [questionFile,workingFile]=await Promise.all([readFile(qFile),readFile(wFile)]);const res=await fetch('/api/ai',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({subject,grade,mode,focus,prompt,file:questionFile,questionFile,workingFile})});const data=await res.json();if(!res.ok)throw new Error(data.error||'The Gemini service could not respond.');answer.textContent=data.answer;if(mode==='mark')saveMarkAttempt(subject,grade,prompt,data.answer);logActivity('Used Gemini AI Study Assistant: '+mode+' / '+subject+' / '+grade);logNotification('Gemini response generated for '+subject+' ('+grade+').');refreshProgress();renderNotifications()}catch(err){answer.textContent='Sorry, Gemini could not respond.\n\n'+err.message;checkAIStatus()}finally{button.disabled=false;button.textContent='✨ Ask AI'}}
 async function loadCurriculumCatalogue(){const box=document.getElementById('curriculumCatalogue');if(!box)return;box.textContent='Loading curriculum records...';try{const grade=document.getElementById('catGrade').value,subject=document.getElementById('catSubject').value;const r=await fetch('/api/curriculum?'+new URLSearchParams({grade,subject}));const data=await r.json();box.innerHTML=data.records.length?data.records.map(x=>`<div class="material"><div><b>${x.grade} • ${x.subject}</b><br><span class="tag">${x.strand}</span> <span class="tag">${x.substrand}</span><br><small>${(x.learningOutcomes||[]).join(' • ')||'Structure record — exact learning outcomes not yet imported for this entry.'}</small></div><span class="tag">${(x.learningOutcomes||[]).length} outcomes</span></div>`).join(''):'<p>No imported record matches this selection yet.</p>'}catch(e){box.textContent='Start the EduShelf server to load curriculum records.'}}
-document.getElementById('aiMode')?.addEventListener('change',()=>{const mode=document.getElementById('aiMode').value;const hint=document.getElementById('aiFileHint');const panel=document.getElementById('workingUploadPanel');if(hint){hint.innerHTML=mode==='mark'?'Upload the <b>question paper</b> in the first slot and <b>your working</b> in the second slot. EduShelf will compare them, award marks and explain corrections.':'Use the <b>Question Paper</b> slot for a paper you want the AI to solve. The <b>Your Working</b> slot is used when you choose Mark My Work.';}if(panel)panel.style.borderColor=mode==='mark'?'#2563c7':'#dbe7fb';});
+document.getElementById('aiMode')?.addEventListener('change',()=>{const mode=document.getElementById('aiMode').value;const hint=document.getElementById('aiFileHint');if(hint){hint.innerHTML=mode==='mark'?'Upload the <b>question paper</b> in the first slot and <b>your working</b> in the second slot. Gemini will compare them and mark each step.':'Use the <b>Question Paper</b> slot for a paper you want Gemini to solve. The <b>Your Working</b> slot is for Mark My Work.';}});
 
 async function runGeneratedAI(subject,grade,mode,focus,prompt,resultBox,answerBox){resultBox.style.display='block';answerBox.textContent='Generating...';try{const res=await fetch('/api/ai',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({subject,grade,mode,focus,prompt})});const data=await res.json();if(!res.ok)throw new Error(data.error||'AI request failed.');answerBox.textContent=data.answer;logActivity('Generated '+mode+' / '+subject+' / '+grade);logNotification('New AI '+mode+' generated for '+subject+' ('+grade+').');refreshProgress()}catch(err){answerBox.textContent='Sorry, the AI service is unavailable.\n\n'+err.message}}
 function generateLesson(e){e.preventDefault();runGeneratedAI(document.getElementById('lessonSubject').value,document.getElementById('lessonGrade').value,'lesson','Learning Outcome / Strand / Sub-strand',`Create a ${document.getElementById('lessonDuration').value} lesson plan for ${document.getElementById('lessonStrand').value}. Topic/learning outcome: ${document.getElementById('lessonTopic').value}. Include objectives, key inquiry question, learning experiences, resources, competencies, values, PCIs, differentiation and assessment.`,document.getElementById('lessonResult'),document.getElementById('lessonAnswer'))}
 function generateAssessment(e){e.preventDefault();runGeneratedAI(document.getElementById('assessmentSubject').value,document.getElementById('assessmentGrade').value,'assessment','Assessment / Rubric',`Create a ${document.getElementById('assessmentType').value} assessment for ${document.getElementById('assessmentStrand').value}. Topic/outcome: ${document.getElementById('assessmentTopic').value}. Include instructions, tasks/questions, marking guidance and a 4-level rubric with observable criteria.`,document.getElementById('assessmentResult'),document.getElementById('assessmentAnswer'))}
-function refreshProgress(){const logs=JSON.parse(localStorage.getItem('edushelfActivity')||'[]'),ai=logs.filter(x=>x.action.toLowerCase().includes('ai')).length,practice=logs.filter(x=>x.action.toLowerCase().includes('practice')||x.action.toLowerCase().includes('assessment')).length,views=Number(localStorage.getItem('tusomeViews')||0),set=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v};set('progressViews',views);set('progressAI',ai);set('progressPractice',practice);set('progressStreak',logs.length?'1 day':'0 days');const p=document.getElementById('progressActivity');if(p)p.innerHTML=logs.length?logs.slice(0,10).map(x=>`<div class="material"><div>📝 ${x.action}</div><small>${x.time}</small></div>`).join(''):'<p>No learning activity yet.</p>';const pa=document.getElementById('parentActivity');if(pa)pa.textContent=views+' material view(s) recorded.';const pai=document.getElementById('parentAI');if(pai)pai.textContent=ai+' AI-assisted study session(s) recorded.';const pp=document.getElementById('parentPractice');if(pp)pp.textContent=practice+' practice/assessment action(s) recorded.'}
+function escHtml(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+function getMarkAttempts(){try{return JSON.parse(localStorage.getItem('tusomeMarkAttempts')||'[]')}catch{return[]}}
+function saveMarkAttempt(subject,grade,prompt,answer){
+  const text=String(answer||''); if(!text)return;
+  const matches=[...text.matchAll(/(?:score|marks?|percentage|percent)\s*[:\-]?\s*(\d+(?:\.\d+)?)\s*(?:\/\s*(\d+(?:\.\d+)?))?\s*%?/ig)];
+  let score=null;
+  for(const m of matches){const a=Number(m[1]),b=m[2]?Number(m[2]):null;if(b&&b>0&&a<=b){score=Math.round(a/b*100);break}if(a>=0&&a<=100){score=Math.round(a);break}}
+  const q=[...text.matchAll(/(?:question|q(?:uestion)?\.?)\s*(\d+)/ig)].map(m=>Number(m[1])).filter(n=>n>0);
+  const attempts=getMarkAttempts();
+  attempts.unshift({id:Date.now(),subject,grade,topic:(prompt||'General').slice(0,90),score,questions:[...new Set(q)].length||1,time:new Date().toISOString(),key:`${subject}|${prompt||'General'}`});
+  localStorage.setItem('tusomeMarkAttempts',JSON.stringify(attempts.slice(0,100)));
+}
+function progressScoreClass(score){return score>=80?'score-good':score>=50?'score-mid':'score-low'}
+function formatAgo(iso){const d=new Date(iso),mins=Math.floor(Math.max(0,Date.now()-d.getTime())/60000);if(mins<1)return'Just now';if(mins<60)return mins+' min ago';const h=Math.floor(mins/60);if(h<24)return h+' hr ago';const days=Math.floor(h/24);return days+' day'+(days===1?'':'s')+' ago'}
+function refreshProgress(){
+  const logs=JSON.parse(localStorage.getItem('edushelfActivity')||'[]'),attempts=getMarkAttempts();
+  const ai=logs.filter(x=>x.action.toLowerCase().includes('ai')).length,practice=logs.filter(x=>x.action.toLowerCase().includes('practice')||x.action.toLowerCase().includes('assessment')).length,views=Number(localStorage.getItem('tusomeViews')||0);
+  const scored=attempts.filter(x=>Number.isFinite(x.score)),avg=scored.length?Math.round(scored.reduce((a,x)=>a+x.score,0)/scored.length):null;
+  const questions=attempts.reduce((a,x)=>a+Number(x.questions||1),0),groups={},topicGroups={};
+  attempts.forEach(x=>{(groups[x.subject||'Other']??=[]).push(x);(topicGroups[x.key||`${x.subject||'Other'}|${x.topic||'General'}`]??=[]).push(x)});
+  const set=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v};
+  set('progressViews',views);set('progressAI',ai);set('progressPractice',practice);set('progressAttempts',attempts.length);set('progressAverage',avg===null?'—':avg+'%');set('progressQuestions',questions);set('progressTopics',Object.keys(topicGroups).length);
+  const mastered=Object.values(topicGroups).filter(a=>{const ss=a.filter(x=>Number.isFinite(x.score));return ss.length&&ss.reduce((z,x)=>z+x.score,0)/ss.length>=80}).length;set('progressMastered',mastered);
+  const dates=new Set(logs.map(x=>{const d=new Date(x.time);return isNaN(d)?null:d.toDateString()}).filter(Boolean));let streak=0,cursor=new Date();cursor.setHours(0,0,0,0);while(dates.has(cursor.toDateString())){streak++;cursor.setDate(cursor.getDate()-1)}set('progressStreak',streak+(streak===1?' day':' days'));
+  const subjects=document.getElementById('progressSubjects');
+  if(subjects)subjects.innerHTML=Object.keys(groups).length?Object.entries(groups).map(([sub,a])=>{const ss=a.filter(x=>Number.isFinite(x.score)),score=ss.length?Math.round(ss.reduce((z,x)=>z+x.score,0)/ss.length):null;return `<div class="progress-row"><div style="flex:1"><b>${escHtml(sub)}</b><br><small>${a.length} marked attempt${a.length===1?'':'s'}</small><div class="progress-bar"><div class="progress-fill" style="width:${score??0}%"></div></div></div><span class="${score===null?'':progressScoreClass(score)}">${score===null?'Pending':score+'%'}</span></div>`}).join(''):'<p>No AI-marked work yet. Complete a Mark My Work attempt to start building your progress.</p>';
+  const entries=Object.entries(topicGroups).map(([k,a])=>{const ss=a.filter(x=>Number.isFinite(x.score));return{k,a,score:ss.length?Math.round(ss.reduce((z,x)=>z+x.score,0)/ss.length):null}}).sort((a,b)=>(a.score??-1)-(b.score??-1));
+  const weak=entries.filter(x=>x.score!==null&&x.score<70).slice(0,5),strong=entries.filter(x=>x.score!==null&&x.score>=80).sort((a,b)=>b.score-a.score).slice(0,5);
+  const wb=document.getElementById('progressWeak');if(wb)wb.innerHTML=weak.length?weak.map(x=>`<div class="progress-row"><div><b>${escHtml(x.a[0].topic||'General')}</b><br><small>${escHtml(x.a[0].subject||'Other')} • ${x.a.length} attempt${x.a.length===1?'':'s'}</small></div><span class="${progressScoreClass(x.score)}">${x.score}%</span></div>`).join(''):'<p>No weak areas detected yet. Keep completing marked work.</p>';
+  const sb=document.getElementById('progressStrong');if(sb)sb.innerHTML=strong.length?strong.map(x=>`<div class="progress-row"><div><b>${escHtml(x.a[0].topic||'General')}</b><br><small>${escHtml(x.a[0].subject||'Other')}</small></div><span class="score-good">${x.score}%</span></div>`).join(''):'<p>Topics reaching 80% or more will appear here.</p>';
+  const rec=document.getElementById('progressRecommendations');if(rec)rec.innerHTML=weak.length?weak.slice(0,3).map(x=>`<div class="progress-row"><div><b>Practise ${escHtml(x.a[0].topic||'this topic')}</b><br><small>Current average: ${x.score}% • Review the corrections and try another set.</small></div><button class="btn" onclick="show('ai');document.getElementById('aiMode').value='practice';document.getElementById('aiPrompt').value='Create practice questions on ${escHtml(x.a[0].topic||'this topic')} for ${escHtml(x.a[0].grade||'my grade')}.'">Practise</button></div>`).join(''):'<p>Your recommendations will appear after AI-marked attempts are recorded.</p>';
+  const list=document.getElementById('progressAttemptsList');if(list)list.innerHTML=attempts.length?attempts.slice(0,8).map(x=>`<div class="progress-row"><div><b>${escHtml(x.subject||'Other')} • ${escHtml(x.grade||'')}</b><br><small>${escHtml(x.topic||'General')} • ${x.questions||1} question${(x.questions||1)===1?'':'s'} • ${formatAgo(x.time)}</small></div><span class="${x.score===null?'':progressScoreClass(x.score)}">${x.score===null?'Score not detected':x.score+'%'}</span></div>`).join(''):'<p>No Mark My Work attempts recorded yet.</p>';
+  const p=document.getElementById('progressActivity');if(p)p.innerHTML=logs.length?logs.slice(0,10).map(x=>`<div class="material"><div>📝 ${escHtml(x.action)}</div><small>${escHtml(x.time)}</small></div>`).join(''):'<p>No learning activity yet.</p>';
+  const pa=document.getElementById('parentActivity');if(pa)pa.textContent=views+' material view(s) recorded.';const pai=document.getElementById('parentAI');if(pai)pai.textContent=ai+' AI-assisted study session(s) recorded.';const pp=document.getElementById('parentPractice');if(pp)pp.textContent=practice+' practice/assessment action(s) recorded.';
+}
 populateMaterialFilters();populateMaterialFilters();renderMaterials();renderTeacher();renderAdmin();refreshProgress();checkAIStatus();
 </script>
 </body>

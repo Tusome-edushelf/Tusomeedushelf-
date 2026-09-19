@@ -67,15 +67,6 @@ Optional environment variables:
 
 This does not bypass quotas. If the project has exhausted its quota, changing models may still fail; the app will report that clearly.
 
-## AI Working Marking v2
-The current package adds a structured learner-working marking workflow without removing the existing EduShelf features:
-- Separate Question Paper and Upload Your Working slots.
-- Mark My Work requires the learner's working upload.
-- Gemini is instructed to inspect the actual uploaded question and visible working, preserve question numbering, award marks, identify step-level errors, and provide corrections.
-- Marking responses are returned as structured JSON and rendered as a score, overall feedback, next step, and per-question working checks.
-- The learner can use Try Again or generate a Similar Question after marking.
-- The last marking report is stored locally in the browser so the current session can reuse its result.
-- Existing Daraja/payment code is retained unchanged; payment improvements are intentionally deferred.
 
-### Suggested deployment check
-After installing dependencies and setting `GEMINI_API_KEY`, open the AI Assistant, choose **Mark My Work — Check & Correct**, upload a question paper in the first slot and the learner's working in the second slot, then select **Ask AI**. The result should show a score and step-by-step corrections.
+## Personalized Learner Progress
+The learner Progress dashboard now records Mark My Work attempts locally, calculates average scores, tracks questions attempted and study streaks, groups results by subject/topic, highlights areas to improve and mastered topics, and provides targeted practice shortcuts. Existing Daraja/payment code and the existing prototype structure are preserved for later improvement.

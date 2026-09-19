@@ -147,22 +147,14 @@ ${markMode ? `MARK MY WORK MODE:
 9. If the uploaded working is unclear, identify the exact part that cannot be read and do not guess.
 10. Do not force CBC/KICD/CBE explanations unless the learner explicitly asks for curriculum alignment.
 11. Keep the marking concise but useful. Do not add unrelated tips, summaries, teacher/parent notes, or motivational text.
-12. Return a learner-friendly step-by-step marking report.
-13. Award marks only for work that is supported by the learner's visible working. If the question has no visible mark allocation, infer a reasonable mark allocation and state that it is inferred.
-14. Never penalize a learner for handwriting style; judge the mathematical/academic work only.
-15. When a learner has a correct method but an arithmetic slip, preserve method credit and explain the slip.
-16. When a learner's final answer is correct but working is missing, do not invent steps; mark only what can be verified.
-17. In Mark My Work mode, return ONLY valid JSON with this shape (no Markdown fences):
-{
-  "score": number,
-  "maxScore": number,
-  "overallFeedback": string,
-  "nextStep": string,
-  "questions": [
-    {"number": string, "status": "Correct"|"Partly correct"|"Incorrect"|"Cannot read", "marksAwarded": number, "marksAvailable": number, "steps": [{"status": "Correct"|"Incorrect"|"Partly correct"|"Cannot read", "working": string, "correction": string}], "finalAnswer": string, "feedback": string}
-  ]
-}
-18. Include every readable question/sub-question from the uploaded question paper and preserve its original numbering. If only the working is uploaded and the question is missing, clearly say that the question cannot be verified and do not invent a mark allocation.
+12. Use this format where useful:
+Question [number]
+Status: Correct / Partly correct / Incorrect
+Working check:
+...
+Correction:
+...
+Final answer: ...
 ` : ''}
 ${paperMode ? `UPLOADED QUESTION-PAPER MODE:
 1. Read the entire uploaded paper carefully, including every visible page, diagram, table, graph, formula, and handwritten/printed sub-question.
@@ -215,8 +207,7 @@ Selected subject: ${subject || 'General'}. Selected grade: ${grade || 'General'}
             contents: [{ role: 'user', parts }],
             generationConfig: {
               temperature: 0.1,
-              topP: 0.9,
-              ...(markMode ? { responseMimeType: 'application/json' } : {})
+              topP: 0.9
             }
           })
         });
@@ -238,14 +229,6 @@ Selected subject: ${subject || 'General'}. Selected grade: ${grade || 'General'}
           .join('\n')
           .trim();
         if (!answer) throw new Error('Gemini returned no text response.');
-        if (markMode) {
-          try { return JSON.parse(answer); }
-          catch {
-            const cleaned = answer.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
-            try { return JSON.parse(cleaned); }
-            catch { throw new Error('The AI returned an invalid marking report. Please try marking the work again.'); }
-          }
-        }
         return answer;
       } catch (err) {
         lastError = err;
@@ -268,7 +251,7 @@ Selected subject: ${subject || 'General'}. Selected grade: ${grade || 'General'}
 app.post('/api/ai', async (req, res) => {
   try {
     const answer = await callGemini(req.body || {});
-    res.json({ ok: true, answer: typeof answer === 'string' ? answer : JSON.stringify(answer), ...(mode === 'mark' ? { marking: answer } : {}) });
+    res.json({ ok: true, answer });
   } catch (e) {
     console.error('AI error:', e);
     const message = e?.message || 'AI service failed.';

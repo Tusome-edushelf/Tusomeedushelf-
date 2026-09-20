@@ -34,20 +34,36 @@ footer{text-align:center;padding:30px;color:#687386}.ai-answer{line-height:1.7;b
 
 .home-ai{margin-top:24px;background:linear-gradient(180deg,#ffffff,#f7faff);border:1px solid #dfe7f3;border-radius:18px;padding:24px;box-shadow:0 4px 18px #0000000b}.home-ai-head{display:flex;justify-content:space-between;align-items:center;gap:15px;flex-wrap:wrap}.home-ai-head h2{margin:0}.home-ai-sub{color:#687386;margin:6px 0 0}.home-ai-chips{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}.home-ai-chip{border:1px solid #cbd6e5;background:#fff;color:#173f8a;border-radius:999px;padding:8px 12px;cursor:pointer;font-weight:700}.home-ai-chat{background:#fff;border:1px solid #e1e6ef;border-radius:14px;padding:14px;min-height:70px;max-height:360px;overflow:auto;margin-bottom:12px}.home-ai-msg{padding:10px 12px;border-radius:12px;margin:8px 0;line-height:1.55;white-space:pre-wrap}.home-ai-msg.user{background:#eaf1ff;margin-left:12%;}.home-ai-msg.bot{background:#f3f6fa;margin-right:12%;}.home-ai-msg.bot table{width:100%;border-collapse:collapse;margin:8px 0}.home-ai-msg.bot th,.home-ai-msg.bot td{border:1px solid #d9e0ea;padding:7px;text-align:left;vertical-align:top}.home-ai-msg.bot th{background:#eef3f8}.home-ai-form{display:flex;gap:8px;align-items:flex-end}.home-ai-form textarea{margin:0;min-height:48px;resize:vertical}.home-ai-form button{flex:0 0 auto}.home-ai-note{font-size:12px;color:#687386;margin-top:10px}
 @media(max-width:600px){.home-ai-form{flex-direction:column}.home-ai-form button{width:100%}.home-ai-msg.user,.home-ai-msg.bot{margin-left:0;margin-right:0}}
+
+/* v22 accessibility and usability */
+.skip-link{position:fixed;left:12px;top:-60px;background:#fff;color:#173f8a;padding:10px 14px;border-radius:8px;z-index:1000;font-weight:800;box-shadow:0 3px 12px #0003}.skip-link:focus{top:12px}
+.a11y-toggle{border:1px solid #ffffff88!important;border-radius:8px;padding:8px 10px!important}.a11y-panel{position:fixed;right:16px;top:74px;width:min(340px,calc(100vw - 32px));background:#fff;color:#18212f;border:1px solid #d7dfeb;border-radius:14px;padding:16px;box-shadow:0 10px 35px #0003;z-index:20;display:none}.a11y-panel.open{display:block}.a11y-panel h3{margin:0 0 8px}.a11y-panel .a11y-row{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}.a11y-panel button{border:1px solid #ccd5e2;background:#fff;color:#173f8a;border-radius:8px;padding:8px 11px;cursor:pointer;font-weight:700}.a11y-panel button.active{background:#173f8a;color:#fff}.a11y-panel .a11y-close{float:right}
+body.a11y-large{font-size:18px}body.a11y-large .hero-copy h1{font-size:48px}body.a11y-large input,body.a11y-large select,body.a11y-large textarea{font-size:18px}
+body.a11y-contrast{background:#fff;color:#000}body.a11y-contrast header{background:#000;color:#fff}body.a11y-contrast .card,body.a11y-contrast form,body.a11y-contrast .hero,body.a11y-contrast .hero-copy,body.a11y-contrast .home-ai,body.a11y-contrast .communication-card{background:#fff;color:#000;border:2px solid #000}body.a11y-contrast .hero-copy h1,body.a11y-contrast .logo span,body.a11y-contrast .auth-switch button{color:#000}body.a11y-contrast .btn.primary{background:#000;color:#fff}
+body.a11y-reduced-motion *,body.a11y-reduced-motion *::before,body.a11y-reduced-motion *::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+:focus-visible{outline:3px solid #ffbf47;outline-offset:3px}
 </style>
 </head>
 <body>
+<a class="skip-link" href="#mainContent">Skip to main content</a>
 <header>
   <div class="logo">Tusome <span>EduShelf</span></div>
   <nav>
     <button onclick="show('home')">Home</button>
-    <button id="notificationNav" class="nav-auth nav-notify" onclick="show('notifications')" aria-label="Notifications">🔔 <span id="notificationNavCount" class="notify-count" aria-live="polite">0</span></button><button class="nav-auth" onclick="show('account')">👤 Account</button>
+    <button id="notificationNav" class="nav-auth nav-notify" onclick="show('notifications')" aria-label="Notifications">🔔 <span id="notificationNavCount" class="notify-count" aria-live="polite">0</span></button><button class="nav-auth" onclick="show('account')">👤 Account</button><button class="nav-auth a11y-toggle" onclick="toggleAccessibilityPanel()" aria-expanded="false" aria-controls="accessibilityPanel">⚙️ Accessibility</button>
     <button class="nav-auth" onclick="show('login')">Sign In</button>
     <button class="nav-auth nav-signup" onclick="show('signup')">Sign Up</button>
   </nav>
 </header>
 
-<main class="container">
+<div id="accessibilityPanel" class="a11y-panel" role="dialog" aria-label="Accessibility and display settings">
+  <button class="a11y-close" type="button" onclick="toggleAccessibilityPanel()" aria-label="Close accessibility settings">✕</button>
+  <h3>Accessibility & Display</h3><p class="small">Choose settings that make Tusome EduShelf easier to read and use. Your choices are saved on this device.</p>
+  <div class="a11y-row"><button id="a11yNormal" type="button" onclick="setAccessibility('normal')">Normal text</button><button id="a11yLarge" type="button" onclick="setAccessibility('large')">Larger text</button></div>
+  <div class="a11y-row"><button id="a11yContrast" type="button" onclick="toggleAccessibilityOption('contrast')">High contrast</button><button id="a11yMotion" type="button" onclick="toggleAccessibilityOption('motion')">Reduce motion</button></div>
+  <button type="button" onclick="resetAccessibility()">Reset display settings</button>
+</div>
+<main id="mainContent" class="container" tabindex="-1">
 <section id="home" class="page active">
   <div class="hero">
     <div class="hero-grid">
@@ -1065,5 +1081,13 @@ configureAIAssistant(getSessionRole()||'learner');
 (async()=>{await loadServerMaterials();if(getSessionRole()==='learner'){await loadServerPurchases();await loadLearnerActivity()}populateMaterialFilters();populateMaterialFilters();renderMaterials();renderTeacher();renderAdmin();refreshProgress();checkAIStatus()})();
 </script>
 <button id="communicationLaunch" class="btn primary communication-launch" onclick="openCommunicationCentre()" style="position:fixed;right:18px;bottom:18px;z-index:20;border-radius:24px">💬 Communication Centre</button>
+<script>
+function applyAccessibility(){const b=document.body;const mode=localStorage.getItem('tusomeA11yText')||'normal';b.classList.toggle('a11y-large',mode==='large');b.classList.toggle('a11y-contrast',localStorage.getItem('tusomeA11yContrast')==='true');b.classList.toggle('a11y-reduced-motion',localStorage.getItem('tusomeA11yMotion')==='true');document.getElementById('a11yNormal')?.classList.toggle('active',mode==='normal');document.getElementById('a11yLarge')?.classList.toggle('active',mode==='large');document.getElementById('a11yContrast')?.classList.toggle('active',localStorage.getItem('tusomeA11yContrast')==='true');document.getElementById('a11yMotion')?.classList.toggle('active',localStorage.getItem('tusomeA11yMotion')==='true')}
+function toggleAccessibilityPanel(){const p=document.getElementById('accessibilityPanel');if(!p)return;const open=!p.classList.contains('open');p.classList.toggle('open',open);document.querySelector('.a11y-toggle')?.setAttribute('aria-expanded',String(open));if(open)document.getElementById('a11yNormal')?.focus()}
+function setAccessibility(mode){localStorage.setItem('tusomeA11yText',mode);applyAccessibility()}
+function toggleAccessibilityOption(type){const key=type==='contrast'?'tusomeA11yContrast':'tusomeA11yMotion';localStorage.setItem(key,localStorage.getItem(key)==='true'?'false':'true');applyAccessibility()}
+function resetAccessibility(){['tusomeA11yText','tusomeA11yContrast','tusomeA11yMotion'].forEach(k=>localStorage.removeItem(k));applyAccessibility()}
+applyAccessibility();
+</script>
 </body>
 </html>

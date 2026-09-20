@@ -7,3 +7,24 @@ Added account settings for authenticated learners, teachers and admins: profile 
 - Fixed `ReferenceError: escapeHtml is not defined` on the Account/Profile and Notifications screens.
 - Added a shared HTML-escaping helper before those functions use it.
 - Existing account, notifications, analytics, AI, materials, payments and B2C code is otherwise unchanged.
+
+## v22 — Accessibility & Usability
+- Added an Accessibility & Display panel available from the header.
+- Added Normal/Larger text controls.
+- Added High Contrast mode.
+- Added Reduce Motion mode.
+- Preferences are saved locally on the user's device.
+- Added a keyboard-accessible Skip to main content link.
+- Added visible keyboard focus indicators.
+- Added accessible labels/ARIA state for the accessibility panel.
+- Existing account, notifications, analytics, AI, materials, payments and B2C functionality is preserved.
+
+## v22 — Accessibility & Usability
+- Added an Accessibility & Display panel in the header.
+- Added Normal/Larger text controls.
+- Added High Contrast mode.
+- Added Reduce Motion mode.
+- Preferences are saved locally on the user's device.
+- Added a keyboard-accessible Skip to main content link.
+- Added visible keyboard focus indicators and ARIA state for the settings panel.
+- Existing account, notifications, analytics, AI, materials, payments and B2C functionality is preserved.

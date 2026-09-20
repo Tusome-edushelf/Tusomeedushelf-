@@ -1,9 +1,3 @@
-# Tusome EduShelf v20.1 — Platform Analytics Fix
+Tusome EduShelf v21 — User Profiles & Account Settings
 
-Fixed the Admin **Platform Analytics** tab so it opens correctly and loads analytics when selected.
-
-Changes:
-- Added `analytics: 'adminAnalytics'` to the admin tab map.
-- Added automatic `loadAdminAnalytics()` when Platform Analytics is opened.
-- Preserved v20 admin analytics, backups, notifications, AI, authentication, and payment features.
-- B2C teacher payouts remain untouched.
+Added account settings for authenticated learners, teachers and admins: profile display name, optional avatar URL, notification preferences, password change, recent account activity, and a visible Account button in the header. Existing v20 analytics, backups, notifications, AI, materials and payments remain included. B2C payout functionality is unchanged.

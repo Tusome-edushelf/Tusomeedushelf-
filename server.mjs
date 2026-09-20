@@ -145,8 +145,15 @@ async function initDatabase() {
       role TEXT NOT NULL CHECK (role IN ('learner','teacher','admin')),
       password_hash TEXT NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      display_name TEXT,
+      avatar_url TEXT,
+      notification_preferences JSONB NOT NULL DEFAULT '{"email":true,"platform":true}'::jsonb
     );
+
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS notification_preferences JSONB NOT NULL DEFAULT '{"email":true,"platform":true}'::jsonb;
 
     CREATE TABLE IF NOT EXISTS materials (
       id TEXT PRIMARY KEY,
@@ -443,7 +450,7 @@ async function restoreBackup(backupId) {
 
 async function dbFindUser(email) {
   if (!db || !databaseReady) return null;
-  const result = await db.query('SELECT email, role, password_hash AS "passwordHash" FROM users WHERE email = $1 LIMIT 1', [String(email || '').trim().toLowerCase()]);
+  const result = await db.query('SELECT email, role, password_hash AS "passwordHash", display_name AS "displayName", avatar_url AS "avatarUrl", notification_preferences AS "notificationPreferences" FROM users WHERE email = $1 LIMIT 1', [String(email || '').trim().toLowerCase()]);
   return result.rows[0] || null;
 }
 
@@ -859,6 +866,37 @@ app.get('/api/auth/me', (req, res) => {
   const user = currentUser(req);
   if (!user) return res.status(401).json({ error: 'Not logged in.' });
   res.json({ ok: true, user: { email: user.email, role: user.role } });
+});
+
+app.get('/api/account/profile', requireAuth, async (req, res) => {
+  const u = await findUser(req.user.email);
+  const activity = db && databaseReady ? (await db.query(`SELECT action, entity_type AS "entityType", entity_id AS "entityId", created_at AS "createdAt" FROM audit_logs WHERE actor_email=$1 ORDER BY created_at DESC LIMIT 12`, [req.user.email])).rows : [];
+  res.json({ok:true, profile:{email:u?.email||req.user.email,role:u?.role||req.user.role,displayName:u?.displayName||'',avatarUrl:u?.avatarUrl||'',notificationPreferences:u?.notificationPreferences||{email:true,platform:true}},activity});
+});
+
+app.patch('/api/account/profile', requireAuth, async (req,res)=>{
+  const displayName=String(req.body?.displayName||'').trim().slice(0,100);
+  const avatarUrl=String(req.body?.avatarUrl||'').trim().slice(0,500);
+  const prefs=req.body?.notificationPreferences||{};
+  const safePrefs={email:Boolean(prefs.email!==false),platform:Boolean(prefs.platform!==false)};
+  if(db && databaseReady){
+    await db.query(`UPDATE users SET display_name=$1, avatar_url=$2, notification_preferences=$3::jsonb, updated_at=NOW() WHERE email=$4`,[displayName,avatarUrl,JSON.stringify(safePrefs),req.user.email]);
+  } else {
+    const users=await readJson(USERS_FILE,[]); const i=users.findIndex(x=>x.email===req.user.email); if(i>=0){users[i].displayName=displayName;users[i].avatarUrl=avatarUrl;users[i].notificationPreferences=safePrefs;users[i].updatedAt=new Date().toISOString();await writeJson(USERS_FILE,users);}
+  }
+  void audit({user:req.user},'update_profile','user',req.user.email,{displayNameChanged:Boolean(displayName),preferencesUpdated:true});
+  res.json({ok:true,profile:{email:req.user.email,role:req.user.role,displayName,avatarUrl,notificationPreferences:safePrefs}});
+});
+
+app.patch('/api/account/password', requireAuth, async (req,res)=>{
+  const current=String(req.body?.currentPassword||''), next=String(req.body?.newPassword||'');
+  if(next.length<8) return res.status(400).json({error:'New password must be at least 8 characters long.'});
+  const u=await findUser(req.user.email); if(!u || !verifyPassword(current,u.passwordHash)) return res.status(401).json({error:'Current password is incorrect.'});
+  const hash=passwordHash=hashPassword(next);
+  if(db && databaseReady) await db.query('UPDATE users SET password_hash=$1, updated_at=NOW() WHERE email=$2',[hash,req.user.email]);
+  else {const users=await readJson(USERS_FILE,[]);const i=users.findIndex(x=>x.email===req.user.email);if(i>=0){users[i].passwordHash=hash;users[i].updatedAt=new Date().toISOString();await writeJson(USERS_FILE,users);}}
+  void audit({user:req.user},'change_password','user',req.user.email);
+  res.json({ok:true});
 });
 
 app.post('/api/auth/logout', (_req, res) => {

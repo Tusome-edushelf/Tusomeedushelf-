@@ -281,6 +281,18 @@ async function initDatabase() {
       last_viewed_at TIMESTAMPTZ,
       PRIMARY KEY (learner_email, material_id)
     );
+
+    CREATE TABLE IF NOT EXISTS notifications (
+      id BIGSERIAL PRIMARY KEY,
+      recipient_email TEXT NOT NULL,
+      title TEXT NOT NULL,
+      message TEXT NOT NULL,
+      type TEXT NOT NULL DEFAULT 'info',
+      read_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_notifications_recipient_created ON notifications(recipient_email, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications(recipient_email, read_at);
     CREATE INDEX IF NOT EXISTS idx_learner_activity_email ON learner_material_activity(learner_email);
 
     CREATE INDEX IF NOT EXISTS idx_transactions_user_email ON transactions (user_email);
@@ -799,6 +811,16 @@ const parts = [];
   throw new Error(`Gemini is temporarily busy. Automatic fallback was attempted across ${models.length} models. Please try again shortly. Last error: ${lastError?.message || 'unknown error'}`);
 }
 
+async function createNotification(recipientEmail, title, message, type='info') {
+  if (!db || !databaseReady || !recipientEmail) return;
+  try { await db.query(`INSERT INTO notifications(recipient_email,title,message,type) VALUES($1,$2,$3,$4)`, [String(recipientEmail).toLowerCase(), title, message, type]); }
+  catch (e) { console.warn('Notification create failed:', e.message); }
+}
+async function notifyAdmins(title, message, type='info') {
+  if (!db || !databaseReady) return;
+  try { const r=await db.query(`SELECT email FROM users WHERE role='admin'`); await Promise.all(r.rows.map(x=>createNotification(x.email,title,message,type))); } catch(e) { console.warn('Admin notification failed:',e.message); }
+}
+
 app.post('/api/auth/register', async (req, res) => {
   const { email, password, role } = req.body || {};
   const normalizedEmail = String(email || '').trim().toLowerCase();
@@ -819,6 +841,7 @@ app.post('/api/auth/register', async (req, res) => {
   const user = { email: normalizedEmail, role: normalizedRole };
   setSessionCookie(res, user);
   void audit({user}, 'register', 'user', normalizedEmail);
+  void createNotification(normalizedEmail, 'Welcome to Tusome EduShelf', 'Your account is ready. Explore learning materials and your role-specific tools.', 'success');
   res.status(201).json({ ok: true, user });
 });
 
@@ -926,6 +949,8 @@ app.post('/api/materials', requireRole('teacher'), async (req, res) => {
     await db.query(`INSERT INTO material_versions(version_id,material_id,version_number,file_name,mime_type,file_size,file_data,metadata,created_by) VALUES($1,$2,1,$3,$4,$5,$6,$7,$8)`, [`VER-${crypto.randomBytes(10).toString('hex')}`,id,file.name,mimeType,buffer.length,buffer,JSON.stringify({title:String(title).trim(),subject,grade,topic}),req.user.email]);
     await db.query('COMMIT');
     void audit(req, 'material_upload', 'material', id, { title: String(title).trim(), fileName: file.name });
+    void createNotification(req.user.email, 'Material submitted', `“${String(title).trim()}” was submitted for administrator review.`, 'info');
+    void notifyAdmins('Material awaiting review', `A new material, “${String(title).trim()}”, was submitted by ${req.user.email}.`, 'review');
     res.status(201).json({ ok: true, material: { id, title: String(title).trim(), subject, grade, strand, competency, topic, file: file.name, fileType: mimeType, fileSize: buffer.length, price: Math.max(0, Number(price || 0)), approvalStatus: 'pending', description, teacherEmail: req.user.email, fileId } });
   } catch (e) {
     try { await db.query('ROLLBACK'); } catch {}
@@ -957,10 +982,13 @@ app.patch('/api/materials/:id/review', requireRole('admin'), async (req, res) =>
   if (!['pending','approved','rejected'].includes(status)) return res.status(400).json({ error: 'Invalid approval status.' });
   const price = Math.max(0, Number(req.body?.price ?? 0));
   try {
-    const result = await db.query(`UPDATE materials SET approval_status=$2,price=$3,approved_at=CASE WHEN $2='approved' THEN NOW() ELSE NULL END,updated_at=NOW() WHERE id=$1 RETURNING id,title,price,approval_status AS "approvalStatus",approved_at AS "approvedAt"`, [req.params.id, status, price]);
+    const result = await db.query(`UPDATE materials SET approval_status=$2,price=$3,approved_at=CASE WHEN $2='approved' THEN NOW() ELSE NULL END,updated_at=NOW() WHERE id=$1 RETURNING id,title,price,approval_status AS "approvalStatus",approved_at AS "approvedAt",teacher_email AS "teacherEmail"`, [req.params.id, status, price]);
     if (!result.rowCount) return res.status(404).json({ error: 'Material not found.' });
+    const m=result.rows[0];
     void audit(req, 'material_review', 'material', req.params.id, { approvalStatus: status, price });
-    res.json({ ok: true, material: result.rows[0] });
+    const reviewMessage = status==='approved' ? `“${m.title}” was approved and is now available to learners.` : status==='rejected' ? `“${m.title}” was not approved. Please review the administrator feedback/workflow.` : `“${m.title}” was returned to pending review.`;
+    void createNotification(m.teacherEmail, status==='approved'?'Material approved':'Material review update', reviewMessage, status==='approved'?'success':'warning');
+    res.json({ ok: true, material: m });
   } catch (e) {
     console.error('Material review error:', e);
     res.status(500).json({ error: 'Could not update the material.' });
@@ -1107,6 +1135,26 @@ app.get('/api/health', async (_req, res) => {
     ai: { configured: aiConfigured, provider: 'Gemini', model: process.env.GEMINI_MODEL || 'gemini-3.8-flash', fallbackModels: (process.env.GEMINI_FALLBACK_MODELS || 'gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash').split(',').map(x => x.trim()).filter(Boolean) },
     database: { configured: Boolean(DATABASE_URL), connected: databaseReady, provider: 'PostgreSQL' }
   });
+});
+
+app.get('/api/notifications', requireAuth, async (req,res)=>{
+  if(!databaseReady) return res.status(503).json({error:'Database is not ready.'});
+  try {
+    const limit=Math.min(100,Math.max(1,Number(req.query.limit||50)));
+    const r=await db.query(`SELECT id,title,message,type,read_at AS "readAt",created_at AS "createdAt" FROM notifications WHERE recipient_email=$1 ORDER BY created_at DESC LIMIT $2`,[req.user.email,limit]);
+    const unread=r.rows.filter(x=>!x.readAt).length;
+    res.json({ok:true,notifications:r.rows,unread});
+  } catch(e){res.status(500).json({error:'Could not load notifications.'});}
+});
+app.patch('/api/notifications/read-all', requireAuth, async (req,res)=>{
+  if(!databaseReady) return res.status(503).json({error:'Database is not ready.'});
+  try { await db.query(`UPDATE notifications SET read_at=NOW() WHERE recipient_email=$1 AND read_at IS NULL`,[req.user.email]); res.json({ok:true}); }
+  catch(e){res.status(500).json({error:'Could not update notifications.'});}
+});
+app.patch('/api/notifications/:id/read', requireAuth, async (req,res)=>{
+  if(!databaseReady) return res.status(503).json({error:'Database is not ready.'});
+  try { const r=await db.query(`UPDATE notifications SET read_at=NOW() WHERE id=$1 AND recipient_email=$2 RETURNING id`,[req.params.id,req.user.email]); if(!r.rowCount)return res.status(404).json({error:'Notification not found.'}); res.json({ok:true}); }
+  catch(e){res.status(500).json({error:'Could not update notification.'});}
 });
 
 app.post('/api/payments/stkpush', requireRole('learner'), async (req, res) => {

@@ -335,8 +335,8 @@ footer{text-align:center;padding:30px;color:#687386}.ai-answer{line-height:1.7;b
 </section>
 
 <section id="notifications" class="page">
-  <div class="topline"><div><h2>🔔 Notifications</h2><p>Updates about learning materials, AI activity and platform actions.</p></div><button class="btn" onclick="markNotificationsRead()">Mark all read</button></div>
-  <div class="card"><div id="notificationList"></div></div>
+  <div class="topline"><div><h2>🔔 Notifications <span id="notificationUnreadBadge" class="tag" style="display:none">0 unread</span></h2><p>Updates about learning materials, account activity and important platform actions.</p></div><button class="btn" onclick="markNotificationsRead()">Mark all read</button></div>
+  <div class="card"><div id="notificationList" aria-live="polite"></div></div>
 </section>
 
 
@@ -463,9 +463,11 @@ let materials=JSON.parse(localStorage.getItem(key)||'null')||[
 ];
 function save(){localStorage.setItem(key,JSON.stringify(materials))}
 function logActivity(action){let logs=JSON.parse(localStorage.getItem('edushelfActivity')||'[]');logs.unshift({action,time:new Date().toLocaleString()});localStorage.setItem('edushelfActivity',JSON.stringify(logs.slice(0,50)))}
-function logNotification(message){let n=JSON.parse(localStorage.getItem('edushelfNotifications')||'[]');n.unshift({message,time:new Date().toLocaleString(),read:false});localStorage.setItem('edushelfNotifications',JSON.stringify(n.slice(0,30)))}
-function renderNotifications(){const box=document.getElementById('notificationList');if(!box)return;const n=JSON.parse(localStorage.getItem('edushelfNotifications')||'[]');box.innerHTML=n.length?n.map(x=>`<div class="material"><div><b>${x.read?'':'🔵 '}${x.message}</b><br><small>${x.time}</small></div></div>`).join(''):'<p>No notifications yet.</p>'}
-function markNotificationsRead(){let n=JSON.parse(localStorage.getItem('edushelfNotifications')||'[]').map(x=>({...x,read:true}));localStorage.setItem('edushelfNotifications',JSON.stringify(n));renderNotifications()}
+function logNotification(message){let n=JSON.parse(localStorage.getItem('edushelfNotifications')||'[]');n.unshift({message,time:new Date().toLocaleString(),read:false});localStorage.setItem('edushelfNotifications',JSON.stringify(n.slice(0,30)));renderNotifications()}
+async function renderNotifications(){const box=document.getElementById('notificationList');if(!box)return;try{const res=await fetch('/api/notifications?limit=50',{credentials:'include'});if(!res.ok)throw new Error('server notifications unavailable');const data=await res.json();const n=data.notifications||[];const badge=document.getElementById('notificationUnreadBadge');if(badge){badge.textContent=`${data.unread||0} unread`;badge.style.display=data.unread?'inline-block':'none'}box.innerHTML=n.length?n.map(x=>`<div class="material" style="border-left:4px solid ${x.type==='success'?'#2e7d32':x.type==='warning'?'#f59e0b':x.type==='review'?'#2563eb':'#64748b'}"><div><b>${x.readAt?'':'🔵 '}${escapeHtml(x.title)}</b><p style="margin:5px 0">${escapeHtml(x.message)}</p><small>${new Date(x.createdAt).toLocaleString()}</small>${x.readAt?'':' <button class="btn" style="margin-left:8px" onclick="markNotificationRead('+x.id+')">Mark read</button>'}</div></div>`).join(''):'<p>No notifications yet.</p>'}catch(e){const n=JSON.parse(localStorage.getItem('edushelfNotifications')||'[]');box.innerHTML=n.length?n.map(x=>`<div class="material"><div><b>${x.read?'':'🔵 '}${escapeHtml(x.message)}</b><br><small>${escapeHtml(x.time)}</small></div></div>`).join(''):'<p>No notifications yet.</p>'}}
+async function markNotificationRead(id){try{await fetch('/api/notifications/'+id+'/read',{method:'PATCH',credentials:'include'});}catch{}renderNotifications()}
+async function markNotificationsRead(){try{await fetch('/api/notifications/read-all',{method:'PATCH',credentials:'include'});}catch{}let n=JSON.parse(localStorage.getItem('edushelfNotifications')||'[]').map(x=>({...x,read:true}));localStorage.setItem('edushelfNotifications',JSON.stringify(n));renderNotifications()}
+async function refreshNotificationBadge(){try{const res=await fetch('/api/notifications?limit=1',{credentials:'include'});if(res.ok){const d=await res.json();const badge=document.getElementById('notificationUnreadBadge');if(badge){badge.textContent=`${d.unread||0} unread`;badge.style.display=d.unread?'inline-block':'none'}}}catch{}}
 const DB_NAME='edushelfFilesDB';const DB_STORE='files';
 function openFileDB(){return new Promise((resolve,reject)=>{const req=indexedDB.open(DB_NAME,1);req.onupgradeneeded=()=>{if(!req.result.objectStoreNames.contains(DB_STORE))req.result.createObjectStore(DB_STORE)};req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error)})}
 async function saveUploadedFile(id,file){const db=await openFileDB();return new Promise((resolve,reject)=>{const tx=db.transaction(DB_STORE,'readwrite');tx.objectStore(DB_STORE).put({blob:file,type:file.type,name:file.name},id);tx.oncomplete=()=>{db.close();resolve()};tx.onerror=()=>{db.close();reject(tx.error)}})}
@@ -857,7 +859,7 @@ function show(id){
   if(id==='teacher'){loadServerMaterials().then(renderTeacher);loadTeacherEarnings()}
   if(id==='admin'){adminRefreshAll()}
   if(id==='communication'){renderMyFeedback();renderAdminFeedback()}
-  if(id==='notifications')renderNotifications();
+  if(id==='notifications')renderNotifications(); else refreshNotificationBadge();
   if(id==='progress'||id==='parent')refreshProgress();
   if(id==='payments')renderPayments();
   if(id==='curriculum')loadCurriculumCatalogue();

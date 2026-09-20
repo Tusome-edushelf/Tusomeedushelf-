@@ -1,16 +1,15 @@
-# Tusome EduShelf v17 — Advanced Search & Filters
+# Tusome EduShelf v18 — Persistent Notifications
 
-Built on v16. Adds a richer learner material discovery experience while preserving the existing authentication, AI, payments, backups/recovery, bookmarks, progress, teacher and admin features.
+Adds a PostgreSQL-backed notification centre without changing B2C.
 
-## New
-- Search across title, subject, grade, topic, strand, competency, description and file name.
-- Subject, grade, topic and strand filters.
-- File-type filter.
-- Free-only / paid-only filter.
-- Saved-only and not-opened-yet filters.
-- Newest, title A–Z and price sorting.
-- Accessible labels on filter controls.
-- Reset clears every advanced filter.
+- Persistent per-user notifications
+- Unread count badge and polling
+- Mark one/all as read
+- Welcome notification after registration
+- Teacher notification when a material is submitted
+- Admin notification when a material awaits review
+- Teacher notification when an admin approves/rejects/returns a material
+- Existing local notification fallback retained for AI activity
+- Accessible live notification area
 
-## Notes
-Filtering is performed against approved materials already loaded by the application. No B2C payment changes were made.
+No B2C teacher payout changes.

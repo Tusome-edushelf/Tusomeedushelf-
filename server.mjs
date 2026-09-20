@@ -401,6 +401,20 @@ async function initDatabase() {
       PRIMARY KEY (school_id,user_email)
     );
     CREATE INDEX IF NOT EXISTS idx_school_memberships_user ON school_memberships(user_email,status);
+    CREATE TABLE IF NOT EXISTS school_classes (
+      class_id TEXT PRIMARY KEY, school_id TEXT NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
+      class_name TEXT NOT NULL, grade TEXT, stream TEXT, teacher_email TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_school_classes_school ON school_classes(school_id);
+    CREATE TABLE IF NOT EXISTS school_invites (
+      invite_id TEXT PRIMARY KEY, school_id TEXT NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
+      email TEXT NOT NULL, member_role TEXT NOT NULL CHECK (member_role IN ('teacher','learner')),
+      class_id TEXT REFERENCES school_classes(class_id) ON DELETE SET NULL, status TEXT NOT NULL DEFAULT 'invited' CHECK (status IN ('invited','joined','cancelled')),
+      invited_by TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_school_invites_email ON school_invites(email,status);
+    ALTER TABLE school_memberships ADD COLUMN IF NOT EXISTS class_id TEXT REFERENCES school_classes(class_id) ON DELETE SET NULL;
+    CREATE INDEX IF NOT EXISTS idx_school_memberships_class ON school_memberships(school_id,class_id,status);
 
     INSERT INTO subscription_plans(plan_key,name,audience,price_monthly,price_yearly,description,features)
     VALUES
@@ -1021,6 +1035,19 @@ function requireRole(...roles) {
     req.user = user;
     next();
   };
+}
+
+async function requireSchoolMembership(req,res,next){
+  const user=currentUser(req);
+  if(!user) return res.status(401).json({error:'Please log in to continue.'});
+  const schoolId=String(req.query.schoolId||req.body?.schoolId||'').trim();
+  if(!schoolId) return res.status(400).json({error:'School ID is required.'});
+  if(!databaseReady) return res.status(503).json({error:'School database is not ready.'});
+  try{
+    const r=await db.query(`SELECT sm.school_id AS "schoolId",sm.member_role AS "memberRole",sm.status,sc.school_name AS "schoolName",sc.status AS "schoolStatus" FROM school_memberships sm JOIN schools sc ON sc.school_id=sm.school_id WHERE sm.school_id=$1 AND sm.user_email=$2`,[schoolId,user.email]);
+    if(!r.rowCount || r.rows[0].status!=='active' || r.rows[0].schoolStatus!=='active') return res.status(403).json({error:'You do not have active access to this school.'});
+    req.user=user; req.school=r.rows[0]; next();
+  }catch(e){console.error(e);res.status(500).json({error:'Could not verify school access.'})}
 }
 
 function decodeDataUrl(dataUrl) {
@@ -1755,6 +1782,46 @@ app.patch('/api/admin/subscriptions/:id/status', requireRole('admin'), async (re
 app.patch('/api/admin/schools/:id/status', requireRole('admin'), async (req,res)=>{
   try{const status=['active','pending','suspended'].includes(req.body?.status)?req.body.status:'active';const r=await db.query(`UPDATE schools SET status=$1 WHERE school_id=$2 RETURNING school_id`,[status,String(req.params.id)]);if(!r.rowCount)return res.status(404).json({error:'School not found.'});res.json({ok:true})}
   catch(e){console.error(e);res.status(500).json({error:'Could not update school.'})}
+});
+
+// v38 School Management. School admins are represented by active school memberships with member_role='admin'.
+app.get('/api/schools/mine', requireAuth, async (req,res)=>{
+  if(!databaseReady) return res.json({ok:true,schools:[]});
+  try{const r=await db.query(`SELECT sc.school_id AS "schoolId",sc.school_name AS "schoolName",sc.status,sm.member_role AS "memberRole" FROM school_memberships sm JOIN schools sc ON sc.school_id=sm.school_id WHERE sm.user_email=$1 AND sm.status='active' ORDER BY sc.school_name`,[req.user.email]);res.json({ok:true,schools:r.rows})}catch(e){res.status(500).json({error:'Could not load school access.'})}
+});
+
+app.get('/api/schools/dashboard', requireSchoolMembership, async (req,res)=>{
+  try{
+    const [members,classes,materials,invites]=await Promise.all([
+      db.query(`SELECT user_email AS "email",member_role AS "memberRole",status,created_at AS "createdAt" FROM school_memberships WHERE school_id=$1 ORDER BY member_role,user_email`,[req.school.schoolId]),
+      db.query(`SELECT c.class_id AS "classId",c.class_name AS "className",c.grade,c.stream,c.teacher_email AS "teacherEmail",COUNT(sm.user_email)::int AS "learnerCount" FROM school_classes c LEFT JOIN school_memberships sm ON sm.school_id=c.school_id AND sm.class_id=c.class_id AND sm.member_role='learner' AND sm.status='active' GROUP BY c.class_id ORDER BY c.grade,c.class_name`,[req.school.schoolId]),
+      db.query(`SELECT m.id,m.title,m.subject,m.grade,m.approval_status AS "approvalStatus",m.teacher_email AS "teacherEmail",m.created_at AS "createdAt" FROM materials m WHERE m.approval_status='approved' ORDER BY m.created_at DESC LIMIT 40`),
+      db.query(`SELECT invite_id AS "inviteId",email,member_role AS "memberRole",class_id AS "classId",status,created_at AS "createdAt" FROM school_invites WHERE school_id=$1 ORDER BY created_at DESC LIMIT 100`,[req.school.schoolId])
+    ]);
+    res.json({ok:true,school:req.school,members:members.rows,classes:classes.rows,materials:materials.rows,invites:invites.rows,counts:{members:members.rowCount,teachers:members.rows.filter(x=>x.memberRole==='teacher').length,learners:members.rows.filter(x=>x.memberRole==='learner').length,classes:classes.rowCount}});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not load school dashboard.'})}
+});
+
+app.post('/api/schools/classes', requireAuth, async (req,res)=>{
+  const fake={query:{},body:req.body}; req.query={schoolId:req.body?.schoolId};
+  return requireSchoolMembership({...req,query:req.query},res,async()=>{
+    try{if(!['admin'].includes(req.school.memberRole) && req.user.role!=='admin')return res.status(403).json({error:'School admin access is required.'});const name=String(req.body?.className||'').trim().slice(0,100);if(!name)return res.status(400).json({error:'Class name is required.'});const id='CLS-'+Date.now().toString(36).toUpperCase()+'-'+Math.random().toString(36).slice(2,6).toUpperCase();const r=await db.query(`INSERT INTO school_classes(class_id,school_id,class_name,grade,stream,teacher_email) VALUES($1,$2,$3,$4,$5,$6) RETURNING class_id AS "classId"`,[id,req.school.schoolId,name,String(req.body?.grade||'').trim().slice(0,40),String(req.body?.stream||'').trim().slice(0,40),String(req.body?.teacherEmail||'').trim().toLowerCase().slice(0,160)||null]);res.status(201).json({ok:true,classId:r.rows[0].classId})}catch(e){console.error(e);res.status(500).json({error:'Could not create class.'})}
+  });
+});
+
+app.delete('/api/schools/classes/:id', requireAuth, async (req,res)=>{
+  req.query={schoolId:req.body?.schoolId||req.query.schoolId};
+  return requireSchoolMembership(req,res,async()=>{try{if(req.school.memberRole!=='admin'&&req.user.role!=='admin')return res.status(403).json({error:'School admin access is required.'});const r=await db.query(`DELETE FROM school_classes WHERE class_id=$1 AND school_id=$2 RETURNING class_id`,[req.params.id,req.school.schoolId]);if(!r.rowCount)return res.status(404).json({error:'Class not found.'});res.json({ok:true})}catch(e){res.status(500).json({error:'Could not remove class.'})}})
+});
+
+app.post('/api/schools/invites', requireAuth, async (req,res)=>{
+  req.query={schoolId:req.body?.schoolId};
+  return requireSchoolMembership(req,res,async()=>{try{if(req.school.memberRole!=='admin'&&req.user.role!=='admin')return res.status(403).json({error:'School admin access is required.'});const email=String(req.body?.email||'').trim().toLowerCase();const role=['teacher','learner'].includes(req.body?.memberRole)?req.body.memberRole:'';if(!email||!email.includes('@')||!role)return res.status(400).json({error:'Valid email and member role are required.'});const existing=await db.query(`SELECT 1 FROM school_memberships WHERE school_id=$1 AND user_email=$2`,[req.school.schoolId,email]);if(existing.rowCount)return res.status(409).json({error:'That user is already a school member.'});const invite='INV-'+Date.now().toString(36).toUpperCase()+'-'+Math.random().toString(36).slice(2,6).toUpperCase();await db.query(`INSERT INTO school_invites(invite_id,school_id,email,member_role,class_id,invited_by) VALUES($1,$2,$3,$4,$5,$6)`,[invite,req.school.schoolId,email,role,req.body?.classId||null,req.user.email]);const u=await db.query(`SELECT email FROM users WHERE email=$1`,[email]);if(u.rowCount) await db.query(`INSERT INTO school_memberships(school_id,user_email,member_role,status,class_id) VALUES($1,$2,$3,'active',$4) ON CONFLICT(school_id,user_email) DO UPDATE SET member_role=EXCLUDED.member_role,status='active',class_id=EXCLUDED.class_id`,[req.school.schoolId,email,role,req.body?.classId||null]);res.status(201).json({ok:true,inviteId:invite,joined:u.rowCount>0,message:u.rowCount?'User added to school. Invite recorded.':'Invite recorded; the account can join when created.'})}catch(e){console.error(e);res.status(500).json({error:'Could not create school invitation.'})}})
+});
+
+app.delete('/api/schools/members/:email', requireAuth, async (req,res)=>{
+  req.query={schoolId:req.body?.schoolId||req.query.schoolId};
+  return requireSchoolMembership(req,res,async()=>{try{if(req.school.memberRole!=='admin'&&req.user.role!=='admin')return res.status(403).json({error:'School admin access is required.'});const email=decodeURIComponent(req.params.email).toLowerCase();if(email===req.user.email)return res.status(400).json({error:'School admins cannot remove their own access here.'});const r=await db.query(`UPDATE school_memberships SET status='suspended' WHERE school_id=$1 AND user_email=$2 RETURNING user_email`,[req.school.schoolId,email]);if(!r.rowCount)return res.status(404).json({error:'Member not found.'});res.json({ok:true})}catch(e){res.status(500).json({error:'Could not suspend member.'})}})
 });
 
 app.use(express.static(__dirname));

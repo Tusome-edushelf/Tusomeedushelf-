@@ -1,16 +1,13 @@
-# Tusome EduShelf v34 — Learner Discussions
+# Tusome EduShelf v34.1 — Learner Discussions Dashboard Placement
 
-Adds a learner discussion centre with:
-- Text discussion posts filtered by grade and learning area.
-- Topic field for focused study conversations.
-- Teacher/learner role labels and basic moderation controls on the server.
-- Report/safety guidance reminding learners not to share private information.
-- Live voice study rooms using browser microphone permission.
-- Live video study rooms using browser camera + microphone permission.
-- Room-code based WebRTC signalling through the existing PostgreSQL database.
-- Leave-room controls and connection status feedback.
-- Existing v33 CBE quiz, answer upload/AI marking, notes, highlights, reader, dashboards, AI, payments and B2C preserved.
+This update keeps the Learner Discussions feature inside the learner experience only.
 
-Safety note: live rooms are intended for learning discussions. Learners should follow their school/teacher rules and should not share passwords, M-PESA PINs, home addresses, phone numbers or private images.
+## Change
+- Removed the Discussions button from the public/global Home navigation.
+- Kept Discussions as a quick-action card on the Learner Dashboard.
+- The Discussions page remains protected for learners.
+- Teacher/Admin users cannot access the learner Discussions page through the protected route.
+- Existing text, voice, and video discussion functionality is preserved.
 
-Deployment: upload the ZIP to Render and deploy. PostgreSQL is required for persistent text discussions and live-room signalling.
+## UX intent
+Learners can reach Discussions from their dashboard after signing in, while new visitors on the public Home screen do not see the Discussions option.

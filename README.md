@@ -1,12 +1,9 @@
-# Tusome EduShelf v24 — Feedback & Status UX
+# Tusome EduShelf v25 — Learner Dashboard Personalization
 
-This release builds on v23 and adds a consistent, accessible feedback layer:
-- non-blocking success/info/warning/error toast messages;
-- dismiss controls and automatic dismissal;
-- status/error announcements that can be exposed to assistive technology;
-- reduced-motion friendly toast animation;
-- friendlier Account/Profile and learner bookmark feedback.
+This release adds the personalized learner dashboard design shown in the approved Tusome EduShelf visual:
+- photo-based learner dashboard hero banner;
+- Continue Learning, Saved Materials, My Learning Goals, Recent Activity, Recommended and Search shortcuts;
+- responsive layout for desktop, tablet and mobile;
+- existing bookmarks, material search/filtering, AI assistant, progress, notifications, Help Centre, accessibility, payments and B2C configuration preserved.
 
-Existing Help Centre, AI, accessibility settings, notifications, analytics, materials, payments and B2C configuration are preserved.
-
-Accessibility work is aligned with WCAG 2.2 status-message guidance; important dynamic status changes should be programmatically determinable for assistive technologies.
+The generated hero image is `tusome-learner-personalized.png` and is used directly in the learner dashboard.

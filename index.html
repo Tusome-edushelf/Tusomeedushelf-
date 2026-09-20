@@ -54,6 +54,16 @@ body.a11y-reduced-motion *,body.a11y-reduced-motion *::before,body.a11y-reduced-
   .tusome-toast button{float:right;margin-left:10px;border:0;background:transparent;font-size:1rem;cursor:pointer}
   @keyframes tusomeToastIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
   @media (prefers-reduced-motion:reduce){.tusome-toast{animation:none}}
+
+/* v25 Learner Dashboard Personalization — photo-matched design */
+.learner-personalized-hero{margin:18px 0 20px;background:#eef6ff;border:1px solid #d9e6f5;border-radius:22px;overflow:hidden;box-shadow:0 8px 28px #173f8a14}
+.learner-personalized-hero img{display:block;width:100%;height:auto;max-height:620px;object-fit:cover}
+.learner-quick-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;margin:0 0 20px}
+.learner-quick-card{appearance:none;border:1px solid #dce5f0;background:#fff;border-radius:15px;padding:16px 12px;text-align:left;cursor:pointer;box-shadow:0 3px 12px #0000000a;transition:transform .15s ease,box-shadow .15s ease,border-color .15s ease;color:#18212f}
+.learner-quick-card:hover,.learner-quick-card:focus-visible{transform:translateY(-2px);box-shadow:0 7px 18px #173f8a18;border-color:#8db0e4;outline:none}
+.learner-quick-card span{display:block;font-size:25px;margin-bottom:9px}.learner-quick-card b{display:block;color:#173f8a;font-size:14px}.learner-quick-card small{display:block;color:#687386;margin-top:4px;line-height:1.35}
+@media(max-width:980px){.learner-quick-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:600px){.learner-personalized-hero{border-radius:16px}.learner-personalized-hero img{min-height:260px;object-fit:cover;object-position:center}.learner-quick-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.learner-quick-card{padding:13px 10px}.learner-quick-card span{font-size:22px}}
 </style>
 </style>
 </head>
@@ -155,8 +165,22 @@ body.a11y-reduced-motion *,body.a11y-reduced-motion *::before,body.a11y-reduced-
 </section>
 
 <section id="learner" class="page">
-  <div class="topline"><div><h2>🎓 Learner Dashboard</h2><p>Welcome to your learner space — notes, AI support and progress.</p></div>
+  <div class="topline"><div><h2>🎓 Learner Dashboard</h2><p>Welcome to your personalized learning space.</p></div>
   <button class="btn primary" onclick="logoutUser()">Logout</button></div>
+
+  <section class="learner-personalized-hero" aria-label="Personalized learner dashboard introduction">
+    <img src="tusome-learner-personalized.png" alt="Two learners studying together in a bright library with Tusome EduShelf learning shortcuts" loading="eager">
+  </section>
+
+  <div class="learner-quick-grid" aria-label="Learner quick actions">
+    <button class="learner-quick-card" type="button" onclick="document.getElementById('continueLearning').scrollIntoView({behavior:'smooth',block:'center'})"><span>📘</span><b>Continue Learning</b><small>Pick up where you stopped</small></button>
+    <button class="learner-quick-card" type="button" onclick="document.getElementById('bookmarkedMaterials').scrollIntoView({behavior:'smooth',block:'center'})"><span>🔖</span><b>Saved Materials</b><small>Open your bookmarks</small></button>
+    <button class="learner-quick-card" type="button" onclick="showLearningGoals()"><span>🎯</span><b>My Learning Goals</b><small>Set your study focus</small></button>
+    <button class="learner-quick-card" type="button" onclick="showRecentLearning()"><span>🕒</span><b>Recent Activity</b><small>See your latest learning</small></button>
+    <button class="learner-quick-card" type="button" onclick="showRecommendedMaterials()"><span>⭐</span><b>Recommended</b><small>Explore useful materials</small></button>
+    <button class="learner-quick-card" type="button" onclick="document.getElementById('search').focus();document.getElementById('search').scrollIntoView({behavior:'smooth',block:'center'})"><span>🔎</span><b>Search Materials</b><small>Find a topic quickly</small></button>
+  </div>
+
   <div class="cards">
     <div class="card"><h3>📘 Mathematics</h3><p>12 materials</p></div>
     <div class="card"><h3>🧬 Biology</h3><p>8 materials</p></div>
@@ -1127,6 +1151,23 @@ async function restoreServerSession(){
   updatePublicUi();
 }
 restoreServerSession();
+function showLearningGoals(){
+  const current=localStorage.getItem('tusomeLearningGoal')||'';
+  const goal=prompt('What is your main learning goal? Example: Improve Mathematics revision',current);
+  if(goal!==null){const clean=goal.trim().slice(0,180);if(clean){localStorage.setItem('tusomeLearningGoal',clean);showToast?.('Learning goal saved.','success');}else{localStorage.removeItem('tusomeLearningGoal');showToast?.('Learning goal cleared.','info');}}
+}
+function showRecentLearning(){
+  const logs=JSON.parse(localStorage.getItem('edushelfActivity')||'[]').slice(0,8);
+  const text=logs.length?logs.map((x,i)=>`${i+1}. ${x.action} — ${x.time}`).join('\n'):'No recent learning activity yet.';
+  alert('Recent Activity\n\n'+text);
+}
+function showRecommendedMaterials(){
+  const list=(materials||[]).filter(m=>(m.approvalStatus||'approved')==='approved').slice(0,6);
+  if(!list.length){alert('No recommended materials are available yet.');return;}
+  const text=list.map((m,i)=>`${i+1}. ${m.title||'Untitled'} — ${m.subject||'General'} / ${m.grade||'All grades'}`).join('\n');
+  alert('Recommended Materials\n\n'+text+'\n\nUse Search Materials below to find and open one.');
+  document.getElementById('search')?.scrollIntoView({behavior:'smooth',block:'center'});
+}
 configureAIAssistant(getSessionRole()||'learner');
 (async()=>{await loadServerMaterials();if(getSessionRole()==='learner'){await loadServerPurchases();await loadLearnerActivity()}populateMaterialFilters();populateMaterialFilters();renderMaterials();renderTeacher();renderAdmin();refreshProgress();checkAIStatus()})();
 </script>

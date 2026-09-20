@@ -362,6 +362,7 @@ footer{text-align:center;padding:30px;color:#687386}.ai-answer{line-height:1.7;b
     <div class="card"><h3>💰 Earnings</h3><p><b id="teacherBalance">KES 0.00</b> available</p><small id="teacherRevenueRate">Teacher share: 80%</small></div>
     <div class="card"><h3>🤖 AI Assistant</h3><p>Create lesson plans, assessments, notes and learning activities.</p><button class="btn primary" onclick="openAIAssistant('teacher')">Open AI Assistant</button></div>
   </div>
+  <div class="card" style="margin-top:22px"><h3>📊 Material Analytics</h3><div id="teacherAnalyticsPanel"><p>Loading analytics...</p></div></div>
   <div class="card" style="margin-top:22px"><h3>💰 Sales & Earnings</h3><div id="teacherEarningsPanel"><p>Loading earnings...</p></div></div>
   <div class="card" style="margin-top:22px"><h3>Your Recent Uploads</h3><div id="teacherMaterials"></div></div>
 </section>
@@ -704,6 +705,18 @@ async function restoreDeletedMaterial(id){
   try{const r=await fetch('/api/admin/materials/'+encodeURIComponent(id)+'/restore',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({confirmation:typed})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not recover material.');alert('Material recovered and returned to pending review.');loadAdminBackups();adminRefreshAll();renderMaterials();}catch(e){alert(e.message)}
 }
 
+async function loadTeacherAnalytics(){
+  try{
+    const r=await fetch('/api/teacher/analytics',{credentials:'include'}); const d=await r.json();
+    if(!r.ok)throw new Error(d.error||'Could not load analytics.');
+    const box=document.getElementById('teacherAnalyticsPanel'); if(!box)return;
+    const s=d.summary||{};
+    const rows=(d.activity||[]).map(x=>`<tr><td>${escHtml(x.title||'')}</td><td>${escHtml(x.subject||'')}</td><td>${escHtml(x.grade||'')}</td><td>${Number(x.views||0)}</td><td>${Number(x.uniqueLearners||0)}</td><td>${Number(x.bookmarks||0)}</td></tr>`).join('');
+    const sales=(d.sales||[]).map(x=>`<tr><td>${escHtml(x.title||'')}</td><td>${Number(x.purchases||0)}</td><td>KES ${Number(x.earnings||0).toFixed(2)}</td></tr>`).join('');
+    box.innerHTML=`<div class="cards" style="margin:0 0 16px"><div class="card"><h4>Materials</h4><b>${Number(s.materialCount||0)}</b></div><div class="card"><h4>Approved</h4><b>${Number(s.approvedCount||0)}</b></div><div class="card"><h4>Pending</h4><b>${Number(s.pendingCount||0)}</b></div><div class="card"><h4>Rejected</h4><b>${Number(s.rejectedCount||0)}</b></div></div><h4>Engagement by material</h4><div class="table-like"><table><thead><tr><th>Material</th><th>Subject</th><th>Grade</th><th>Views</th><th>Unique learners</th><th>Bookmarks</th></tr></thead><tbody>${rows||'<tr><td colspan="6">No material activity yet.</td></tr>'}</tbody></table></div><h4 style="margin-top:18px">Purchases & earnings</h4><div class="table-like"><table><thead><tr><th>Material</th><th>Purchases</th><th>Teacher earnings</th></tr></thead><tbody>${sales||'<tr><td colspan="3">No purchases yet.</td></tr>'}</tbody></table></div>`;
+  }catch(e){console.warn(e)}
+}
+
 async function loadTeacherEarnings(){
   try{
     const r=await fetch('/api/teacher/earnings',{credentials:'include'});
@@ -857,7 +870,7 @@ function show(id){
   }
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   const el=document.getElementById(id);if(el)el.classList.add('active');
-  if(id==='teacher'){loadServerMaterials().then(renderTeacher);loadTeacherEarnings()}
+  if(id==='teacher'){loadServerMaterials().then(renderTeacher);loadTeacherEarnings();loadTeacherAnalytics()}
   if(id==='admin'){adminRefreshAll()}
   if(id==='communication'){renderMyFeedback();renderAdminFeedback()}
   if(id==='notifications')renderNotifications(); else refreshNotificationBadge();

@@ -1323,6 +1323,43 @@ app.patch('/api/admin/teacher-payouts/:id/paid', requireRole('admin'), async (re
   catch(e){console.error(e);res.status(500).json({error:'Could not mark payout as paid.'})}
 });
 
+app.get('/api/teacher/analytics', requireRole('teacher'), async (req,res)=>{
+  try {
+    const summary = await db.query(`
+      SELECT
+        COUNT(*)::int AS "materialCount",
+        COUNT(*) FILTER (WHERE approval_status='approved')::int AS "approvedCount",
+        COUNT(*) FILTER (WHERE approval_status='pending')::int AS "pendingCount",
+        COUNT(*) FILTER (WHERE approval_status='rejected')::int AS "rejectedCount"
+      FROM materials WHERE teacher_email=$1`, [req.user.email]);
+    const activity = await db.query(`
+      SELECT m.id AS "materialId", m.title, m.subject, m.grade,
+             COALESCE(SUM(a.view_count),0)::int AS views,
+             COUNT(*) FILTER (WHERE a.bookmarked=true)::int AS bookmarks,
+             COUNT(DISTINCT a.learner_email)::int AS "uniqueLearners"
+      FROM materials m
+      LEFT JOIN learner_material_activity a ON a.material_id=m.id
+      WHERE m.teacher_email=$1
+      GROUP BY m.id, m.title, m.subject, m.grade
+      ORDER BY views DESC, m.created_at DESC`, [req.user.email]);
+    const sales = await db.query(`
+      SELECT m.id AS "materialId", m.title,
+             COUNT(t.transaction_id)::int AS purchases,
+             COALESCE(SUM(CASE WHEN t.status='paid' THEN COALESCE(t.teacher_amount,t.amount) ELSE 0 END),0) AS earnings
+      FROM materials m
+      LEFT JOIN transactions t ON t.material_id=m.id
+      WHERE m.teacher_email=$1
+      GROUP BY m.id, m.title
+      ORDER BY purchases DESC, earnings DESC`, [req.user.email]);
+    const bySubject = await db.query(`
+      SELECT COALESCE(NULLIF(TRIM(subject),''),'Unspecified') AS subject,
+             COUNT(*)::int AS materials,
+             COALESCE(SUM((SELECT COALESCE(SUM(a2.view_count),0) FROM learner_material_activity a2 WHERE a2.material_id=m.id)),0)::int AS views
+      FROM materials m WHERE teacher_email=$1 GROUP BY 1 ORDER BY views DESC, materials DESC`, [req.user.email]);
+    res.json({ok:true, summary:summary.rows[0]||{}, activity:activity.rows, sales:sales.rows, bySubject:bySubject.rows});
+  } catch(e) { console.error('Teacher analytics error:',e); res.status(500).json({error:'Could not load teacher analytics.'}); }
+});
+
 app.get('/api/teacher/earnings', requireRole('teacher'), async (req,res)=>{
   try{const settings=await getRevenueSettings();const sales=await db.query(`WITH settings AS (SELECT COALESCE(MAX(CASE WHEN setting_key='teacher_revenue_percentage' THEN setting_value::numeric END),80) AS teacher_pct FROM platform_settings) SELECT t.transaction_id AS "transactionId",t.title,t.amount,t.status,COALESCE(t.teacher_amount,ROUND(COALESCE(t.paid_amount,t.amount)*s.teacher_pct/100,2)) AS "teacherAmount",COALESCE(t.platform_amount,ROUND(COALESCE(t.paid_amount,t.amount)*(100-s.teacher_pct)/100,2)) AS "platformAmount",t.created_at AS "createdAt",m.teacher_email AS "teacherEmail" FROM transactions t CROSS JOIN settings s JOIN materials m ON m.id=t.material_id WHERE m.teacher_email=$1 ORDER BY t.created_at DESC`,[req.user.email]);const totals=await db.query(`WITH settings AS (SELECT COALESCE(MAX(CASE WHEN setting_key='teacher_revenue_percentage' THEN setting_value::numeric END),80) AS teacher_pct FROM platform_settings) SELECT COALESCE(SUM(COALESCE(t.teacher_amount,ROUND(COALESCE(t.paid_amount,t.amount)*s.teacher_pct/100,2))),0) AS earned FROM transactions t CROSS JOIN settings s JOIN materials m ON m.id=t.material_id WHERE m.teacher_email=$1 AND t.status='paid'`,[req.user.email]);const payouts=await db.query(`SELECT COALESCE(SUM(amount),0) AS paid FROM teacher_payouts WHERE teacher_email=$1 AND status='paid'`,[req.user.email]);res.json({ok:true,settings,sales:sales.rows,earned:Number(totals.rows[0]?.earned||0),paidOut:Number(payouts.rows[0]?.paid||0),balance:Math.max(0,Number(totals.rows[0]?.earned||0)-Number(payouts.rows[0]?.paid||0))})}catch(e){console.error(e);res.status(500).json({error:'Could not load teacher earnings.'})}
 });

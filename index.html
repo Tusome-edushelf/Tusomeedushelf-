@@ -25,6 +25,8 @@ label{font-weight:700;font-size:14px}.topline{display:flex;justify-content:space
 footer{text-align:center;padding:30px;color:#687386}.ai-answer{line-height:1.7;background:#fbfcff;border:1px solid #e1e6ef;border-radius:12px;padding:18px;overflow:auto;font-size:15px}.ai-answer h3{margin:18px 0 8px;font-size:18px}.ai-answer h4{margin:14px 0 6px}.ai-answer p{margin:8px 0}.ai-answer ul,.ai-answer ol{padding-left:24px}.ai-answer li{margin:5px 0}.ai-answer table{width:100%;border-collapse:collapse;margin:14px 0;background:#fff;font-size:14px}.ai-answer th,.ai-answer td{border:1px solid #d9e0ea;padding:9px;vertical-align:top;text-align:left}.ai-answer th{font-weight:800;background:#f0f4f9}.ai-answer .ai-note{padding:10px 12px;border-left:4px solid #4b6b9c;background:#f1f5fb;margin:12px 0}
 @media(max-width:600px){.hero h1{font-size:31px}.hero{padding:40px 25px}nav button{margin-left:5px}}
 .cards .card{min-width:0}.small{font-size:12px;color:#687386}.material>b{word-break:break-word}.success{background:#e8f8ee;color:#176b3a;padding:8px 12px;border-radius:8px}\n.progress-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}.progress-row{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:11px 0;border-bottom:1px solid #e8edf3}.progress-row:last-child{border-bottom:0}.progress-bar{height:8px;border-radius:99px;background:#e8edf3;overflow:hidden;margin-top:7px}.progress-fill{height:100%;background:#2563eb;border-radius:99px}.score-good{color:#15803d;font-weight:700}.score-mid{color:#b45309;font-weight:700}.score-low{color:#b91c1c;font-weight:700}@media(max-width:760px){.progress-grid{grid-template-columns:1fr}}.admin-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:18px 0}.admin-panel{margin-top:12px}.admin-action-row{display:flex;gap:7px;flex-wrap:wrap;align-items:center}.status-approved{color:#15803d;font-weight:700}.status-pending{color:#b45309;font-weight:700}.status-rejected,.status-suspended{color:#b91c1c;font-weight:700}.admin-stat{display:inline-block;padding:5px 9px;border-radius:999px;background:#eef2ff;margin-right:5px}.table-like{width:100%;overflow:auto}.table-like table{width:100%;border-collapse:collapse}.table-like th,.table-like td{padding:10px;border-bottom:1px solid #e8edf3;text-align:left;vertical-align:top}.price-input{width:110px!important;margin:0!important}
+/* v28 Admin Dashboard Command Centre */
+.admin-command{display:grid;grid-template-columns:1.35fr .65fr;gap:18px;margin-top:18px}.command-hero{background:linear-gradient(135deg,#173f8a,#1267d8);color:#fff;border-radius:18px;padding:24px;box-shadow:0 8px 25px #173f8a22}.command-hero h3{margin:0 0 7px;font-size:22px}.command-hero p{margin:0;opacity:.92;line-height:1.55}.command-kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.command-kpi{background:#fff;border:1px solid #e1e7f0;border-radius:14px;padding:16px}.command-kpi b{display:block;font-size:24px;color:#173f8a;margin-top:4px}.command-actions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:18px}.command-action{background:#fff;border:1px solid #e1e7f0;border-radius:13px;padding:15px;text-align:left;cursor:pointer;font-weight:800;color:#173f8a;box-shadow:0 2px 9px #00000008}.command-action span{display:block;font-size:23px;margin-bottom:6px}.command-action small{display:block;color:#687386;font-weight:500;line-height:1.4}.command-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:18px}.command-list{margin:0;padding:0;list-style:none}.command-list li{padding:11px 0;border-bottom:1px solid #e8edf3}.command-list li:last-child{border-bottom:0}.command-status{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:800}.command-dot{width:9px;height:9px;border-radius:50%;background:#16a34a}.command-dot.warn{background:#d97706}.command-dot.bad{background:#dc2626}@media(max-width:900px){.admin-command{grid-template-columns:1fr}.command-actions{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:600px){.command-grid{grid-template-columns:1fr}.command-actions{grid-template-columns:1fr}}
 .communication-launch{display:none}
 .communication-grid{display:grid;grid-template-columns:1fr 1.2fr;gap:18px;margin-top:18px}
 .communication-card{background:#fff;border-radius:16px;padding:20px;box-shadow:0 3px 14px #0000000d}
@@ -521,14 +523,28 @@ body.a11y-reduced-motion *,body.a11y-reduced-motion *::before,body.a11y-reduced-
 
 <section id="admin" class="page">
   <div class="topline"><div><h2>🛡️ Administrator Control Center</h2><p>Central control for approvals, users, AI-generated notes, pricing, reports, transactions and platform revenue.</p></div><button class="btn primary" onclick="adminRefreshAll()">Refresh</button></div>
-  <div class="cards">
-    <div class="card"><h3>📚 Learning Materials</h3><p><b id="adminCount">0</b> total • <b id="adminPendingMaterials">0</b> active</p></div>
-    <div class="card"><h3>💰 Material Prices</h3><p>Admin reviews and sets the selling price before publication.</p></div>
-    <div class="card"><h3>👨‍🏫 Teachers</h3><p>Teachers can join directly and upload materials without teacher access.</p></div>
-    <div class="card"><h3>🤖 AI Assistant</h3><p>Review AI-generated learning content and use the study assistant when needed.</p><button class="btn primary" onclick="openAIAssistant('admin')">Open AI Assistant</button></div>
+  <div class="admin-command">
+    <div class="command-hero"><h3>👋 Admin Command Centre</h3><p>One place to see what needs attention, jump to common tasks and monitor the platform. Use the detailed tabs below when you need deeper records.</p><div class="admin-action-row" style="margin-top:12px"><button class="btn light" onclick="adminTab('analytics')">Open Full Analytics</button><button class="btn light" onclick="openAIAssistant('admin')">Ask Admin AI</button></div></div>
+    <div class="command-kpis">
+      <div class="command-kpi">📚 Materials<b id="commandMaterials">0</b></div>
+      <div class="command-kpi">⏳ Pending Review<b id="commandPending">0</b></div>
+      <div class="command-kpi">👥 Users<b id="commandUsers">0</b></div>
+      <div class="command-kpi">💳 Paid Sales<b id="commandPaid">0</b></div>
+    </div>
+  </div>
+  <div class="command-actions" aria-label="Admin quick actions">
+    <button class="command-action" onclick="adminTab('approvals')"><span>📚</span>Review Materials<small>Approve, reject or set prices.</small></button>
+    <button class="command-action" onclick="adminTab('payments')"><span>💳</span>Payments<small>Review confirmed purchases.</small></button>
+    <button class="command-action" onclick="adminTab('revenue')"><span>💰</span>Revenue<small>Review teacher earnings and payouts.</small></button>
+    <button class="command-action" onclick="adminTab('backups')"><span>🛡️</span>Backups<small>Protect and recover platform data.</small></button>
+  </div>
+  <div class="command-grid">
+    <div class="card"><h3>⚠️ Needs Attention</h3><div id="commandAttention"><span class="small">Loading...</span></div></div>
+    <div class="card"><h3>🧭 Platform Shortcuts</h3><ul class="command-list"><li><button class="btn" onclick="show('communication')">💬 Communication Centre</button></li><li><button class="btn" onclick="adminTab('analytics')">📊 Platform Analytics</button></li><li><button class="btn" onclick="adminTab('backups')">🛡️ Backup & Recovery</button></li><li><button class="btn" onclick="openAIAssistant('admin')">🤖 Administrator AI</button></li></ul></div>
   </div>
   <div class="admin-tabs">
-    <button class="btn primary" onclick="adminTab('approvals')">Learning Materials</button>
+    <button class="btn primary" onclick="adminTab('command')">🏠 Command Centre</button>
+    <button class="btn" onclick="adminTab('approvals')">Learning Materials</button>
     <button class="btn" onclick="adminTab('payments')">💳 Purchases & Payments</button>
     <button class="btn" onclick="adminTab('revenue')">💰 Revenue & Teacher Payouts</button>
     <button class="btn" onclick="adminTab('backups')">🛡️ Backups & Recovery</button>
@@ -793,6 +809,7 @@ function replyToFeedback(id){const a=feedbackStore(),x=a.find(v=>v.id===id);if(!
 function openCommunicationCentre(){show('communication')}
 function adminTab(tab){
   document.querySelectorAll('.admin-panel').forEach(x=>x.style.display='none');
+  if(tab==='command'){adminRefreshAll();window.scrollTo({top:0,behavior:'smooth'});return;}
   const map={approvals:'adminApprovals',payments:'adminPayments',revenue:'adminRevenue',backups:'adminBackups',analytics:'adminAnalytics'};
   const el=document.getElementById(map[tab]||'adminApprovals');if(el)el.style.display='block';
   adminRefreshAll();
@@ -905,8 +922,19 @@ async function adminRefreshAll(){
   renderAdminFeedback();
   const pendingM=materials.filter(m=>(m.approvalStatus||'pending')!=='approved').length;
   const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v};
+  void (async()=>{try{const r=await fetch('/api/admin/analytics',{credentials:'include'});const d=await r.json();if(!r.ok)return;set('commandUsers',(Number(d.users?.learner||0)+Number(d.users?.teacher||0)+Number(d.users?.admin||0)));set('commandPaid',d.payments?.paid?.count||0);}catch(e){console.warn('Command centre summary unavailable',e)}})();
   set('adminCount',materials.length);
   set('adminPendingMaterials',pendingM);
+  set('commandMaterials',materials.length);
+  set('commandPending',pendingM);
+  const commandAttention=document.getElementById('commandAttention');
+  if(commandAttention){
+    const items=[];
+    if(pendingM) items.push(`<div class=\"command-status\"><span class=\"command-dot warn\"></span>${pendingM} material${pendingM===1?'':'s'} waiting for review.</div>`);
+    if(!pendingM) items.push(`<div class=\"command-status\"><span class=\"command-dot\"></span>No materials waiting for review.</div>`);
+    items.push(`<div class=\"small\" style=\"margin-top:8px\">Use Platform Analytics for payments, activity, storage and backup health.</div>`);
+    commandAttention.innerHTML=items.join('<br>');
+  }
   const ma=document.getElementById('materialApprovalList');
   if(ma)ma.innerHTML=materials.length?materials.map((m,i)=>{
     const status=m.approvalStatus||'pending';

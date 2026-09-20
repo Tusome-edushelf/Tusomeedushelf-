@@ -18,3 +18,10 @@ The planner is a self-management aid and does not make high-stakes academic deci
 - Added dashboard section visibility controls with local persistence.
 - Added responsive and keyboard-friendly quick-action cards.
 - Preserved existing AI, analytics, notifications, accessibility, materials, payments and B2C features.
+
+## v28 — Admin Dashboard Personalization & Command Centre
+- Added an admin Command Centre overview with key platform KPIs.
+- Added quick actions for materials, payments, revenue and backups.
+- Added a needs-attention summary and platform shortcuts.
+- Kept detailed analytics, approvals, backups, payments, revenue, AI and communication tools intact.
+- Added a Command Centre tab and consistent navigation.

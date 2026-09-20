@@ -655,11 +655,12 @@ function replyToFeedback(id){const a=feedbackStore(),x=a.find(v=>v.id===id);if(!
 function openCommunicationCentre(){show('communication')}
 function adminTab(tab){
   document.querySelectorAll('.admin-panel').forEach(x=>x.style.display='none');
-  const map={approvals:'adminApprovals',payments:'adminPayments',revenue:'adminRevenue',backups:'adminBackups'};
+  const map={approvals:'adminApprovals',payments:'adminPayments',revenue:'adminRevenue',backups:'adminBackups',analytics:'adminAnalytics'};
   const el=document.getElementById(map[tab]||'adminApprovals');if(el)el.style.display='block';
   adminRefreshAll();
   if(tab==='payments'||tab==='revenue')loadAdminPayments();
   if(tab==='backups')loadAdminBackups();
+  if(tab==='analytics')loadAdminAnalytics();
 }
 
 async function loadServerMaterials(){try{const r=await fetch('/api/materials',{credentials:'include'});if(!r.ok)return false;const d=await r.json();materials=Array.isArray(d.materials)?d.materials:[];return true}catch(e){console.warn('Could not load server materials',e);return false}}

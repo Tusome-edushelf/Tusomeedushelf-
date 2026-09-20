@@ -1,10 +1,9 @@
-# Tusome EduShelf v19 — Teacher Material Analytics
+# Tusome EduShelf v20.1 — Platform Analytics Fix
 
-Based on v18. Adds a teacher-only Material Analytics panel with:
-- material counts by approval status
-- views and unique learner engagement per material
-- bookmarks per material
-- purchase counts and teacher earnings per material
-- existing v18 notifications, search, bookmarks, backups/recovery, AI and payment features preserved
+Fixed the Admin **Platform Analytics** tab so it opens correctly and loads analytics when selected.
 
-No B2C payout functionality was changed.
+Changes:
+- Added `analytics: 'adminAnalytics'` to the admin tab map.
+- Added automatic `loadAdminAnalytics()` when Platform Analytics is opened.
+- Preserved v20 admin analytics, backups, notifications, AI, authentication, and payment features.
+- B2C teacher payouts remain untouched.

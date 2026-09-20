@@ -28,3 +28,12 @@ Added account settings for authenticated learners, teachers and admins: profile 
 - Added a keyboard-accessible Skip to main content link.
 - Added visible keyboard focus indicators and ARIA state for the settings panel.
 - Existing account, notifications, analytics, AI, materials, payments and B2C functionality is preserved.
+
+## v23 — Help Centre & Guided Onboarding
+- Added a public Help Centre accessible before login.
+- Added a simple 3-step getting-started guide.
+- Added separate Learner, Teacher and Administrator guides.
+- Added searchable FAQs for accounts, materials, uploads, AI, passwords and support.
+- Added keyboard-accessible FAQ controls with ARIA expanded state.
+- Added reminders not to enter passwords, M-PESA PINs or API keys into public AI.
+- Existing accessibility, account, notifications, analytics, AI, materials, payments and B2C functionality is preserved.

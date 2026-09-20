@@ -35,6 +35,10 @@ footer{text-align:center;padding:30px;color:#687386}.ai-answer{line-height:1.7;b
 .home-ai{margin-top:24px;background:linear-gradient(180deg,#ffffff,#f7faff);border:1px solid #dfe7f3;border-radius:18px;padding:24px;box-shadow:0 4px 18px #0000000b}.home-ai-head{display:flex;justify-content:space-between;align-items:center;gap:15px;flex-wrap:wrap}.home-ai-head h2{margin:0}.home-ai-sub{color:#687386;margin:6px 0 0}.home-ai-chips{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}.home-ai-chip{border:1px solid #cbd6e5;background:#fff;color:#173f8a;border-radius:999px;padding:8px 12px;cursor:pointer;font-weight:700}.home-ai-chat{background:#fff;border:1px solid #e1e6ef;border-radius:14px;padding:14px;min-height:70px;max-height:360px;overflow:auto;margin-bottom:12px}.home-ai-msg{padding:10px 12px;border-radius:12px;margin:8px 0;line-height:1.55;white-space:pre-wrap}.home-ai-msg.user{background:#eaf1ff;margin-left:12%;}.home-ai-msg.bot{background:#f3f6fa;margin-right:12%;}.home-ai-msg.bot table{width:100%;border-collapse:collapse;margin:8px 0}.home-ai-msg.bot th,.home-ai-msg.bot td{border:1px solid #d9e0ea;padding:7px;text-align:left;vertical-align:top}.home-ai-msg.bot th{background:#eef3f8}.home-ai-form{display:flex;gap:8px;align-items:flex-end}.home-ai-form textarea{margin:0;min-height:48px;resize:vertical}.home-ai-form button{flex:0 0 auto}.home-ai-note{font-size:12px;color:#687386;margin-top:10px}
 @media(max-width:600px){.home-ai-form{flex-direction:column}.home-ai-form button{width:100%}.home-ai-msg.user,.home-ai-msg.bot{margin-left:0;margin-right:0}}
 
+
+/* v23 Help Centre & Guided Onboarding */
+.help-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-top:18px}.help-card{background:#fff;border:1px solid #e1e7f0;border-radius:15px;padding:20px;box-shadow:0 3px 14px #0000000a}.help-card h3{margin-top:0;color:#173f8a}.help-steps{counter-reset:helpstep}.help-step{display:flex;gap:14px;padding:14px 0;border-bottom:1px solid #e8edf3}.help-step:last-child{border-bottom:0}.help-step-num{flex:0 0 34px;height:34px;border-radius:50%;background:#173f8a;color:#fff;display:grid;place-items:center;font-weight:800}.help-faq{border:1px solid #e1e7f0;border-radius:12px;margin:10px 0;background:#fff;overflow:hidden}.help-faq button{width:100%;border:0;background:#fff;text-align:left;padding:15px;font-weight:800;color:#173f8a;cursor:pointer}.help-faq-answer{display:none;padding:0 15px 15px;color:#4b5b70;line-height:1.6}.help-faq.open .help-faq-answer{display:block}.help-search{margin:12px 0 18px}.help-role{min-height:150px}.help-role .btn{margin-top:8px}@media(max-width:820px){.help-grid{grid-template-columns:1fr 1fr}}@media(max-width:600px){.help-grid{grid-template-columns:1fr}}
+
 /* v22 accessibility and usability */
 .skip-link{position:fixed;left:12px;top:-60px;background:#fff;color:#173f8a;padding:10px 14px;border-radius:8px;z-index:1000;font-weight:800;box-shadow:0 3px 12px #0003}.skip-link:focus{top:12px}
 .a11y-toggle{border:1px solid #ffffff88!important;border-radius:8px;padding:8px 10px!important}.a11y-panel{position:fixed;right:16px;top:74px;width:min(340px,calc(100vw - 32px));background:#fff;color:#18212f;border:1px solid #d7dfeb;border-radius:14px;padding:16px;box-shadow:0 10px 35px #0003;z-index:20;display:none}.a11y-panel.open{display:block}.a11y-panel h3{margin:0 0 8px}.a11y-panel .a11y-row{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}.a11y-panel button{border:1px solid #ccd5e2;background:#fff;color:#173f8a;border-radius:8px;padding:8px 11px;cursor:pointer;font-weight:700}.a11y-panel button.active{background:#173f8a;color:#fff}.a11y-panel .a11y-close{float:right}
@@ -50,7 +54,7 @@ body.a11y-reduced-motion *,body.a11y-reduced-motion *::before,body.a11y-reduced-
   <div class="logo">Tusome <span>EduShelf</span></div>
   <nav>
     <button onclick="show('home')">Home</button>
-    <button id="notificationNav" class="nav-auth nav-notify" onclick="show('notifications')" aria-label="Notifications">🔔 <span id="notificationNavCount" class="notify-count" aria-live="polite">0</span></button><button class="nav-auth" onclick="show('account')">👤 Account</button><button class="nav-auth a11y-toggle" onclick="toggleAccessibilityPanel()" aria-expanded="false" aria-controls="accessibilityPanel">⚙️ Accessibility</button>
+    <button class="nav-auth" onclick="show('help')">❓ Help</button><button id="notificationNav" class="nav-auth nav-notify" onclick="show('notifications')" aria-label="Notifications">🔔 <span id="notificationNavCount" class="notify-count" aria-live="polite">0</span></button><button class="nav-auth" onclick="show('account')">👤 Account</button><button class="nav-auth a11y-toggle" onclick="toggleAccessibilityPanel()" aria-expanded="false" aria-controls="accessibilityPanel">⚙️ Accessibility</button>
     <button class="nav-auth" onclick="show('login')">Sign In</button>
     <button class="nav-auth nav-signup" onclick="show('signup')">Sign Up</button>
   </nav>
@@ -383,6 +387,35 @@ body.a11y-reduced-motion *,body.a11y-reduced-motion *::before,body.a11y-reduced-
   <div class="card" style="margin-top:22px"><h3>Your Recent Uploads</h3><div id="teacherMaterials"></div></div>
 </section>
 
+
+
+<section id="help" class="page">
+  <div class="topline"><div><h2>❓ Tusome EduShelf Help Centre</h2><p>Simple guides for new and existing users. You can use this page without logging in.</p></div><button class="btn primary" onclick="show('home')">Back Home</button></div>
+  <div class="notice"><b>New here?</b> Start with the three steps below, then choose your role for a more specific guide. For account-specific actions, use Sign In first.</div>
+  <div class="card"><h3>🚀 Start in 3 steps</h3><div class="help-steps">
+    <div class="help-step"><span class="help-step-num">1</span><div><b>Create an account or sign in</b><p class="small">Learners and teachers can create accounts. Administrator accounts are created by the platform administrator.</p></div></div>
+    <div class="help-step"><span class="help-step-num">2</span><div><b>Open your dashboard</b><p class="small">Your dashboard shows the tools and materials available for your role.</p></div></div>
+    <div class="help-step"><span class="help-step-num">3</span><div><b>Learn, create or manage</b><p class="small">Learners study materials, teachers create and share resources, and administrators review and manage the platform.</p></div></div>
+  </div></div>
+  <h3 style="margin-top:26px">Choose your guide</h3>
+  <div class="help-grid">
+    <div class="help-card help-role"><h3>🎓 Learner</h3><p>Find materials, save resources, continue learning, use the AI study assistant and check progress.</p><button class="btn" onclick="show('login');document.querySelector('#login select').value='learner'">Learner Sign In</button></div>
+    <div class="help-card help-role"><h3>👩🏽‍🏫 Teacher</h3><p>Upload learning materials, use AI for lesson plans and assessments, and view material activity and earnings.</p><button class="btn" onclick="show('login');document.querySelector('#login select').value='teacher'">Teacher Sign In</button></div>
+    <div class="help-card help-role"><h3>🛡️ Administrator</h3><p>Review materials, manage platform activity, view analytics, handle notifications and manage settings.</p><button class="btn" onclick="show('login');document.querySelector('#login select').value='admin'">Admin Sign In</button></div>
+  </div>
+  <div class="card" style="margin-top:22px"><h3>🔎 Frequently Asked Questions</h3><input id="helpSearch" class="help-search" type="search" placeholder="Search help, e.g. upload, AI, materials, password..." aria-label="Search help questions" oninput="filterHelp()">
+    <div id="helpFaqs">
+      <div class="help-faq" data-help="account sign up register login"><button type="button" aria-expanded="false" onclick="toggleHelpFaq(this)">How do I create an account?</button><div class="help-faq-answer">Select <b>Sign Up</b>, choose Learner or Teacher, enter your email and create a password of at least 8 characters. Administrator accounts are created by the platform administrator.</div></div>
+      <div class="help-faq" data-help="learner materials search save bookmark buy open download"><button type="button" aria-expanded="false" onclick="toggleHelpFaq(this)">How does a learner use materials?</button><div class="help-faq-answer">Sign in as a learner, search or filter approved materials, open a material to study it, and use the available save, purchase or download options. Availability depends on the material.</div></div>
+      <div class="help-faq" data-help="teacher upload material submit ai lesson scheme assessment rubric"><button type="button" aria-expanded="false" onclick="toggleHelpFaq(this)">How does a teacher upload a material?</button><div class="help-faq-answer">Sign in as a teacher, open the upload area, complete the material details, select the file and submit it for administrator review. The teacher AI can also help with lesson plans, schemes of work, assessments, rubrics and material quality checks.</div></div>
+      <div class="help-faq" data-help="ai assistant gemini question study teacher admin parent"><button type="button" aria-expanded="false" onclick="toggleHelpFaq(this)">What can the AI assistant do?</button><div class="help-faq-answer">The AI assistant provides role-specific support. Learners can ask for explanations and practice; teachers can generate planning and assessment support; administrators can summarize and review platform information; parent/guardian tools focus on progress and study support.</div></div>
+      <div class="help-faq" data-help="password change account settings profile notification"><button type="button" aria-expanded="false" onclick="toggleHelpFaq(this)">How do I change my password?</button><div class="help-faq-answer">Sign in, open <b>Account</b>, enter your current password and a new password, then select <b>Change Password</b>. Never share your password or payment PIN.</div></div>
+      <div class="help-faq" data-help="problem error support communication complaint suggestion feedback"><button type="button" aria-expanded="false" onclick="toggleHelpFaq(this)">What if I have a problem?</button><div class="help-faq-answer">Sign in and open the <b>Communication Centre</b> to send a complaint, suggestion, question or feedback to the EduShelf team. You can also ask the public Home AI about general platform use.</div></div>
+    </div>
+    <p id="helpNoResults" class="small" style="display:none">No matching help topic found. Try another search term.</p>
+  </div>
+  <div class="notice" style="margin-top:18px"><b>Safety reminder:</b> Never enter passwords, M-PESA PINs, API keys or other private credentials into the public AI assistant.</div>
+</section>
 
 <section id="communication" class="page">
   <div class="topline"><div><h2>💬 Communication Centre</h2><p>Share complaints, suggestions, questions and feedback with the EduShelf team.</p></div></div>
@@ -914,6 +947,10 @@ async function askHomeAI(e){
     pending.innerHTML='<b>Tusome EduShelf AI:</b> Sorry, I could not respond right now. '+escapeHomeAIText(err.message);
   }finally{button.disabled=false;button.textContent='✨ Ask';}
 }
+
+
+function toggleHelpFaq(button){const item=button.closest('.help-faq');if(!item)return;const open=!item.classList.contains('open');item.classList.toggle('open',open);button.setAttribute('aria-expanded',String(open))}
+function filterHelp(){const q=(document.getElementById('helpSearch')?.value||'').trim().toLowerCase();const items=[...document.querySelectorAll('#helpFaqs .help-faq')];let visible=0;items.forEach(item=>{const match=!q||item.dataset.help.includes(q)||item.textContent.toLowerCase().includes(q);item.style.display=match?'block':'none';if(match)visible++});const no=document.getElementById('helpNoResults');if(no)no.style.display=visible?'none':'block'}
 
 function show(id){
   const protectedRoles={learner:'learner',teacher:'teacher',admin:'admin',communication:'user',account:'user'};

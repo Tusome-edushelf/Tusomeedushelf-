@@ -25,3 +25,6 @@ The planner is a self-management aid and does not make high-stakes academic deci
 - Added a needs-attention summary and platform shortcuts.
 - Kept detailed analytics, approvals, backups, payments, revenue, AI and communication tools intact.
 - Added a Command Centre tab and consistent navigation.
+
+
+v29 adds a Teacher Material Management Centre with searchable/filterable material status tracking, quick open/revise actions, and local draft saving.

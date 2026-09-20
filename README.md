@@ -1,30 +1,17 @@
-# Tusome EduShelf v26 — Learner Study Planner & Goal Tracking
+# Tusome EduShelf v30 — Learner Material Reader
 
-This release builds on v25 and adds a practical learner study-planning layer:
-- weekly study planner with editable tasks;
-- task completion tracking and completion percentage;
-- local-device persistence for the study plan;
-- learner-set goal and goal progress slider;
-- clear/reset controls and friendly feedback;
-- mobile-responsive planner cards;
-- existing v25 personalized dashboard visual and shortcuts preserved;
-- existing AI, bookmarks, progress, notifications, Help Centre, accessibility, payments and B2C configuration preserved.
+v30 adds a focused reading/study interface for approved learner materials.
 
-The planner is a self-management aid and does not make high-stakes academic decisions.
+## Added
+- Dedicated Learner Material Reader page
+- Embedded document viewing using the existing `/api/materials/:id/file` endpoint
+- Clear material title, subject, grade and topic metadata
+- Save/bookmark control inside the reader
+- Download control as a fallback when the browser cannot display the file
+- Loading and display-failure states
+- Back-to-materials navigation
+- Learner-only access protection
+- Responsive layout for desktop and mobile
 
-## v27 — Teacher Dashboard Personalization
-- Added a personalized teacher workspace with quick actions for upload, AI, analytics, earnings, materials, and teaching goals.
-- Added a teacher focus goal saved on the device.
-- Added dashboard section visibility controls with local persistence.
-- Added responsive and keyboard-friendly quick-action cards.
-- Preserved existing AI, analytics, notifications, accessibility, materials, payments and B2C features.
-
-## v28 — Admin Dashboard Personalization & Command Centre
-- Added an admin Command Centre overview with key platform KPIs.
-- Added quick actions for materials, payments, revenue and backups.
-- Added a needs-attention summary and platform shortcuts.
-- Kept detailed analytics, approvals, backups, payments, revenue, AI and communication tools intact.
-- Added a Command Centre tab and consistent navigation.
-
-
-v29 adds a Teacher Material Management Centre with searchable/filterable material status tracking, quick open/revise actions, and local draft saving.
+## Preserved
+Existing AI, learner personalization, study planner, teacher material management, admin command centre, notifications, accessibility, payments and B2C functionality are preserved from v29.

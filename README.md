@@ -1,9 +1,13 @@
-# Tusome EduShelf v25 — Learner Dashboard Personalization
+# Tusome EduShelf v26 — Learner Study Planner & Goal Tracking
 
-This release adds the personalized learner dashboard design shown in the approved Tusome EduShelf visual:
-- photo-based learner dashboard hero banner;
-- Continue Learning, Saved Materials, My Learning Goals, Recent Activity, Recommended and Search shortcuts;
-- responsive layout for desktop, tablet and mobile;
-- existing bookmarks, material search/filtering, AI assistant, progress, notifications, Help Centre, accessibility, payments and B2C configuration preserved.
+This release builds on v25 and adds a practical learner study-planning layer:
+- weekly study planner with editable tasks;
+- task completion tracking and completion percentage;
+- local-device persistence for the study plan;
+- learner-set goal and goal progress slider;
+- clear/reset controls and friendly feedback;
+- mobile-responsive planner cards;
+- existing v25 personalized dashboard visual and shortcuts preserved;
+- existing AI, bookmarks, progress, notifications, Help Centre, accessibility, payments and B2C configuration preserved.
 
-The generated hero image is `tusome-learner-personalized.png` and is used directly in the learner dashboard.
+The planner is a self-management aid and does not make high-stakes academic decisions.

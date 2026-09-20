@@ -56,6 +56,8 @@ body.a11y-reduced-motion *,body.a11y-reduced-motion *::before,body.a11y-reduced-
   @media (prefers-reduced-motion:reduce){.tusome-toast{animation:none}}
 
 /* v25 Learner Dashboard Personalization — photo-matched design */
+
+.study-planner{display:grid;grid-template-columns:1.15fr .85fr;gap:18px;margin:18px 0}.study-planner-card{background:#fff;border:1px solid #dce5f0;border-radius:18px;padding:20px;box-shadow:0 4px 16px #173f8a10}.study-planner-card h3{margin-top:0;color:#173f8a}.study-plan-table{width:100%;border-collapse:collapse}.study-plan-table th,.study-plan-table td{padding:10px 8px;border-bottom:1px solid #e8edf3;text-align:left;vertical-align:top}.study-plan-table th{font-size:12px;color:#687386;text-transform:uppercase}.study-plan-table input,.study-plan-table select{margin:0!important;width:100%;padding:8px;border:1px solid #ccd6e3;border-radius:8px}.goal-progress{height:10px;border-radius:99px;background:#e8edf3;overflow:hidden;margin:10px 0}.goal-progress>div{height:100%;background:#2563eb;border-radius:99px;transition:width .2s ease}.planner-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.planner-note{background:#f5f9ff;border-left:4px solid #2563eb;padding:10px 12px;border-radius:8px;margin-top:12px}.planner-stat{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:12px 0}.planner-stat div{background:#f6f8fb;border-radius:12px;padding:12px;text-align:center}.planner-stat b{display:block;font-size:20px;color:#173f8a}.study-check{display:flex;gap:8px;align-items:flex-start}.study-check input{width:auto!important;margin-top:4px!important}@media(max-width:760px){.study-planner{grid-template-columns:1fr}.planner-stat{grid-template-columns:1fr 1fr}.study-plan-table{font-size:13px}}
 .learner-personalized-hero{margin:18px 0 20px;background:#eef6ff;border:1px solid #d9e6f5;border-radius:22px;overflow:hidden;box-shadow:0 8px 28px #173f8a14}
 .learner-personalized-hero img{display:block;width:100%;height:auto;max-height:620px;object-fit:cover}
 .learner-quick-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;margin:0 0 20px}
@@ -181,6 +183,29 @@ body.a11y-reduced-motion *,body.a11y-reduced-motion *::before,body.a11y-reduced-
     <button class="learner-quick-card" type="button" onclick="document.getElementById('search').focus();document.getElementById('search').scrollIntoView({behavior:'smooth',block:'center'})"><span>🔎</span><b>Search Materials</b><small>Find a topic quickly</small></button>
   </div>
 
+
+  <section class="study-planner" aria-label="Learner study planner">
+    <div class="study-planner-card">
+      <h3>📅 My Study Planner</h3>
+      <p class="small">Plan a few focused study tasks for the week. Your plan is saved on this device.</p>
+      <div class="planner-stat"><div><b id="plannerDone">0</b><small>Tasks done</small></div><div><b id="plannerTotal">0</b><small>Tasks planned</small></div><div><b id="plannerPercent">0%</b><small>Complete</small></div></div>
+      <div class="study-planner-card" style="padding:12px;margin:0;background:#f8fbff;box-shadow:none">
+        <table class="study-plan-table" aria-label="Weekly study plan"><thead><tr><th>Day</th><th>Subject / task</th><th>Done</th></tr></thead><tbody id="studyPlanRows"></tbody></table>
+      </div>
+      <div class="planner-actions"><button class="btn primary" type="button" onclick="addStudyTask()">＋ Add task</button><button class="btn" type="button" onclick="saveStudyPlan()">💾 Save plan</button><button class="btn" type="button" onclick="clearStudyPlan()">↺ Clear</button></div>
+      <div class="planner-note"><b>Study tip:</b> Choose a small, clear task and check it off when finished. Your plan is a study aid, not a grade.</div>
+    </div>
+    <div class="study-planner-card">
+      <h3>🎯 Goal Progress</h3>
+      <p id="plannerGoalText">No learning goal set yet.</p>
+      <label for="plannerGoalPercent"><b>Goal progress</b></label>
+      <input id="plannerGoalPercent" type="range" min="0" max="100" value="0" aria-label="Learning goal progress" oninput="updateGoalProgress(this.value)">
+      <div class="goal-progress" aria-hidden="true"><div id="plannerGoalBar" style="width:0%"></div></div>
+      <p><b id="plannerGoalValue">0%</b> complete</p>
+      <div class="planner-actions"><button class="btn primary" type="button" onclick="setPlannerGoal()">🎯 Set goal</button><button class="btn" type="button" onclick="resetPlannerGoal()">Reset progress</button></div>
+      <p class="small" style="margin-top:16px">Use this to track your own study target. It does not replace teacher assessment.</p>
+    </div>
+  </section>
   <div class="cards">
     <div class="card"><h3>📘 Mathematics</h3><p>12 materials</p></div>
     <div class="card"><h3>🧬 Biology</h3><p>8 materials</p></div>
@@ -1168,6 +1193,26 @@ function showRecommendedMaterials(){
   alert('Recommended Materials\n\n'+text+'\n\nUse Search Materials below to find and open one.');
   document.getElementById('search')?.scrollIntoView({behavior:'smooth',block:'center'});
 }
+
+function defaultStudyPlan(){return [
+  {day:'Monday',task:'Review one topic',done:false},
+  {day:'Tuesday',task:'Practise 5 questions',done:false},
+  {day:'Wednesday',task:'Read a learning material',done:false},
+  {day:'Thursday',task:'Review corrections',done:false},
+  {day:'Friday',task:'Do a short self-check',done:false}
+]}
+function getStudyPlan(){try{const x=JSON.parse(localStorage.getItem('tusomeStudyPlan')||'null');return Array.isArray(x)&&x.length?x:defaultStudyPlan()}catch{return defaultStudyPlan()}}
+function renderStudyPlan(){const rows=document.getElementById('studyPlanRows');if(!rows)return;const plan=getStudyPlan();rows.innerHTML=plan.map((x,i)=>`<tr><td>${escHtml(x.day||'Day')}</td><td><input aria-label="Task for ${escHtml(x.day||'day')}" value="${escHtml(x.task||'')}" oninput="updateStudyTask(${i},this.value)"></td><td><label class="study-check"><input type="checkbox" ${x.done?'checked':''} onchange="toggleStudyTask(${i},this.checked)"><span>${x.done?'Done':'Not done'}</span></label></td></tr>`).join('');const done=plan.filter(x=>x.done).length,total=plan.length,pct=total?Math.round(done/total*100):0;['plannerDone','plannerTotal','plannerPercent'].forEach((id,i)=>{const e=document.getElementById(id);if(e)e.textContent=i===0?done:i===1?total:pct+'%'});}
+function saveStudyPlan(){localStorage.setItem('tusomeStudyPlan',JSON.stringify(getStudyPlan()));renderStudyPlan();showToast?.('Study plan saved.','success')}
+function updateStudyTask(i,value){const p=getStudyPlan();if(p[i]){p[i].task=value.slice(0,140);localStorage.setItem('tusomeStudyPlan',JSON.stringify(p));}}
+function toggleStudyTask(i,done){const p=getStudyPlan();if(p[i]){p[i].done=!!done;localStorage.setItem('tusomeStudyPlan',JSON.stringify(p));renderStudyPlan();}}
+function addStudyTask(){const p=getStudyPlan();const days=['Saturday','Sunday','Monday','Tuesday','Wednesday','Thursday','Friday'];p.push({day:days[p.length%days.length],task:'New study task',done:false});localStorage.setItem('tusomeStudyPlan',JSON.stringify(p));renderStudyPlan();}
+function clearStudyPlan(){if(!confirm('Clear your study plan on this device?'))return;localStorage.removeItem('tusomeStudyPlan');renderStudyPlan();showToast?.('Study plan cleared.','info')}
+function updateGoalProgress(value){const n=Math.max(0,Math.min(100,Number(value)||0));localStorage.setItem('tusomeGoalProgress',String(n));const bar=document.getElementById('plannerGoalBar'),label=document.getElementById('plannerGoalValue');if(bar)bar.style.width=n+'%';if(label)label.textContent=n+'%';}
+function setPlannerGoal(){const current=localStorage.getItem('tusomeLearningGoal')||'';const goal=prompt('What is your main learning goal?',current);if(goal===null)return;const clean=goal.trim().slice(0,180);if(clean){localStorage.setItem('tusomeLearningGoal',clean);const t=document.getElementById('plannerGoalText');if(t)t.textContent=clean;showToast?.('Learning goal saved.','success')}else{localStorage.removeItem('tusomeLearningGoal');const t=document.getElementById('plannerGoalText');if(t)t.textContent='No learning goal set yet.';showToast?.('Learning goal cleared.','info')}}
+function resetPlannerGoal(){updateGoalProgress(0);showToast?.('Goal progress reset.','info')}
+function initStudyPlanner(){const goal=localStorage.getItem('tusomeLearningGoal');const pct=localStorage.getItem('tusomeGoalProgress')||'0';const t=document.getElementById('plannerGoalText');if(t)t.textContent=goal||'No learning goal set yet.';const slider=document.getElementById('plannerGoalPercent');if(slider)slider.value=pct;updateGoalProgress(pct);renderStudyPlan();}
+initStudyPlanner();
 configureAIAssistant(getSessionRole()||'learner');
 (async()=>{await loadServerMaterials();if(getSessionRole()==='learner'){await loadServerPurchases();await loadLearnerActivity()}populateMaterialFilters();populateMaterialFilters();renderMaterials();renderTeacher();renderAdmin();refreshProgress();checkAIStatus()})();
 </script>

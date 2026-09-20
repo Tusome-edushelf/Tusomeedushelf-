@@ -15,3 +15,11 @@ v30 adds a focused reading/study interface for approved learner materials.
 
 ## Preserved
 Existing AI, learner personalization, study planner, teacher material management, admin command centre, notifications, accessibility, payments and B2C functionality are preserved from v29.
+
+
+## v31 — Learner Notes & Highlights
+- Added notes and key highlights to the learner material reader.
+- Notes/highlights are stored per material in localStorage on the learner's device.
+- Added delete and clear controls with accessible status feedback.
+- Existing reader, bookmarks, downloads, AI and platform workflows preserved.
+- Note: the legacy app.js contains pre-existing duplicate declarations and is not loaded by the main index page; the active inline frontend and server pass syntax checks.

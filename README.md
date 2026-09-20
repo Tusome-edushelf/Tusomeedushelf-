@@ -11,3 +11,10 @@ This release builds on v25 and adds a practical learner study-planning layer:
 - existing AI, bookmarks, progress, notifications, Help Centre, accessibility, payments and B2C configuration preserved.
 
 The planner is a self-management aid and does not make high-stakes academic decisions.
+
+## v27 — Teacher Dashboard Personalization
+- Added a personalized teacher workspace with quick actions for upload, AI, analytics, earnings, materials, and teaching goals.
+- Added a teacher focus goal saved on the device.
+- Added dashboard section visibility controls with local persistence.
+- Added responsive and keyboard-friendly quick-action cards.
+- Preserved existing AI, analytics, notifications, accessibility, materials, payments and B2C features.

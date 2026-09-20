@@ -338,6 +338,60 @@ async function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications(recipient_email, read_at);
     CREATE INDEX IF NOT EXISTS idx_learner_activity_email ON learner_material_activity(learner_email);
 
+
+    CREATE TABLE IF NOT EXISTS subscription_plans (
+      plan_key TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      audience TEXT NOT NULL CHECK (audience IN ('learner','teacher','school')),
+      price_monthly NUMERIC(12,2) NOT NULL DEFAULT 0,
+      price_yearly NUMERIC(12,2) NOT NULL DEFAULT 0,
+      description TEXT,
+      features JSONB NOT NULL DEFAULT '[]'::jsonb,
+      active BOOLEAN NOT NULL DEFAULT TRUE,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS subscriptions (
+      subscription_id TEXT PRIMARY KEY,
+      user_email TEXT,
+      school_id TEXT,
+      plan_key TEXT NOT NULL REFERENCES subscription_plans(plan_key),
+      status TEXT NOT NULL DEFAULT 'requested' CHECK (status IN ('requested','active','expired','cancelled','rejected')),
+      billing_cycle TEXT NOT NULL DEFAULT 'monthly' CHECK (billing_cycle IN ('monthly','yearly')),
+      amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+      starts_at TIMESTAMPTZ,
+      ends_at TIMESTAMPTZ,
+      requested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_subscriptions_user ON subscriptions(user_email, status);
+    CREATE INDEX IF NOT EXISTS idx_subscriptions_school ON subscriptions(school_id, status);
+    CREATE TABLE IF NOT EXISTS schools (
+      school_id TEXT PRIMARY KEY,
+      school_name TEXT NOT NULL,
+      contact_email TEXT,
+      contact_phone TEXT,
+      status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','active','suspended')),
+      created_by TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS school_memberships (
+      school_id TEXT NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
+      user_email TEXT NOT NULL,
+      member_role TEXT NOT NULL CHECK (member_role IN ('teacher','learner','admin')),
+      status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','invited','suspended')),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (school_id,user_email)
+    );
+    CREATE INDEX IF NOT EXISTS idx_school_memberships_user ON school_memberships(user_email,status);
+
+    INSERT INTO subscription_plans(plan_key,name,audience,price_monthly,price_yearly,description,features)
+    VALUES
+      ('learner_plus','Learner Plus','learner',299,2990,'More AI practice and study tools.', '["Expanded AI study support","More practice tools","Study planner","Premium learning resources"]'::jsonb),
+      ('teacher_plus','Teacher Plus','teacher',599,5990,'Advanced AI tools for teachers.', '["Lesson-plan generation","Scheme-of-work support","Assessment and rubric tools","Material quality checking","Teacher analytics"]'::jsonb),
+      ('school_starter','School Starter','school',4999,49990,'A starter workspace for schools.', '["School dashboard","Teacher and learner management","Learning resource library","Basic school analytics"]'::jsonb),
+      ('school_growth','School Growth','school',9999,99990,'Expanded school operations and analytics.', '["Everything in Starter","Advanced analytics","AI teacher tools","School-wide learning insights","Priority support"]'::jsonb)
+    ON CONFLICT (plan_key) DO NOTHING;
+
     CREATE INDEX IF NOT EXISTS idx_transactions_user_email ON transactions (user_email);
     CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions (status);
     CREATE INDEX IF NOT EXISTS idx_transactions_teacher_amount ON transactions (teacher_amount);
@@ -1563,6 +1617,79 @@ app.get('/api/discussions/signals', requireAuth, async (req,res)=>{
   const room=String(req.query.room||'').replace(/[^a-zA-Z0-9_-]/g,'').slice(0,40); const after=Math.max(0,Number(req.query.after||0));
   if(!room)return res.status(400).json({error:'Room code required.'});
   try{const r=await db.query(`SELECT id,sender_email AS "sender",kind,payload,created_at AS "createdAt" FROM discussion_signals WHERE room_code=$1 AND id>$2 AND sender_email<>$3 ORDER BY id ASC LIMIT 100`,[room,after,req.user.email]);res.json({ok:true,signals:r.rows})}catch(e){res.status(500).json({error:'Could not read live-room signals.'})}
+});
+
+
+
+// v36 Premium Membership + School Plans.
+app.get('/api/plans', requireAuth, async (_req,res)=>{
+  if(!databaseReady) return res.json({ok:true,plans:[]});
+  try{const r=await db.query(`SELECT plan_key AS "planKey",name,audience,price_monthly AS "priceMonthly",price_yearly AS "priceYearly",description,features FROM subscription_plans WHERE active=true ORDER BY audience,price_monthly`);res.json({ok:true,plans:r.rows});}
+  catch(e){console.error(e);res.status(500).json({error:'Could not load membership plans.'})}
+});
+
+app.get('/api/my/subscription', requireAuth, async (req,res)=>{
+  if(!databaseReady) return res.json({ok:true,subscriptions:[],schools:[]});
+  try{
+    const s=await db.query(`SELECT s.subscription_id AS "subscriptionId",s.plan_key AS "planKey",p.name,p.audience,s.status,s.billing_cycle AS "billingCycle",s.amount,s.starts_at AS "startsAt",s.ends_at AS "endsAt",s.requested_at AS "requestedAt" FROM subscriptions s JOIN subscription_plans p ON p.plan_key=s.plan_key WHERE s.user_email=$1 ORDER BY s.requested_at DESC LIMIT 10`,[req.user.email]);
+    const schools=await db.query(`SELECT sc.school_id AS "schoolId",sc.school_name AS "schoolName",sm.member_role AS "memberRole",sc.status FROM school_memberships sm JOIN schools sc ON sc.school_id=sm.school_id WHERE sm.user_email=$1 AND sm.status='active' ORDER BY sc.school_name`,[req.user.email]);
+    res.json({ok:true,subscriptions:s.rows,schools:schools.rows});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not load membership status.'})}
+});
+
+app.post('/api/subscriptions/request', requireAuth, async (req,res)=>{
+  if(!databaseReady) return res.status(503).json({error:'Membership database is not ready.'});
+  try{
+    const plan=String(req.body?.planKey||''); const cycle=req.body?.billingCycle==='yearly'?'yearly':'monthly';
+    const r=await db.query(`SELECT * FROM subscription_plans WHERE plan_key=$1 AND active=true`,[plan]);
+    if(!r.rowCount) return res.status(404).json({error:'Plan not found.'});
+    const p=r.rows[0]; if(p.audience==='school') return res.status(400).json({error:'School plans must be requested through the school section.'});
+    const amount=Number(cycle==='yearly'?p.price_yearly:p.price_monthly); const id='SUB-'+Date.now().toString(36).toUpperCase()+'-'+Math.random().toString(36).slice(2,7).toUpperCase();
+    await db.query(`UPDATE subscriptions SET status='cancelled',updated_at=NOW() WHERE user_email=$1 AND status='requested'`,[req.user.email]);
+    await db.query(`INSERT INTO subscriptions(subscription_id,user_email,plan_key,status,billing_cycle,amount) VALUES($1,$2,$3,'requested',$4,$5)`,[id,req.user.email,plan,cycle,amount]);
+    res.status(201).json({ok:true,subscriptionId:id,status:'requested',message:'Membership request recorded. An authorized administrator can activate it after payment and account checks.'});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not create membership request.'})}
+});
+
+app.post('/api/schools/request', requireRole('teacher','admin'), async (req,res)=>{
+  if(!databaseReady) return res.status(503).json({error:'School database is not ready.'});
+  try{
+    const schoolName=String(req.body?.schoolName||'').trim().slice(0,160); const contactEmail=String(req.body?.contactEmail||req.user.email).trim().slice(0,160); const contactPhone=String(req.body?.contactPhone||'').trim().slice(0,40); const planKey=String(req.body?.planKey||'school_starter');
+    if(!schoolName)return res.status(400).json({error:'School name is required.'});
+    const p=await db.query(`SELECT * FROM subscription_plans WHERE plan_key=$1 AND audience='school' AND active=true`,[planKey]); if(!p.rowCount)return res.status(404).json({error:'School plan not found.'});
+    const schoolId='SCH-'+Date.now().toString(36).toUpperCase()+'-'+Math.random().toString(36).slice(2,7).toUpperCase(); const subId='SUB-'+Date.now().toString(36).toUpperCase()+'-'+Math.random().toString(36).slice(2,7).toUpperCase();
+    await db.query('BEGIN');
+    try{
+      await db.query(`INSERT INTO schools(school_id,school_name,contact_email,contact_phone,status,created_by) VALUES($1,$2,$3,$4,'pending',$5)`,[schoolId,schoolName,contactEmail,contactPhone,req.user.email]);
+      await db.query(`INSERT INTO school_memberships(school_id,user_email,member_role,status) VALUES($1,$2,$3,'active')`,[schoolId,req.user.email,req.user.role]);
+      await db.query(`INSERT INTO subscriptions(subscription_id,school_id,plan_key,status,billing_cycle,amount) VALUES($1,$2,$3,'requested','monthly',$4)`,[subId,schoolId,planKey,Number(p.rows[0].price_monthly)]);
+      await db.query('COMMIT');
+    }catch(e){await db.query('ROLLBACK');throw e}
+    res.status(201).json({ok:true,schoolId,subscriptionId:subId,message:'School plan request recorded for administrator review.'});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not create school request.'})}
+});
+
+app.get('/api/admin/subscriptions', requireRole('admin'), async (_req,res)=>{
+  try{
+    const subs=await db.query(`SELECT s.subscription_id AS "subscriptionId",s.user_email AS "userEmail",s.school_id AS "schoolId",sc.school_name AS "schoolName",s.plan_key AS "planKey",p.name,s.status,s.billing_cycle AS "billingCycle",s.amount,s.requested_at AS "requestedAt",s.starts_at AS "startsAt",s.ends_at AS "endsAt" FROM subscriptions s JOIN subscription_plans p ON p.plan_key=s.plan_key LEFT JOIN schools sc ON sc.school_id=s.school_id ORDER BY s.requested_at DESC LIMIT 200`);
+    const schools=await db.query(`SELECT sc.school_id AS "schoolId",sc.school_name AS "schoolName",sc.contact_email AS "contactEmail",sc.contact_phone AS "contactPhone",sc.status,COUNT(sm.user_email)::int AS "memberCount" FROM schools sc LEFT JOIN school_memberships sm ON sm.school_id=sc.school_id GROUP BY sc.school_id ORDER BY sc.created_at DESC LIMIT 100`);
+    res.json({ok:true,subscriptions:subs.rows,schools:schools.rows});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not load membership administration.'})}
+});
+
+app.patch('/api/admin/subscriptions/:id/status', requireRole('admin'), async (req,res)=>{
+  try{
+    const status=['active','expired','cancelled','rejected'].includes(req.body?.status)?req.body.status:'active'; const days=Math.max(1,Math.min(730,Number(req.body?.days)||30));
+    const r=await db.query(`UPDATE subscriptions SET status=$1,starts_at=CASE WHEN $1='active' THEN COALESCE(starts_at,NOW()) ELSE starts_at END,ends_at=CASE WHEN $1='active' THEN NOW()+($2||' days')::interval ELSE ends_at END,updated_at=NOW() WHERE subscription_id=$3 RETURNING subscription_id`,[status,days,String(req.params.id)]);
+    if(!r.rowCount)return res.status(404).json({error:'Subscription not found.'});
+    await db.query(`INSERT INTO audit_logs(actor_email,actor_role,action,entity_type,entity_id,details) VALUES($1,'admin','subscription_status_changed','subscription',$2,$3)`,[req.user.email,String(req.params.id),JSON.stringify({status,days})]);
+    res.json({ok:true});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not update subscription.'})}
+});
+
+app.patch('/api/admin/schools/:id/status', requireRole('admin'), async (req,res)=>{
+  try{const status=['active','pending','suspended'].includes(req.body?.status)?req.body.status:'active';const r=await db.query(`UPDATE schools SET status=$1 WHERE school_id=$2 RETURNING school_id`,[status,String(req.params.id)]);if(!r.rowCount)return res.status(404).json({error:'School not found.'});res.json({ok:true})}
+  catch(e){console.error(e);res.status(500).json({error:'Could not update school.'})}
 });
 
 app.use(express.static(__dirname));

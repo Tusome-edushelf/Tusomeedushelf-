@@ -90,6 +90,10 @@ body.a11y-reduced-motion *,body.a11y-reduced-motion *::before,body.a11y-reduced-
 .discussion-shell{max-width:1100px;margin:0 auto;padding:20px}.discussion-hero{background:linear-gradient(135deg,#173f8a,#0f766e);color:#fff;border-radius:22px;padding:24px;box-shadow:0 14px 32px #173f8a22}.discussion-grid{display:grid;grid-template-columns:1.25fr .75fr;gap:16px;margin-top:16px}.discussion-card{background:#fff;border:1px solid #dbe5f0;border-radius:16px;padding:18px;box-shadow:0 8px 24px #173f8a10}.discussion-post{padding:14px 0;border-bottom:1px solid #e5e7eb}.discussion-post:last-child{border-bottom:0}.discussion-post-meta{font-size:12px;color:#64748b;margin-bottom:6px}.discussion-compose textarea{width:100%;min-height:100px;resize:vertical}.discussion-live{display:grid;gap:10px}.live-video-grid{display:grid;grid-template-columns:2fr 1fr;gap:14px;align-items:stretch}.live-video-grid video{width:100%;aspect-ratio:16/9;min-height:320px;background:#0f172a;border-radius:14px;object-fit:cover;box-shadow:0 10px 28px #0f172a22}.live-video-grid video:first-child{min-height:440px;object-fit:contain}.live-video-grid video[style*="display: none"]{display:none!important}@media(max-width:800px){.live-video-grid{grid-template-columns:1fr}.live-video-grid video,.live-video-grid video:first-child{min-height:220px}}.room-code{font-size:20px;font-weight:800;letter-spacing:2px;padding:10px;border-radius:10px;background:#f1f5f9;text-align:center}.discussion-safety{background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:12px}.discussion-empty{padding:24px;text-align:center;color:#64748b}@media(max-width:800px){.discussion-grid{grid-template-columns:1fr}.live-video-grid{grid-template-columns:1fr}}
 </style>
 </style>
+
+<style>
+.membership-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}.plan-card{border:1px solid #dfe7f1;border-radius:16px;padding:18px;background:#fff;box-shadow:0 3px 12px #173f8a12}.plan-card h3{margin-top:0}.plan-price{font-size:25px;font-weight:900}.plan-features{padding-left:18px}.membership-status{border-radius:12px;padding:12px;background:#f4f8ff}.school-panel{display:grid;grid-template-columns:1fr 1fr;gap:12px}@media(max-width:700px){.school-panel{grid-template-columns:1fr}}
+</style>
 </head>
 <body>
 <div id="tusomeToastRegion" aria-live="polite" aria-atomic="false"></div>
@@ -550,6 +554,13 @@ body.a11y-reduced-motion *,body.a11y-reduced-motion *::before,body.a11y-reduced-
 </section>
 
 
+<section id="membership" class="page">
+  <div class="topline"><div><h2>👑 Premium Membership</h2><p>Unlock additional learning and teaching tools. Membership requests are reviewed before activation.</p></div><button class="btn" onclick="loadMembership()">↻ Refresh</button></div>
+  <div id="membershipStatus" class="membership-status">Loading membership status…</div>
+  <div class="membership-grid" id="membershipPlans" style="margin-top:18px"></div>
+  <div class="card" style="margin-top:18px"><h3>🏫 School Plans</h3><p>Schools can request a school workspace with teacher and learner management, shared resources and analytics.</p><div class="school-panel"><label>School name<input id="schoolRequestName" maxlength="160" placeholder="School name"></label><label>Contact email<input id="schoolRequestEmail" type="email" maxlength="160" placeholder="school@example.com"></label><label>Contact phone (optional)<input id="schoolRequestPhone" maxlength="40" placeholder="Optional"></label><label>Plan<select id="schoolRequestPlan"><option value="school_starter">School Starter</option><option value="school_growth">School Growth</option></select></label></div><button class="btn primary" style="margin-top:12px" onclick="requestSchoolPlan()">Request School Plan</button><p class="small" style="margin-top:8px">A school plan request does not charge the account. An authorized administrator handles activation and payment arrangements.</p></div>
+</section>
+
 <section id="payments" class="page">
   <div class="topline"><div><h2>💳 Tusome EduShelf Payments</h2><p>Buy learning materials and track teacher earnings.</p></div><button class="btn primary" onclick="show('learner')">Back to Materials</button></div>
   <div class="notice"><b>Daraja sandbox:</b> Payments are sent through the server to Safaricom Daraja. Consumer credentials and the HTTPS callback URL stay in Render environment variables. In sandbox mode, the standard Safaricom test shortcode/passkey are supplied by the server unless you explicitly override them.</div>
@@ -575,6 +586,7 @@ body.a11y-reduced-motion *,body.a11y-reduced-motion *::before,body.a11y-reduced-
     <button class="teacher-quick-card" onclick="document.getElementById('teacherEarningsSection')?.scrollIntoView({behavior:'smooth',block:'start'})"><span>💰</span><b>Earnings</b><small>Review sales and teacher revenue.</small></button>
     <button class="teacher-quick-card" onclick="document.getElementById('teacherUploadsSection')?.scrollIntoView({behavior:'smooth',block:'start'})"><span>📚</span><b>My Materials</b><small>Open your recent uploads.</small></button>
     <button class="teacher-quick-card" onclick="setTeacherFocusGoal()"><span>🎯</span><b>Teaching Goal</b><small id="teacherGoalQuick">Set your focus for this period.</small></button>
+    <button class="teacher-quick-card" onclick="show('membership')"><span>👑</span><b>Membership</b><small>Premium tools and school plans.</small></button>
   </div>
   <div class="cards teacher-stats">
     <div class="card"><h3>📤 Uploaded</h3><p><b id="count">3</b> materials</p></div>
@@ -681,6 +693,7 @@ body.a11y-reduced-motion *,body.a11y-reduced-motion *::before,body.a11y-reduced-
     <button class="btn" onclick="adminTab('backups')">🛡️ Backups & Recovery</button>
     <button class="btn" onclick="adminTab('analytics')">📊 Platform Analytics</button>
     <button class="btn" onclick="adminTab('marketplace')">🛒 Marketplace</button>
+    <button class="btn" onclick="adminTab('memberships')">👑 Memberships & Schools</button>
   </div>
 
   <div id="adminAnalytics" class="admin-panel" style="display:none">
@@ -714,6 +727,12 @@ body.a11y-reduced-motion *,body.a11y-reduced-motion *::before,body.a11y-reduced-
       <div class="card"><h3>Teacher Earnings</h3><p><b id="marketAdminTeacher">KES 0.00</b></p></div>
     </div>
     <div class="card" style="margin-top:16px"><h3>🏆 Marketplace Performance</h3><div class="table-like"><table><thead><tr><th>Material</th><th>Teacher</th><th>Price</th><th>Purchases</th><th>Rating</th><th>Reviews</th><th>Platform Revenue</th></tr></thead><tbody id="adminMarketplaceTable"></tbody></table></div></div>
+  </div>
+
+  <div id="adminMemberships" class="admin-panel" style="display:none">
+    <div class="cards"><div class="card"><h3>👑 Requests</h3><p><b id="adminSubRequests">0</b></p></div><div class="card"><h3>✅ Active Memberships</h3><p><b id="adminSubActive">0</b></p></div><div class="card"><h3>🏫 Schools</h3><p><b id="adminSchoolCount">0</b></p></div></div>
+    <div class="card" style="margin-top:16px"><h3>Membership Requests</h3><p class="small">Activate only after the organization's authorized payment/account checks are complete.</p><div class="table-like"><table><thead><tr><th>Date</th><th>Account/School</th><th>Plan</th><th>Amount</th><th>Status</th><th>Action</th></tr></thead><tbody id="adminSubscriptionsTable"></tbody></table></div></div>
+    <div class="card" style="margin-top:16px"><h3>🏫 School Workspaces</h3><div class="table-like"><table><thead><tr><th>School</th><th>Contact</th><th>Members</th><th>Status</th><th>Action</th></tr></thead><tbody id="adminSchoolsTable"></tbody></table></div></div>
   </div>
 
   <div id="adminBackups" class="admin-panel" style="display:none">
@@ -974,13 +993,14 @@ function openCommunicationCentre(){show('communication')}
 function adminTab(tab){
   document.querySelectorAll('.admin-panel').forEach(x=>x.style.display='none');
   if(tab==='command'){adminRefreshAll();window.scrollTo({top:0,behavior:'smooth'});return;}
-  const map={approvals:'adminApprovals',payments:'adminPayments',revenue:'adminRevenue',backups:'adminBackups',analytics:'adminAnalytics',marketplace:'adminMarketplace'};
+  const map={approvals:'adminApprovals',payments:'adminPayments',revenue:'adminRevenue',backups:'adminBackups',analytics:'adminAnalytics',marketplace:'adminMarketplace',memberships:'adminMemberships'};
   const el=document.getElementById(map[tab]||'adminApprovals');if(el)el.style.display='block';
   adminRefreshAll();
   if(tab==='payments'||tab==='revenue')loadAdminPayments();
   if(tab==='backups')loadAdminBackups();
   if(tab==='analytics')loadAdminAnalytics();
   if(tab==='marketplace')loadAdminMarketplace();
+  if(tab==='memberships')loadAdminMemberships();
 }
 
 async function loadMarketplace(){
@@ -1244,7 +1264,7 @@ function toggleHelpFaq(button){const item=button.closest('.help-faq');if(!item)r
 function filterHelp(){const q=(document.getElementById('helpSearch')?.value||'').trim().toLowerCase();const items=[...document.querySelectorAll('#helpFaqs .help-faq')];let visible=0;items.forEach(item=>{const match=!q||item.dataset.help.includes(q)||item.textContent.toLowerCase().includes(q);item.style.display=match?'block':'none';if(match)visible++});const no=document.getElementById('helpNoResults');if(no)no.style.display=visible?'none':'block'}
 
 function show(id){
-  const protectedRoles={learner:'learner',teacher:'teacher',admin:'admin',communication:'user',account:'user',reader:'learner',practice:'learner',discussions:'learner'};
+  const protectedRoles={learner:'learner',teacher:'teacher',admin:'admin',communication:'user',account:'user',reader:'learner',practice:'learner',discussions:'learner',membership:'user'};
   if(protectedRoles[id]){
     const role=getSessionRole();
     if(!role){show('login');return}
@@ -1258,6 +1278,7 @@ function show(id){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   const el=document.getElementById(id);if(el)el.classList.add('active');
   if(id==='teacher'){loadServerMaterials().then(renderTeacher);loadTeacherEarnings();loadTeacherAnalytics()}
+  if(id==='membership'){loadMembership()}
   if(id==='admin'){adminRefreshAll();loadAdminAnalytics()}
   if(id==='communication'){renderMyFeedback();renderAdminFeedback()}
   if(id==='notifications')renderNotifications(); else refreshNotificationBadge(); if(id==='account')loadAccountProfile();
@@ -1488,8 +1509,31 @@ function setPlannerGoal(){const current=localStorage.getItem('tusomeLearningGoal
 function resetPlannerGoal(){updateGoalProgress(0);showToast?.('Goal progress reset.','info')}
 function initStudyPlanner(){const goal=localStorage.getItem('tusomeLearningGoal');const pct=localStorage.getItem('tusomeGoalProgress')||'0';const t=document.getElementById('plannerGoalText');if(t)t.textContent=goal||'No learning goal set yet.';const slider=document.getElementById('plannerGoalPercent');if(slider)slider.value=pct;updateGoalProgress(pct);renderStudyPlan();}
 initStudyPlanner();
+
+async function loadMembership(){
+  const plansBox=document.getElementById('membershipPlans'),statusBox=document.getElementById('membershipStatus'); if(!plansBox)return;
+  try{
+    const [pRes,sRes]=await Promise.all([fetch('/api/plans',{credentials:'include'}),fetch('/api/my/subscription',{credentials:'include'})]);
+    const p=await pRes.json(), d=await sRes.json();
+    const subs=d.subscriptions||[], schools=d.schools||[];
+    statusBox.innerHTML=subs.length?subs.slice(0,3).map(x=>`<div><b>${escapeHtml(x.name||x.planKey)}</b> — ${escapeHtml(x.status)} · ${escapeHtml(x.billingCycle)} · KES ${Number(x.amount||0).toFixed(2)}${x.endsAt?' · ends '+new Date(x.endsAt).toLocaleDateString():''}</div>`).join(''):'<b>No membership yet.</b> Choose a plan below.';
+    if(schools.length) statusBox.innerHTML+=`<div style="margin-top:8px"><b>School:</b> ${schools.map(x=>escapeHtml(x.schoolName)+' ('+escapeHtml(x.status)+')').join(', ')}</div>`;
+    const schoolCard=document.querySelector('#membership .card:last-child'); if(schoolCard) schoolCard.style.display=['teacher','admin'].includes(getSessionRole())?'block':'none';
+    plansBox.innerHTML=(p.plans||[]).filter(x=>x.audience!=='school').map(x=>`<div class="plan-card"><span class="market-badge">${x.audience==='learner'?'Learner':'Teacher'}</span><h3>${escapeHtml(x.name)}</h3><div class="plan-price">KES ${Number(x.priceMonthly||0).toFixed(0)} <small>/ month</small></div><div class="small">KES ${Number(x.priceYearly||0).toFixed(0)} / year</div><p>${escapeHtml(x.description||'')}</p><ul class="plan-features">${(x.features||[]).map(f=>`<li>${escapeHtml(f)}</li>`).join('')}</ul><div class="admin-action-row"><button class="btn primary" onclick="requestMembership('${escapeHtml(x.planKey)}','monthly')">Request Monthly</button><button class="btn" onclick="requestMembership('${escapeHtml(x.planKey)}','yearly')">Request Yearly</button></div></div>`).join('')||'<div class="notice">No active plans are configured.</div>';
+    if(document.getElementById('schoolRequestEmail') && !document.getElementById('schoolRequestEmail').value) document.getElementById('schoolRequestEmail').value=localStorage.getItem('tusomeCurrentUser')||'';
+  }catch(e){statusBox.textContent='Could not load membership information.';showToast?.(e.message,'error')}
+}
+async function requestMembership(planKey,billingCycle){
+  if(!confirm(`Request ${planKey.replaceAll('_',' ')} (${billingCycle})? This only creates a request; it does not charge you.`))return;
+  try{const r=await fetch('/api/subscriptions/request',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({planKey,billingCycle})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Request failed.');showToast?.('Membership request submitted.','success');loadMembership();}catch(e){showToast?.(e.message,'error')}
+}
+async function requestSchoolPlan(){const schoolName=document.getElementById('schoolRequestName')?.value.trim(),contactEmail=document.getElementById('schoolRequestEmail')?.value.trim(),contactPhone=document.getElementById('schoolRequestPhone')?.value.trim(),planKey=document.getElementById('schoolRequestPlan')?.value||'school_starter';if(!schoolName){showToast?.('Enter the school name.','error');return}if(!confirm('Submit this school plan request? It does not charge the account.'))return;try{const r=await fetch('/api/schools/request',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({schoolName,contactEmail,contactPhone,planKey})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Request failed.');showToast?.('School plan request submitted.','success');loadMembership()}catch(e){showToast?.(e.message,'error')}}
+async function loadAdminMemberships(){try{const r=await fetch('/api/admin/subscriptions',{credentials:'include'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load memberships.');const subs=d.subscriptions||[], schools=d.schools||[];document.getElementById('adminSubRequests').textContent=subs.filter(x=>x.status==='requested').length;document.getElementById('adminSubActive').textContent=subs.filter(x=>x.status==='active').length;document.getElementById('adminSchoolCount').textContent=schools.length;const tb=document.getElementById('adminSubscriptionsTable');tb.innerHTML=subs.length?subs.map(x=>`<tr><td>${new Date(x.requestedAt).toLocaleString()}</td><td>${escapeHtml(x.schoolName||x.userEmail||'—')}</td><td>${escapeHtml(x.name||x.planKey)}</td><td>KES ${Number(x.amount||0).toFixed(2)}</td><td>${escapeHtml(x.status)}</td><td>${x.status==='requested'?`<button class="btn" onclick="setSubscriptionStatus('${escapeHtml(x.subscriptionId)}','active')">Activate 30d</button> <button class="btn" onclick="setSubscriptionStatus('${escapeHtml(x.subscriptionId)}','rejected')">Reject</button>`:'—'}</td></tr>`).join(''):'<tr><td colspan="6">No membership requests.</td></tr>';const sb=document.getElementById('adminSchoolsTable');sb.innerHTML=schools.length?schools.map(x=>`<tr><td>${escapeHtml(x.schoolName)}</td><td>${escapeHtml(x.contactEmail||'—')}<br>${escapeHtml(x.contactPhone||'')}</td><td>${x.memberCount}</td><td>${escapeHtml(x.status)}</td><td>${x.status==='pending'?`<button class="btn" onclick="setSchoolStatus('${escapeHtml(x.schoolId)}','active')">Activate</button>`:x.status==='active'?`<button class="btn" onclick="setSchoolStatus('${escapeHtml(x.schoolId)}','suspended')">Suspend</button>`:`<button class="btn" onclick="setSchoolStatus('${escapeHtml(x.schoolId)}','active')">Reactivate</button>`}</td></tr>`).join(''):'<tr><td colspan="5">No school requests.</td></tr>'}catch(e){showToast?.(e.message,'error')}}
+async function setSubscriptionStatus(id,status){if(!confirm(status==='active'?'Activate this membership for 30 days?':`Set membership to ${status}?`))return;try{const r=await fetch('/api/admin/subscriptions/'+encodeURIComponent(id)+'/status',{method:'PATCH',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({status,days:30})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Update failed.');loadAdminMemberships()}catch(e){showToast?.(e.message,'error')}}
+async function setSchoolStatus(id,status){if(!confirm(`Set school status to ${status}?`))return;try{const r=await fetch('/api/admin/schools/'+encodeURIComponent(id)+'/status',{method:'PATCH',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({status})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Update failed.');loadAdminMemberships()}catch(e){showToast?.(e.message,'error')}}
+
 configureAIAssistant(getSessionRole()||'learner');
-(async()=>{await loadServerMaterials();if(getSessionRole()==='learner'){await loadServerPurchases();await loadLearnerActivity()}populateMaterialFilters();populateMaterialFilters();renderMaterials();renderTeacher();renderAdmin();refreshProgress();checkAIStatus();if(getSessionRole()==='learner')loadMarketplace()})();
+(async()=>{await loadServerMaterials();if(getSessionRole()==='learner'){await loadServerPurchases();await loadLearnerActivity()}populateMaterialFilters();populateMaterialFilters();renderMaterials();renderTeacher();renderAdmin();refreshProgress();checkAIStatus();if(getSessionRole()==='learner'){loadMarketplace();loadMembership()} if(getSessionRole()==='teacher'){loadMembership()} if(getSessionRole()==='admin'){loadAdminMemberships()}})();
 </script>
 <button id="communicationLaunch" class="btn primary communication-launch" onclick="openCommunicationCentre()" style="position:fixed;right:18px;bottom:18px;z-index:20;border-radius:24px">💬 Communication Centre</button>
 <script>

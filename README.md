@@ -1,27 +1,27 @@
-# Tusome EduShelf v35 — Marketplace & Monetization Foundation
+# Tusome EduShelf v37 — Premium Payments & Subscription Management
 
-Built on v34.2. Preserves learner discussions, large video display and screen sharing.
+Built from v36.
 
-## Marketplace
-- Learner dashboard marketplace section for approved resources.
-- Free vs premium resource labels.
-- Prices and purchase counts.
-- Featured resources and ratings.
-- Learners can review resources after a paid purchase or access to a free approved resource.
-- Reviews are stored in PostgreSQL and one review per learner/material is enforced.
+## Included
+- Real M-PESA STK Push checkout for learner/teacher premium memberships.
+- Monthly and yearly membership payment options.
+- PostgreSQL subscription payment ledger.
+- Payment status polling and automatic activation after confirmed successful callback.
+- Subscription start/end dates based on billing cycle.
+- Failed-payment state handling.
+- Existing school-plan request workflow preserved; school billing remains administrator-managed.
+- Admin membership management preserved.
+- Existing marketplace, teacher revenue, learner discussions, large video and screen sharing preserved.
 
-## Revenue
-- Existing M-PESA purchase flow is preserved.
-- Existing teacher/platform revenue split is preserved.
-- Existing teacher earnings and admin payout records are preserved.
-- Admin Marketplace panel shows approved/premium resources, purchases, gross sales, platform revenue, teacher earnings and per-material performance.
+## Payment safety
+- Never collect or store an M-PESA PIN.
+- Phone numbers are normalized server-side.
+- Production payment credentials remain server-side environment variables.
+- If the user is under 18, payments should use a parent/guardian or other authorized adult's payment method with permission.
 
-## Premium-ready architecture
-- Current implementation treats paid materials as premium resources.
-- Subscription billing is intentionally not activated yet; this keeps the payment flow focused on individual resources until the business/account/legal setup is ready.
-
-## Safety / ownership
-- Teachers should only upload material they own or have permission to distribute.
-- Curriculum claims should be verified against authoritative curriculum sources before publication.
-- Learner reviews avoid exposing learner email addresses publicly.
-- Because learners can be children, production deployment should apply privacy-by-design, data minimisation, age/guardian requirements where applicable, retention controls and appropriate security safeguards.
+## Production notes
+- Use HTTPS for the Daraja callback URL.
+- Keep Daraja credentials in Render environment variables.
+- Test sandbox callbacks before enabling production payments.
+- Confirm business/account, payment-provider, tax, consumer-protection and data-protection requirements with the authorized adult/business operator and relevant providers before launch.
+- Tusome EduShelf processes educational data; privacy-by-design and child-data safeguards should be reviewed before production.

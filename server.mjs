@@ -365,6 +365,24 @@ async function initDatabase() {
     );
     CREATE INDEX IF NOT EXISTS idx_subscriptions_user ON subscriptions(user_email, status);
     CREATE INDEX IF NOT EXISTS idx_subscriptions_school ON subscriptions(school_id, status);
+    CREATE TABLE IF NOT EXISTS subscription_payments (
+      payment_id TEXT PRIMARY KEY,
+      subscription_id TEXT NOT NULL REFERENCES subscriptions(subscription_id) ON DELETE CASCADE,
+      checkout_request_id TEXT UNIQUE,
+      merchant_request_id TEXT,
+      amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+      phone TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      result_code INTEGER,
+      result_description TEXT,
+      mpesa_receipt TEXT,
+      paid_amount NUMERIC(12,2),
+      paid_phone TEXT,
+      transaction_date TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_subscription_payments_sub ON subscription_payments(subscription_id, status);
     CREATE TABLE IF NOT EXISTS schools (
       school_id TEXT PRIMARY KEY,
       school_name TEXT NOT NULL,
@@ -1380,6 +1398,12 @@ app.post('/api/payments/callback', async (req, res) => {
     };
     if (databaseReady) {
       await dbUpdateTransaction(stk.CheckoutRequestID, patch);
+      const sp=await db.query(`SELECT payment_id,subscription_id FROM subscription_payments WHERE checkout_request_id=$1 LIMIT 1`,[stk.CheckoutRequestID]);
+      if(sp.rowCount){
+        const p=sp.rows[0];
+        await db.query(`UPDATE subscription_payments SET status=$1,result_code=$2,result_description=$3,mpesa_receipt=$4,paid_amount=$5,paid_phone=$6,transaction_date=$7,updated_at=NOW() WHERE payment_id=$8`,[patch.status,patch.resultCode,patch.resultDescription,patch.mpesaReceipt,patch.paidAmount,patch.paidPhone,patch.transactionDate,p.payment_id]);
+        await db.query(`UPDATE subscriptions SET status=$1,starts_at=CASE WHEN $1='active' THEN NOW() ELSE starts_at END,ends_at=CASE WHEN $1='active' THEN NOW()+CASE billing_cycle WHEN 'yearly' THEN INTERVAL '1 year' ELSE INTERVAL '1 month' END ELSE ends_at END,updated_at=NOW() WHERE subscription_id=$2`,[patch.status==='paid'?'active':'payment_failed',p.subscription_id]);
+      }
     } else {
       const items = await readTx();
       const tx = items.find(x => x.checkoutRequestId === stk.CheckoutRequestID);
@@ -1635,6 +1659,47 @@ app.get('/api/my/subscription', requireAuth, async (req,res)=>{
     const schools=await db.query(`SELECT sc.school_id AS "schoolId",sc.school_name AS "schoolName",sm.member_role AS "memberRole",sc.status FROM school_memberships sm JOIN schools sc ON sc.school_id=sm.school_id WHERE sm.user_email=$1 AND sm.status='active' ORDER BY sc.school_name`,[req.user.email]);
     res.json({ok:true,subscriptions:s.rows,schools:schools.rows});
   }catch(e){console.error(e);res.status(500).json({error:'Could not load membership status.'})}
+});
+
+app.post('/api/subscriptions/pay', requireAuth, async (req,res)=>{
+  if (!databaseReady) return res.status(503).json({error:'Subscription payments require PostgreSQL.'});
+  try {
+    const plan=String(req.body?.planKey||'').trim();
+    const cycle=['monthly','yearly'].includes(req.body?.billingCycle)?req.body.billingCycle:'monthly';
+    const phone=normalizePhone(req.body?.phone);
+    const r=await db.query(`SELECT * FROM subscription_plans WHERE plan_key=$1 AND active=true AND audience IN ('learner','teacher')`,[plan]);
+    if(!r.rowCount)return res.status(404).json({error:'Membership plan not found.'});
+    const p=r.rows[0];
+    const amount=Number(cycle==='yearly'?p.price_yearly:p.price_monthly);
+    if(!Number.isFinite(amount)||amount<=0)return res.status(400).json({error:'This membership plan has no valid payment amount.'});
+    const id='SUB-'+Date.now().toString(36).toUpperCase()+'-'+Math.random().toString(36).slice(2,7).toUpperCase();
+    await db.query(`UPDATE subscriptions SET status='cancelled',updated_at=NOW() WHERE user_email=$1 AND status='requested'`,[req.user.email]);
+    await db.query(`INSERT INTO subscriptions(subscription_id,user_email,plan_key,status,billing_cycle,amount) VALUES($1,$2,$3,'pending_payment',$4,$5)`,[id,req.user.email,plan,cycle,amount]);
+
+    const shortcode=cfg('MPESA_SHORTCODE'); const passkey=cfg('MPESA_PASSKEY');
+    const base=(process.env.MPESA_BASE_URL||'https://sandbox.safaricom.co.ke').replace(/\/$/,'');
+    const ts=timestamp(); const password=Buffer.from(`${shortcode}${passkey}${ts}`).toString('base64');
+    const token=await getAccessToken();
+    const body={BusinessShortCode:shortcode,Password:password,Timestamp:ts,TransactionType:process.env.MPESA_TRANSACTION_TYPE||'CustomerPayBillOnline',Amount:Math.round(amount),PartyA:phone,PartyB:shortcode,PhoneNumber:phone,CallBackURL:cfg('MPESA_CALLBACK_URL'),AccountReference:id.slice(0,20),TransactionDesc:`Tusome EduShelf ${p.name} ${cycle}`.slice(0,100)};
+    const r2=await fetch(`${base}/mpesa/stkpush/v1/processrequest`,{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const data=await r2.json();
+    if(!r2.ok||data.ResponseCode!=='0'){
+      await db.query(`UPDATE subscriptions SET status='payment_failed',updated_at=NOW() WHERE subscription_id=$1`,[id]);
+      return res.status(502).json({error:data.errorMessage||data.ResponseDescription||'Daraja rejected the membership STK Push.'});
+    }
+    const paymentId='SP-'+Date.now().toString(36).toUpperCase()+'-'+Math.random().toString(36).slice(2,7).toUpperCase();
+    await db.query(`INSERT INTO subscription_payments(payment_id,subscription_id,checkout_request_id,merchant_request_id,amount,phone) VALUES($1,$2,$3,$4,$5,$6)`,[paymentId,id,data.CheckoutRequestID,data.MerchantRequestID,amount,phone]);
+    res.json({ok:true,subscriptionId:id,checkoutRequestId:data.CheckoutRequestID,message:data.CustomerMessage||'M-PESA prompt sent. Complete the payment on the authorized phone.'});
+  }catch(e){console.error(e);res.status(500).json({error:e.message||'Subscription payment setup failed.'});}
+});
+
+app.get('/api/subscriptions/payment-status/:checkoutRequestId', requireAuth, async (req,res)=>{
+  if(!databaseReady)return res.status(503).json({error:'Subscription payments require PostgreSQL.'});
+  try{
+    const r=await db.query(`SELECT sp.status,sp.subscription_id AS "subscriptionId",sp.mpesa_receipt AS "mpesaReceipt",sp.result_description AS "resultDescription",s.status AS "subscriptionStatus",s.starts_at AS "startsAt",s.ends_at AS "endsAt" FROM subscription_payments sp JOIN subscriptions s ON s.subscription_id=sp.subscription_id WHERE sp.checkout_request_id=$1 AND s.user_email=$2 LIMIT 1`,[req.params.checkoutRequestId,req.user.email]);
+    if(!r.rowCount)return res.status(404).json({error:'Subscription payment not found.'});
+    res.json(r.rows[0]);
+  }catch(e){console.error(e);res.status(500).json({error:'Could not check membership payment.'});}
 });
 
 app.post('/api/subscriptions/request', requireAuth, async (req,res)=>{

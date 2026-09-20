@@ -398,6 +398,20 @@ footer{text-align:center;padding:30px;color:#687386}.ai-answer{line-height:1.7;b
     <button class="btn" onclick="adminTab('payments')">💳 Purchases & Payments</button>
     <button class="btn" onclick="adminTab('revenue')">💰 Revenue & Teacher Payouts</button>
     <button class="btn" onclick="adminTab('backups')">🛡️ Backups & Recovery</button>
+    <button class="btn" onclick="adminTab('analytics')">📊 Platform Analytics</button>
+  </div>
+
+  <div id="adminAnalytics" class="admin-panel" style="display:none">
+    <div class="cards">
+      <div class="card"><h3>👥 Users</h3><p>Learners: <b id="analyticsLearners">0</b><br>Teachers: <b id="analyticsTeachers">0</b><br>Admins: <b id="analyticsAdmins">0</b></p></div>
+      <div class="card"><h3>📚 Materials</h3><p>Total: <b id="analyticsMaterials">0</b><br>Pending: <b id="analyticsPending">0</b><br>Approved: <b id="analyticsApproved">0</b></p></div>
+      <div class="card"><h3>💳 Payments</h3><p>Paid: <b id="analyticsPaid">0</b><br>Amount: <b id="analyticsPaidAmount">KES 0.00</b></p></div>
+      <div class="card"><h3>💾 Storage</h3><p><b id="analyticsFiles">0</b> files<br><b id="analyticsStorage">0 MB</b> stored</p></div>
+    </div>
+    <div class="card" style="margin-top:16px"><h3>⚠️ Requires Attention</h3><div id="analyticsAttention">Loading...</div></div>
+    <div class="card" style="margin-top:16px"><h3>📈 Platform Activity</h3><div id="analyticsActivity">Loading...</div></div>
+    <div class="card" style="margin-top:16px"><h3>🛡️ Backup Health</h3><div id="analyticsBackups">Loading...</div></div>
+    <div class="card" style="margin-top:16px"><h3>📝 Audit Activity</h3><div class="table-like"><table><thead><tr><th>Role</th><th>Actions</th><th>Latest</th></tr></thead><tbody id="analyticsAudit"></tbody></table></div></div>
   </div>
 
   <div id="adminPayments" class="admin-panel" style="display:none">
@@ -733,6 +747,20 @@ async function loadTeacherEarnings(){
   }catch(e){console.warn(e)}
 }
 
+async function loadAdminAnalytics(){
+  const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v};
+  try{
+    const r=await fetch('/api/admin/analytics',{credentials:'include'}); const d=await r.json(); if(!r.ok) throw new Error(d.error||'Could not load analytics.');
+    set('analyticsLearners',d.users?.learner||0); set('analyticsTeachers',d.users?.teacher||0); set('analyticsAdmins',d.users?.admin||0);
+    const total=(d.materials?.pending||0)+(d.materials?.approved||0)+(d.materials?.rejected||0)+(d.materials?.draft||0); set('analyticsMaterials',total); set('analyticsPending',d.materials?.pending||0); set('analyticsApproved',d.materials?.approved||0);
+    set('analyticsPaid',d.payments?.paid?.count||0); set('analyticsPaidAmount','KES '+Number(d.payments?.paid?.amount||0).toFixed(2)); set('analyticsFiles',d.storage?.files||0); set('analyticsStorage',(Number(d.storage?.bytes||0)/1048576).toFixed(2)+' MB');
+    const att=document.getElementById('analyticsAttention'); att.innerHTML=d.attention?.length?d.attention.map(x=>`<div class="notice">⚠️ ${escHtml(x)}</div>`).join(''):'<div class="success">✓ No immediate attention items reported.</div>';
+    const a=d.activity||{}; document.getElementById('analyticsActivity').innerHTML=`<p><b>Material views:</b> ${Number(a.views||0).toLocaleString()} &nbsp; <b>Unique learners:</b> ${Number(a.learners||0).toLocaleString()} &nbsp; <b>Bookmarks:</b> ${Number(a.bookmarks||0).toLocaleString()}</p>`;
+    const b=d.backups||{}; document.getElementById('analyticsBackups').innerHTML=`<p><b>Total backups:</b> ${b.total||0} &nbsp; <b>Completed:</b> ${b.completed||0} &nbsp; <b>Restore tests passed:</b> ${b.tested_passed||0}<br><b>Latest:</b> ${b.latest?new Date(b.latest).toLocaleString():'None recorded'}</p>`;
+    document.getElementById('analyticsAudit').innerHTML=(d.auditSummary||[]).length?(d.auditSummary.map(x=>`<tr><td>${escHtml(x.role||'Unknown')}</td><td>${Number(x.count||0).toLocaleString()}</td><td>${x.latest?new Date(x.latest).toLocaleString():'—'}</td></tr>`).join('')):'<tr><td colspan="3">No audit activity recorded.</td></tr>';
+  }catch(e){const box=document.getElementById('analyticsAttention');if(box)box.innerHTML='<div class="notice">Could not load platform analytics.</div>';console.warn(e)}
+}
+
 async function adminRefreshAll(){
   await loadServerMaterials();
   renderAdminFeedback();
@@ -871,7 +899,7 @@ function show(id){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   const el=document.getElementById(id);if(el)el.classList.add('active');
   if(id==='teacher'){loadServerMaterials().then(renderTeacher);loadTeacherEarnings();loadTeacherAnalytics()}
-  if(id==='admin'){adminRefreshAll()}
+  if(id==='admin'){adminRefreshAll();loadAdminAnalytics()}
   if(id==='communication'){renderMyFeedback();renderAdminFeedback()}
   if(id==='notifications')renderNotifications(); else refreshNotificationBadge();
   if(id==='progress'||id==='parent')refreshProgress();

@@ -1294,6 +1294,28 @@ app.get('/api/admin/ai-context', requireRole('admin'), async (req,res)=>{
   }catch(e){console.error('Admin AI context error:',e);res.status(500).json({error:'Could not load admin AI context.'})}
 });
 
+app.get('/api/admin/analytics', requireRole('admin'), async (req,res)=>{
+  try {
+    const [users, mats, payments, activity, audits, backups, storage] = await Promise.all([
+      db.query(`SELECT role,COUNT(*)::int AS count FROM users GROUP BY role`),
+      db.query(`SELECT approval_status AS status,COUNT(*)::int AS count FROM materials WHERE deleted_at IS NULL GROUP BY approval_status`),
+      db.query(`SELECT status,COUNT(*)::int AS count,COALESCE(SUM(CASE WHEN status='paid' THEN COALESCE(paid_amount,amount) ELSE 0 END),0) AS amount FROM transactions GROUP BY status`),
+      db.query(`SELECT COUNT(*)::int AS views,COUNT(DISTINCT learner_email)::int AS learners,COUNT(*) FILTER (WHERE bookmarked)::int AS bookmarks FROM learner_material_activity`),
+      db.query(`SELECT actor_role AS role,COUNT(*)::int AS count,MAX(created_at) AS latest FROM audit_logs GROUP BY actor_role ORDER BY count DESC`),
+      db.query(`SELECT COUNT(*)::int AS total,COUNT(*) FILTER (WHERE status='completed')::int AS completed,COUNT(*) FILTER (WHERE restore_test_status='passed')::int AS tested_passed,MAX(created_at) AS latest FROM backup_records`),
+      db.query(`SELECT COALESCE(SUM(file_size),0)::bigint AS bytes,COUNT(*)::int AS files FROM material_files`)
+    ]);
+    const roleCounts=Object.fromEntries(users.rows.map(x=>[x.role,Number(x.count||0)]));
+    const materialCounts=Object.fromEntries(mats.rows.map(x=>[x.status,Number(x.count||0)]));
+    const paymentCounts=Object.fromEntries(payments.rows.map(x=>[x.status,{count:Number(x.count||0),amount:Number(x.amount||0)}]));
+    const warnings=[];
+    if(Number(materialCounts.pending||0)>0) warnings.push(`${materialCounts.pending} material(s) are awaiting review.`);
+    if(Number(paymentCounts.pending?.count||0)>0) warnings.push(`${paymentCounts.pending.count} payment(s) are still pending.`);
+    if(!backups.rows[0]?.completed) warnings.push('No completed backup is recorded yet.');
+    res.json({ok:true,users:roleCounts,materials:materialCounts,payments:paymentCounts,activity:activity.rows[0]||{},auditSummary:audits.rows,backups:backups.rows[0]||{},storage:{bytes:Number(storage.rows[0]?.bytes||0),files:Number(storage.rows[0]?.files||0)},attention:warnings});
+  } catch(e) { console.error('Admin analytics error:',e); res.status(500).json({error:'Could not load admin analytics.'}); }
+});
+
 app.get('/api/admin/payments', requireRole('admin'), async (req,res)=>{
   try{
     const settings=await getRevenueSettings();

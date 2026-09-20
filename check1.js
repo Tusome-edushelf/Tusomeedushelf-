@@ -1,0 +1,7 @@
+
+function applyAccessibility(){const b=document.body;const mode=localStorage.getItem('tusomeA11yText')||'normal';b.classList.toggle('a11y-large',mode==='large');b.classList.toggle('a11y-contrast',localStorage.getItem('tusomeA11yContrast')==='true');b.classList.toggle('a11y-reduced-motion',localStorage.getItem('tusomeA11yMotion')==='true');document.getElementById('a11yNormal')?.classList.toggle('active',mode==='normal');document.getElementById('a11yLarge')?.classList.toggle('active',mode==='large');document.getElementById('a11yContrast')?.classList.toggle('active',localStorage.getItem('tusomeA11yContrast')==='true');document.getElementById('a11yMotion')?.classList.toggle('active',localStorage.getItem('tusomeA11yMotion')==='true')}
+function toggleAccessibilityPanel(){const p=document.getElementById('accessibilityPanel');if(!p)return;const open=!p.classList.contains('open');p.classList.toggle('open',open);document.querySelector('.a11y-toggle')?.setAttribute('aria-expanded',String(open));if(open)document.getElementById('a11yNormal')?.focus()}
+function setAccessibility(mode){localStorage.setItem('tusomeA11yText',mode);applyAccessibility()}
+function toggleAccessibilityOption(type){const key=type==='contrast'?'tusomeA11yContrast':'tusomeA11yMotion';localStorage.setItem(key,localStorage.getItem(key)==='true'?'false':'true');applyAccessibility()}
+function resetAccessibility(){['tusomeA11yText','tusomeA11yContrast','tusomeA11yMotion'].forEach(k=>localStorage.removeItem(k));applyAccessibility()}
+applyAccessibility();

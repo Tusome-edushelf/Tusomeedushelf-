@@ -273,6 +273,16 @@ async function initDatabase() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS learner_material_activity (
+      learner_email TEXT NOT NULL,
+      material_id TEXT NOT NULL REFERENCES materials(id) ON DELETE CASCADE,
+      bookmarked BOOLEAN NOT NULL DEFAULT FALSE,
+      view_count INTEGER NOT NULL DEFAULT 0,
+      last_viewed_at TIMESTAMPTZ,
+      PRIMARY KEY (learner_email, material_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_learner_activity_email ON learner_material_activity(learner_email);
+
     CREATE INDEX IF NOT EXISTS idx_transactions_user_email ON transactions (user_email);
     CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions (status);
     CREATE INDEX IF NOT EXISTS idx_transactions_teacher_amount ON transactions (teacher_amount);
@@ -849,6 +859,36 @@ function decodeDataUrl(dataUrl) {
   if (!match) throw new Error('Invalid uploaded file data.');
   return { mimeType: match[1] || 'application/octet-stream', buffer: Buffer.from(match[2], 'base64') };
 }
+
+app.get('/api/learner/activity', requireRole('learner'), async (req, res) => {
+  if (!databaseReady) return res.status(503).json({ error: 'Database is not ready.' });
+  try {
+    const r = await db.query(`SELECT material_id AS "materialId", bookmarked, view_count AS "viewCount", last_viewed_at AS "lastViewedAt" FROM learner_material_activity WHERE learner_email=$1 ORDER BY last_viewed_at DESC NULLS LAST`, [req.user.email]);
+    res.json({ ok:true, activity:r.rows });
+  } catch (e) { res.status(500).json({ error:'Could not load learner activity.' }); }
+});
+
+app.patch('/api/learner/materials/:id/bookmark', requireRole('learner'), async (req, res) => {
+  if (!databaseReady) return res.status(503).json({ error: 'Database is not ready.' });
+  try {
+    const bookmarked = Boolean(req.body?.bookmarked);
+    const material = await db.query(`SELECT id FROM materials WHERE id=$1 AND deleted_at IS NULL LIMIT 1`, [req.params.id]);
+    if (!material.rowCount) return res.status(404).json({ error:'Material not found.' });
+    const r = await db.query(`INSERT INTO learner_material_activity(learner_email,material_id,bookmarked) VALUES($1,$2,$3) ON CONFLICT(learner_email,material_id) DO UPDATE SET bookmarked=EXCLUDED.bookmarked RETURNING bookmarked`, [req.user.email,req.params.id,bookmarked]);
+    void audit({user:req.user}, bookmarked?'bookmark_material':'unbookmark_material','material',req.params.id);
+    res.json({ok:true,bookmarked:r.rows[0].bookmarked});
+  } catch(e) { res.status(500).json({error:'Could not update bookmark.'}); }
+});
+
+app.post('/api/learner/materials/:id/view', requireRole('learner'), async (req, res) => {
+  if (!databaseReady) return res.status(503).json({ error: 'Database is not ready.' });
+  try {
+    const material = await db.query(`SELECT id FROM materials WHERE id=$1 AND approval_status='approved' AND deleted_at IS NULL LIMIT 1`, [req.params.id]);
+    if (!material.rowCount) return res.status(404).json({error:'Material not found.'});
+    await db.query(`INSERT INTO learner_material_activity(learner_email,material_id,view_count,last_viewed_at) VALUES($1,$2,1,NOW()) ON CONFLICT(learner_email,material_id) DO UPDATE SET view_count=learner_material_activity.view_count+1,last_viewed_at=NOW()`, [req.user.email,req.params.id]);
+    res.json({ok:true});
+  } catch(e) { res.status(500).json({error:'Could not record learning activity.'}); }
+});
 
 app.get('/api/materials', requireAuth, async (req, res) => {
   if (!databaseReady) return res.status(503).json({ error: 'Database is not ready.' });

@@ -1,29 +1,18 @@
-# Tusome EduShelf — Backups & Recovery v14
+# Tusome EduShelf v16 — Learner Progress & Saved Materials
 
-This release adds an administrator-controlled backup and recovery layer while keeping the existing homepage, AI, learning materials, payments and teacher revenue features.
+This release builds on v15 and adds persistent learner learning history and bookmarks.
 
-## Included
-- Automatic scheduled backups (default every 24 hours).
-- Database records, uploaded learning-material files, payment records, audit logs and curriculum data included in each compressed backup.
-- SHA-256 backup integrity checks.
-- Admin "Create Backup Now" action.
-- Backup download from the Admin dashboard.
-- Restore testing before a real restore.
-- Full database restore protected by exact admin confirmation: `RESTORE TUSOME EDUSHELF`.
-- File versioning: the first upload is version 1; replacement uploads create additional versions.
-- Deleted-material recovery bin using soft delete, so files are recoverable.
-- Admin confirmation for material deletion and recovery.
-- Audit logs for important security, material, backup and recovery actions.
+## New
+- Learner dashboard **Continue Learning** card.
+- Learner **Saved Materials** / bookmarks.
+- Save/unsave approved materials with a visible bookmark button.
+- Persistent learner material activity in PostgreSQL.
+- Last-viewed material and view counts per learner.
+- Learner activity survives refresh and login on the same account.
+- Existing payments, AI, teacher/admin tools, backups and recovery remain included.
 
-## Environment variables
-Optional:
-- `BACKUP_INTERVAL_HOURS=24`
-- `BACKUP_RETENTION_DAYS=30`
-- `BACKUP_DIR=/var/data/tusome-backups` (use a persistent/durable mounted directory when available)
+## Accessibility
+Controls use clear labels and predictable navigation. Important learner actions are surfaced directly on the dashboard, following W3C guidance on findability and clear navigation.
 
-The app can run with its default `data/backups` directory, but a Render filesystem that is not persistent should not be treated as the final disaster-recovery destination. For production, point `BACKUP_DIR` at durable storage or a persistent disk.
-
-## Safety
-Full restore replaces current database contents. The Admin dashboard requires the exact confirmation phrase before it can run. Restore testing is non-destructive.
-
-PostgreSQL backup/restore follows the general principle that databases should be backed up regularly and that restore procedures should be tested; PostgreSQL documents dump, filesystem and continuous-archiving approaches in its backup documentation.
+## Database
+A new `learner_material_activity` table stores bookmark state, view count and last-viewed time per learner/material.

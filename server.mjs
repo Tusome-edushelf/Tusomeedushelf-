@@ -298,6 +298,29 @@ async function initDatabase() {
       read_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    CREATE TABLE IF NOT EXISTS discussion_posts (
+      id BIGSERIAL PRIMARY KEY,
+      author_email TEXT NOT NULL,
+      author_role TEXT NOT NULL,
+      grade TEXT,
+      subject TEXT,
+      topic TEXT,
+      body TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      moderated BOOLEAN NOT NULL DEFAULT FALSE
+    );
+    CREATE INDEX IF NOT EXISTS idx_discussion_posts_created ON discussion_posts(created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS discussion_signals (
+      id BIGSERIAL PRIMARY KEY,
+      room_code TEXT NOT NULL,
+      sender_email TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      payload JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_discussion_signals_room ON discussion_signals(room_code, id);
     CREATE INDEX IF NOT EXISTS idx_notifications_recipient_created ON notifications(recipient_email, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications(recipient_email, read_at);
     CREATE INDEX IF NOT EXISTS idx_learner_activity_email ON learner_material_activity(learner_email);
@@ -1433,6 +1456,48 @@ app.get('/api/payments/my', requireRole('learner'), async (req, res) => {
     console.error('Purchase list error:', e);
     res.status(500).json({ error: 'Could not load your purchases.' });
   }
+});
+
+
+
+// Learner discussion centre: text discussion plus a lightweight WebRTC signalling channel.
+app.get('/api/discussions/posts', requireAuth, async (req,res)=>{
+  if(!databaseReady) return res.json({ok:true,posts:[]});
+  try{
+    const grade=String(req.query.grade||'').trim(); const subject=String(req.query.subject||'').trim();
+    const params=[]; const where=[];
+    if(grade){params.push(grade);where.push(`(grade=$${params.length} OR grade IS NULL OR grade='')`)}
+    if(subject){params.push(subject);where.push(`(subject=$${params.length} OR subject IS NULL OR subject='')`)}
+    const q=`SELECT id,author_role,grade,subject,topic,body,created_at AS "createdAt" FROM discussion_posts ${where.length?'WHERE '+where.join(' AND '):''} ORDER BY created_at DESC LIMIT 100`;
+    const r=await db.query(q,params); res.json({ok:true,posts:r.rows});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not load discussions.'})}
+});
+
+app.post('/api/discussions/posts', requireRole('learner','teacher'), async (req,res)=>{
+  if(!databaseReady) return res.status(503).json({error:'Discussion database is not ready.'});
+  const body=String(req.body?.body||'').trim();
+  if(!body || body.length>2000) return res.status(400).json({error:'Write a message up to 2,000 characters.'});
+  const grade=String(req.body?.grade||'').trim().slice(0,40), subject=String(req.body?.subject||'').trim().slice(0,80), topic=String(req.body?.topic||'').trim().slice(0,120);
+  try{const r=await db.query(`INSERT INTO discussion_posts(author_email,author_role,grade,subject,topic,body) VALUES($1,$2,$3,$4,$5,$6) RETURNING id,author_role,grade,subject,topic,body,created_at AS "createdAt"`,[req.user.email,req.user.role,grade||null,subject||null,topic||null,body]);res.json({ok:true,post:r.rows[0]})}catch(e){console.error(e);res.status(500).json({error:'Could not post your message.'})}
+});
+
+app.delete('/api/discussions/posts/:id', requireAuth, async (req,res)=>{
+  if(!databaseReady) return res.status(503).json({error:'Discussion database is not ready.'});
+  try{const r=await db.query(`DELETE FROM discussion_posts WHERE id=$1 AND (author_email=$2 OR $3='admin' OR $3='teacher') RETURNING id`,[req.params.id,req.user.email,req.user.role]);if(!r.rowCount)return res.status(404).json({error:'Post not found or you do not have permission.'});res.json({ok:true})}catch(e){res.status(500).json({error:'Could not remove the post.'})}
+});
+
+app.post('/api/discussions/signals', requireAuth, async (req,res)=>{
+  if(!databaseReady) return res.status(503).json({error:'Live discussion service is not ready.'});
+  const room=String(req.body?.room||'').replace(/[^a-zA-Z0-9_-]/g,'').slice(0,40); const kind=String(req.body?.kind||'').slice(0,20); const payload=req.body?.payload;
+  if(!room||!['offer','answer','ice','leave'].includes(kind)||payload==null)return res.status(400).json({error:'Invalid live-room signal.'});
+  try{await db.query(`INSERT INTO discussion_signals(room_code,sender_email,kind,payload) VALUES($1,$2,$3,$4::jsonb)`,[room,req.user.email,kind,JSON.stringify(payload)]);res.json({ok:true})}catch(e){console.error(e);res.status(500).json({error:'Could not send live-room signal.'})}
+});
+
+app.get('/api/discussions/signals', requireAuth, async (req,res)=>{
+  if(!databaseReady) return res.json({ok:true,signals:[]});
+  const room=String(req.query.room||'').replace(/[^a-zA-Z0-9_-]/g,'').slice(0,40); const after=Math.max(0,Number(req.query.after||0));
+  if(!room)return res.status(400).json({error:'Room code required.'});
+  try{const r=await db.query(`SELECT id,sender_email AS "sender",kind,payload,created_at AS "createdAt" FROM discussion_signals WHERE room_code=$1 AND id>$2 AND sender_email<>$3 ORDER BY id ASC LIMIT 100`,[room,after,req.user.email]);res.json({ok:true,signals:r.rows})}catch(e){res.status(500).json({error:'Could not read live-room signals.'})}
 });
 
 app.use(express.static(__dirname));

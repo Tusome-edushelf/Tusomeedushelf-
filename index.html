@@ -86,6 +86,8 @@ body.a11y-reduced-motion *,body.a11y-reduced-motion *::before,body.a11y-reduced-
 /* v31 Learner Notes & Highlights */
 .notes-layout{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:14px;margin-top:14px}.notes-card{background:#fff;border:1px solid #dbe5f0;border-radius:16px;padding:16px;box-shadow:0 8px 24px #173f8a10}.notes-card h3{margin:0 0 10px;color:#173f8a}.notes-toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}.notes-textarea{width:100%;min-height:150px;resize:vertical;padding:12px;border:1px solid #d8e1ec;border-radius:10px;font:inherit}.note-item{padding:12px;border:1px solid #e2e8f0;border-radius:12px;margin-top:9px;background:#f8fbff}.note-item-head{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}.note-time{font-size:11px;color:#64748b}.note-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.highlight-list{display:grid;gap:8px}.highlight-item{padding:10px 12px;border-left:4px solid #2563eb;background:#f8fbff;border-radius:8px}.notes-empty{padding:14px;border:1px dashed #cbd5e1;border-radius:10px;color:#64748b}.notes-status{min-height:22px;font-size:13px;margin-top:8px;color:#166534}@media(max-width:900px){.notes-layout{grid-template-columns:1fr}}
 
+
+.discussion-shell{max-width:1100px;margin:0 auto;padding:20px}.discussion-hero{background:linear-gradient(135deg,#173f8a,#0f766e);color:#fff;border-radius:22px;padding:24px;box-shadow:0 14px 32px #173f8a22}.discussion-grid{display:grid;grid-template-columns:1.25fr .75fr;gap:16px;margin-top:16px}.discussion-card{background:#fff;border:1px solid #dbe5f0;border-radius:16px;padding:18px;box-shadow:0 8px 24px #173f8a10}.discussion-post{padding:14px 0;border-bottom:1px solid #e5e7eb}.discussion-post:last-child{border-bottom:0}.discussion-post-meta{font-size:12px;color:#64748b;margin-bottom:6px}.discussion-compose textarea{width:100%;min-height:100px;resize:vertical}.discussion-live{display:grid;gap:10px}.live-video-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.live-video-grid video{width:100%;aspect-ratio:16/9;background:#0f172a;border-radius:12px;object-fit:cover}.room-code{font-size:20px;font-weight:800;letter-spacing:2px;padding:10px;border-radius:10px;background:#f1f5f9;text-align:center}.discussion-safety{background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:12px}.discussion-empty{padding:24px;text-align:center;color:#64748b}@media(max-width:800px){.discussion-grid{grid-template-columns:1fr}.live-video-grid{grid-template-columns:1fr}}
 </style>
 </style>
 </head>
@@ -96,7 +98,7 @@ body.a11y-reduced-motion *,body.a11y-reduced-motion *::before,body.a11y-reduced-
   <div class="logo">Tusome <span>EduShelf</span></div>
   <nav>
     <button onclick="show('home')">Home</button>
-    <button class="nav-auth" onclick="show('help')">❓ Help</button><button id="notificationNav" class="nav-auth nav-notify" onclick="show('notifications')" aria-label="Notifications">🔔 <span id="notificationNavCount" class="notify-count" aria-live="polite">0</span></button><button class="nav-auth" onclick="show('account')">👤 Account</button><button class="nav-auth a11y-toggle" onclick="toggleAccessibilityPanel()" aria-expanded="false" aria-controls="accessibilityPanel">⚙️ Accessibility</button>
+    <button class="nav-auth" onclick="show('help')">❓ Help</button><button class="nav-auth" id="discussionNav" onclick="show('discussions')">💬 Discussions</button><button id="notificationNav" class="nav-auth nav-notify" onclick="show('notifications')" aria-label="Notifications">🔔 <span id="notificationNavCount" class="notify-count" aria-live="polite">0</span></button><button class="nav-auth" onclick="show('account')">👤 Account</button><button class="nav-auth a11y-toggle" onclick="toggleAccessibilityPanel()" aria-expanded="false" aria-controls="accessibilityPanel">⚙️ Accessibility</button>
     <button class="nav-auth" onclick="show('login')">Sign In</button>
     <button class="nav-auth nav-signup" onclick="show('signup')">Sign Up</button>
   </nav>
@@ -201,7 +203,7 @@ body.a11y-reduced-motion *,body.a11y-reduced-motion *::before,body.a11y-reduced-
     <button class="learner-quick-card" type="button" onclick="showRecentLearning()"><span>🕒</span><b>Recent Activity</b><small>See your latest learning</small></button>
     <button class="learner-quick-card" type="button" onclick="showRecommendedMaterials()"><span>⭐</span><b>Recommended</b><small>Explore useful materials</small></button>
     <button class="learner-quick-card" type="button" onclick="document.getElementById('search').focus();document.getElementById('search').scrollIntoView({behavior:'smooth',block:'center'})"><span>🔎</span><b>Search Materials</b><small>Find a topic quickly</small></button>
-    <button class="learner-quick-card" type="button" onclick="show('practice')"><span>🧠</span><b>Practice Mode</b><small>Test yourself and learn</small></button>
+    <button class="learner-quick-card" type="button" onclick="show('practice')"><span>🧠</span><b>Practice Mode</b><small>Test yourself and learn</small></button><button class="learner-quick-card" type="button" onclick="show('discussions')"><span>💬</span><b>Discussions</b><small>Text, voice or video study rooms</small></button>
   </div>
 
 
@@ -257,6 +259,40 @@ body.a11y-reduced-motion *,body.a11y-reduced-motion *::before,body.a11y-reduced-
 
 
 
+
+<section id="discussions" class="page">
+  <div class="discussion-shell">
+    <div class="discussion-hero">
+      <h2>💬 Learner Discussions</h2>
+      <p>Ask questions, share ideas and study together by text, voice or video.</p>
+    </div>
+    <div class="discussion-safety" style="margin-top:14px"><b>🛡️ Study safely:</b> Keep discussions about learning. Do not share your phone number, home address, passwords, M-PESA PIN, private photos or other personal information. Use the report option if something feels unsafe. Live rooms are designed for study and should follow your school/teacher rules.</div>
+    <div class="discussion-grid">
+      <div class="discussion-card">
+        <div class="topline"><div><h3>📝 Text Discussion</h3><p class="small">Post a question or reply to other learners.</p></div><button class="btn" type="button" onclick="loadDiscussionPosts()">↻ Refresh</button></div>
+        <div class="practice-controls">
+          <label><b>Grade</b><select id="discussionGrade"><option value="">All grades</option><option>Grade 4</option><option>Grade 5</option><option>Grade 6</option><option>Grade 7</option><option>Grade 8</option><option>Grade 9</option></select></label>
+          <label><b>Learning Area</b><input id="discussionSubject" placeholder="e.g. Mathematics"></label>
+          <label><b>Topic</b><input id="discussionTopic" placeholder="e.g. Algebra"></label>
+        </div>
+        <div class="discussion-compose"><textarea id="discussionBody" maxlength="2000" placeholder="Ask a learning question or share an idea..."></textarea><div class="practice-actions"><button class="btn primary" type="button" onclick="postDiscussion()">Post Discussion</button></div></div>
+        <div id="discussionPosts" aria-live="polite" style="margin-top:12px"><div class="discussion-empty">Loading discussions…</div></div>
+      </div>
+      <div class="discussion-card">
+        <h3>🎙️ Live Study Room</h3>
+        <p class="small">Use a room code to have a live voice or video study conversation. Share the room code only with classmates or your teacher.</p>
+        <div class="discussion-live">
+          <label><b>Room code</b><input id="liveRoomCode" maxlength="40" placeholder="e.g. MATH7A"></label>
+          <div class="practice-actions"><button class="btn primary" type="button" onclick="startLiveRoom('voice')">🎙️ Start Voice</button><button class="btn" type="button" onclick="startLiveRoom('video')">📹 Start Video</button><button class="btn light" type="button" onclick="joinLiveRoom()">↗ Join Room</button><button class="btn" type="button" onclick="leaveLiveRoom()">Leave</button></div>
+          <div id="liveRoomStatus" class="notice">No live room connected.</div>
+          <div id="liveRoomCodeDisplay" class="room-code" style="display:none"></div>
+          <div class="live-video-grid"><video id="localLiveVideo" autoplay muted playsinline></video><video id="remoteLiveVideo" autoplay playsinline></video></div>
+        </div>
+        <p class="small">Voice/video requires microphone or camera permission from your browser. The live room uses peer-to-peer media; Tusome EduShelf does not display your camera to other users until you join a room.</p>
+      </div>
+    </div>
+  </div>
+</section>
 <section id="practice" class="page">
   <div class="practice-shell">
     <div class="practice-hero">
@@ -1164,13 +1200,14 @@ function toggleHelpFaq(button){const item=button.closest('.help-faq');if(!item)r
 function filterHelp(){const q=(document.getElementById('helpSearch')?.value||'').trim().toLowerCase();const items=[...document.querySelectorAll('#helpFaqs .help-faq')];let visible=0;items.forEach(item=>{const match=!q||item.dataset.help.includes(q)||item.textContent.toLowerCase().includes(q);item.style.display=match?'block':'none';if(match)visible++});const no=document.getElementById('helpNoResults');if(no)no.style.display=visible?'none':'block'}
 
 function show(id){
-  const protectedRoles={learner:'learner',teacher:'teacher',admin:'admin',communication:'user',account:'user',reader:'learner',practice:'learner'};
+  const protectedRoles={learner:'learner',teacher:'teacher',admin:'admin',communication:'user',account:'user',reader:'learner',practice:'learner',discussions:'learner'};
   if(protectedRoles[id]){
     const role=getSessionRole();
     if(!role){show('login');return}
     if(id==='learner'&&role!=='learner'){alert('This dashboard is for learners.');return}
     if(id==='reader'&&role!=='learner'){alert('The material reader is for learners.');return}
     if(id==='practice'&&role!=='learner'){alert('Practice Mode is for learners.');return}
+    if(id==='discussions'&&role!=='learner'){alert('Discussions are currently available to learners.');return}
     if(id==='teacher'&&role!=='teacher'){alert('This dashboard is for teachers.');return}
     if(id==='admin'&&role!=='admin'){alert('Administrator access is required.');return}
   }
@@ -1418,6 +1455,41 @@ function setAccessibility(mode){localStorage.setItem('tusomeA11yText',mode);appl
 function toggleAccessibilityOption(type){const key=type==='contrast'?'tusomeA11yContrast':'tusomeA11yMotion';localStorage.setItem(key,localStorage.getItem(key)==='true'?'false':'true');applyAccessibility()}
 function resetAccessibility(){['tusomeA11yText','tusomeA11yContrast','tusomeA11yMotion'].forEach(k=>localStorage.removeItem(k));applyAccessibility()}
 applyAccessibility();
+</script>
+
+<script>
+let livePc=null, liveStream=null, liveRoom='', liveLastSignal=0, liveMode='voice', livePollTimer=null, liveInitiator=false;
+function discussionUser(){return String(localStorage.getItem('tusomeCurrentUser')||'Learner')}
+function loadDiscussionPosts(){
+  const box=document.getElementById('discussionPosts'); if(!box)return;
+  const g=document.getElementById('discussionGrade')?.value||'', s=document.getElementById('discussionSubject')?.value||'';
+  fetch('/api/discussions/posts?grade='+encodeURIComponent(g)+'&subject='+encodeURIComponent(s),{credentials:'include'}).then(r=>r.json()).then(d=>{
+    if(!d.ok)throw new Error(d.error||'Could not load discussions.');
+    box.innerHTML=d.posts?.length?d.posts.map(p=>`<article class="discussion-post"><div class="discussion-post-meta">${escHtml(p.author_role==='teacher'?'Teacher':'Learner')} • ${escHtml(p.grade||'All grades')}${p.subject?' • '+escHtml(p.subject):''}${p.topic?' • '+escHtml(p.topic):''} • ${new Date(p.createdAt).toLocaleString()}</div><div>${escapeHomeAIText(p.body).replace(/\n/g,'<br>')}</div></article>`).join(''):'<div class="discussion-empty">No discussions yet. Start one with a learning question.</div>';
+  }).catch(e=>{box.innerHTML='<div class="notice">'+escHtml(e.message)+'</div>'});
+}
+function postDiscussion(){
+  const body=(document.getElementById('discussionBody')?.value||'').trim(); if(!body){showToast?.('Write a message first.','error');return}
+  const payload={body,grade:document.getElementById('discussionGrade')?.value||'',subject:document.getElementById('discussionSubject')?.value||'',topic:document.getElementById('discussionTopic')?.value||''};
+  fetch('/api/discussions/posts',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(payload)}).then(r=>r.json()).then(d=>{if(!d.ok)throw new Error(d.error||'Could not post.');document.getElementById('discussionBody').value='';showToast?.('Discussion posted.','success');loadDiscussionPosts()}).catch(e=>showToast?.(e.message,'error'));
+}
+async function startLiveRoom(mode){
+  let code=(document.getElementById('liveRoomCode')?.value||'').trim().replace(/[^A-Za-z0-9_-]/g,''); if(!code)code='ROOM'+Math.random().toString(36).slice(2,7).toUpperCase();
+  document.getElementById('liveRoomCode').value=code; liveRoom=code; liveMode=mode; liveInitiator=true; await setupLiveMedia(mode); if(!livePc)return;
+  const offer=await livePc.createOffer(); await livePc.setLocalDescription(offer); await sendLiveSignal('offer',offer); setLiveStatus('Room '+code+' started. Share the room code with a classmate or teacher. Waiting for a participant…'); startLivePolling();
+}
+async function joinLiveRoom(){
+  const code=(document.getElementById('liveRoomCode')?.value||'').trim().replace(/[^A-Za-z0-9_-]/g,''); if(!code){showToast?.('Enter a room code first.','error');return} liveRoom=code; liveInitiator=false; await setupLiveMedia('video'); setLiveStatus('Joining room '+code+'…'); startLivePolling();
+}
+async function setupLiveMedia(mode){
+  try{if(liveStream)liveStream.getTracks().forEach(t=>t.stop());liveStream=await navigator.mediaDevices.getUserMedia({audio:true,video:mode==='video'});const v=document.getElementById('localLiveVideo');v.srcObject=liveStream;v.style.display=mode==='video'?'block':'none';livePc=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]});liveStream.getTracks().forEach(t=>livePc.addTrack(t,liveStream));livePc.ontrack=e=>{const rv=document.getElementById('remoteLiveVideo');rv.srcObject=e.streams[0];rv.style.display='block'};livePc.onicecandidate=e=>{if(e.candidate)sendLiveSignal('ice',e.candidate)};livePc.onconnectionstatechange=()=>{if(['connected','completed'].includes(livePc.connectionState))setLiveStatus('Live room connected. You can talk or study together now.');if(['failed','disconnected'].includes(livePc.connectionState))setLiveStatus('Live connection interrupted. You can try joining again.')}
+  }catch(e){showToast?.('Microphone/camera permission was not granted or is unavailable.','error');setLiveStatus('Could not access the microphone or camera.');livePc=null}
+}
+async function sendLiveSignal(kind,payload){if(!liveRoom)return;try{await fetch('/api/discussions/signals',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({room:liveRoom,kind,payload})})}catch{} }
+function startLivePolling(){clearInterval(livePollTimer);livePollTimer=setInterval(pollLiveSignals,1200);pollLiveSignals()}
+async function pollLiveSignals(){if(!liveRoom||!livePc)return;try{const r=await fetch('/api/discussions/signals?room='+encodeURIComponent(liveRoom)+'&after='+liveLastSignal,{credentials:'include'});const d=await r.json();for(const x of (d.signals||[])){liveLastSignal=Math.max(liveLastSignal,Number(x.id));if(x.kind==='offer'&&!liveInitiator){await livePc.setRemoteDescription(x.payload);const ans=await livePc.createAnswer();await livePc.setLocalDescription(ans);await sendLiveSignal('answer',ans);setLiveStatus('Connected to the room. Waiting for media…')}else if(x.kind==='answer'&&liveInitiator){await livePc.setRemoteDescription(x.payload)}else if(x.kind==='ice'){try{await livePc.addIceCandidate(x.payload)}catch{}}} }catch{}}
+function setLiveStatus(t){const el=document.getElementById('liveRoomStatus');if(el)el.textContent=t;}
+function leaveLiveRoom(){clearInterval(livePollTimer);livePollTimer=null;if(liveStream)liveStream.getTracks().forEach(t=>t.stop());if(livePc)livePc.close();liveStream=null;livePc=null;liveRoom='';liveLastSignal=0;liveInitiator=false;document.getElementById('localLiveVideo').srcObject=null;document.getElementById('remoteLiveVideo').srcObject=null;setLiveStatus('You left the live room.')}
 </script>
 </body>
 </html>

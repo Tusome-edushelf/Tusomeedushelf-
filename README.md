@@ -1,30 +1,24 @@
-# Tusome EduShelf v42 — Parent / Guardian Portal
+# Tusome EduShelf v43 — Attendance & School Calendar
 
-v42 adds a school-controlled Parent/Guardian portal on top of v41.
+Built on v42 Parent/Guardian Portal.
 
-## Parent features
-- Parent/Guardian login role
-- Read-only linked learner dashboard
-- School and class information
-- Subject-level academic progress and averages
-- Assignment status and approved marks/feedback visibility
-- Multiple linked learners supported
-- Parent AI study-support entry point
+## Attendance
+- School attendance table with present, absent, late and excused statuses.
+- Teachers can mark attendance for learners in their assigned classes.
+- School administrators can review and mark school attendance.
+- Bulk mark all present/absent and save a daily register.
+- Learners can view their own attendance history and percentage.
+- Linked parents/guardians can view attendance for linked learners only.
 
-## School admin features
-- Link an existing Parent/Guardian account to an active learner
-- View current parent/learner links
-- Remove a parent/learner link
-- Parent access is limited to explicitly linked learners
+## School Calendar
+- School admins can add events for school days, terms, holidays, exams, meetings and activities.
+- School members can view calendar events.
+- Admins can delete calendar events.
 
-## Privacy
-- Parent APIs verify the authenticated parent owns the link before returning learner data.
-- Parents cannot edit grades, assignments, submissions, school membership, or other school records.
-- Parent accounts are not available through the public learner/teacher sign-up flow; they should be provisioned by the school/platform process.
-- The portal avoids exposing unrelated school operational data.
+## Security
+- Attendance writes are scoped to the user's school.
+- Teachers can only edit attendance for learners in classes they teach.
+- Parent attendance is restricted to existing parent-guardian links.
+- Learners can only read their own attendance.
 
-## Preserved
-v41 Gradebook, v40 Assignments/Submissions/Grading, v39 Academic Management, v38 School Management, memberships, marketplace, M-PESA, discussions, large video and screen sharing remain included.
-
-## Production note
-Use verified parent/guardian identity and appropriate school authorization before linking an adult to a learner. Keep child data access limited to what is necessary for education and school administration.
+Existing v42 features are preserved, including Parent/Guardian Portal, school management, classes/subjects, assignments/submissions/grading, gradebook, marketplace, premium membership, M-PESA, discussions, large video and screen sharing.

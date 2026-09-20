@@ -469,6 +469,33 @@ async function initDatabase() {
     );
     CREATE INDEX IF NOT EXISTS idx_school_assignment_submissions_assignment ON school_assignment_submissions(school_id,assignment_id,submitted_at DESC);
     CREATE INDEX IF NOT EXISTS idx_school_assignment_submissions_learner ON school_assignment_submissions(learner_email,submitted_at DESC);
+    CREATE TABLE IF NOT EXISTS school_attendance (
+      attendance_id TEXT PRIMARY KEY,
+      school_id TEXT NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
+      class_id TEXT NOT NULL REFERENCES school_classes(class_id) ON DELETE CASCADE,
+      learner_email TEXT NOT NULL,
+      attendance_date DATE NOT NULL,
+      status TEXT NOT NULL CHECK(status IN ('present','absent','late','excused')),
+      note TEXT,
+      marked_by TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(school_id,class_id,learner_email,attendance_date)
+    );
+    CREATE INDEX IF NOT EXISTS idx_school_attendance_school_date ON school_attendance(school_id,attendance_date);
+    CREATE INDEX IF NOT EXISTS idx_school_attendance_learner ON school_attendance(learner_email,attendance_date DESC);
+    CREATE TABLE IF NOT EXISTS school_calendar_events (
+      event_id TEXT PRIMARY KEY,
+      school_id TEXT NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      description TEXT,
+      event_date DATE NOT NULL,
+      end_date DATE,
+      event_type TEXT NOT NULL DEFAULT 'school' CHECK(event_type IN ('school','term','holiday','exam','meeting','activity','other')),
+      created_by TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_school_calendar_school_date ON school_calendar_events(school_id,event_date);
 
     INSERT INTO subscription_plans(plan_key,name,audience,price_monthly,price_yearly,description,features)
     VALUES
@@ -2065,6 +2092,86 @@ app.get('/api/schools/gradebook', requireSchoolMembership, async (req,res)=>{
     const subMap=new Map(subs.rows.map(x=>[x.assignmentId+'|'+x.learnerEmail,x]));
     res.json({ok:true,assignments:a.rows,learners:learners.rows,submissions:subs.rows,teacherOnly});
   }catch(e){console.error(e);res.status(500).json({error:'Could not load school gradebook.'})}
+});
+
+
+// v43 Attendance & School Calendar.
+app.get('/api/schools/attendance', requireSchoolMembership, async (req,res)=>{
+  try{
+    if(!['teacher','admin'].includes(req.school.memberRole) && req.user.role!=='admin') return res.status(403).json({error:'Teacher or school admin access is required.'});
+    const date=String(req.query.date||new Date().toISOString().slice(0,10)).slice(0,10);
+    const teacherOnly=req.school.memberRole==='teacher' && req.user.role!=='admin';
+    const params=[req.school.schoolId,date];
+    const extra=teacherOnly?' AND c.teacher_email=$3':''; if(teacherOnly) params.push(req.user.email);
+    const r=await db.query(`SELECT sm.user_email AS "learnerEmail",sm.class_id AS "classId",c.class_name AS "className",c.grade,c.stream,COALESCE(a.status,'present') AS status,a.note,a.marked_by AS "markedBy" FROM school_memberships sm JOIN school_classes c ON c.class_id=sm.class_id LEFT JOIN school_attendance a ON a.school_id=sm.school_id AND a.class_id=sm.class_id AND a.learner_email=sm.user_email AND a.attendance_date=$2 WHERE sm.school_id=$1 AND sm.member_role='learner' AND sm.status='active' ${extra} ORDER BY c.class_name,sm.user_email`,params);
+    res.json({ok:true,date,rows:r.rows,teacherOnly});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not load attendance.'})}
+});
+
+app.post('/api/schools/attendance', requireSchoolMembership, async (req,res)=>{
+  try{
+    if(!['teacher','admin'].includes(req.school.memberRole) && req.user.role!=='admin') return res.status(403).json({error:'Teacher or school admin access is required.'});
+    const date=String(req.body?.date||'').slice(0,10); const entries=Array.isArray(req.body?.entries)?req.body.entries:[];
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!entries.length)return res.status(400).json({error:'A valid date and attendance entries are required.'});
+    const teacherOnly=req.school.memberRole==='teacher' && req.user.role!=='admin';
+    await db.query('BEGIN');
+    try{
+      for(const e of entries.slice(0,500)){
+        const email=String(e.learnerEmail||'').trim().toLowerCase(); const classId=String(e.classId||'').trim(); const status=['present','absent','late','excused'].includes(e.status)?e.status:'present'; const note=String(e.note||'').trim().slice(0,300);
+        if(!email||!classId) continue;
+        const allowed=await db.query(`SELECT 1 FROM school_memberships sm JOIN school_classes c ON c.class_id=sm.class_id WHERE sm.school_id=$1 AND sm.user_email=$2 AND sm.class_id=$3 AND sm.member_role='learner' AND sm.status='active' ${teacherOnly?'AND c.teacher_email=$4':''} LIMIT 1`,teacherOnly?[req.school.schoolId,email,classId,req.user.email]:[req.school.schoolId,email,classId]);
+        if(!allowed.rowCount) continue;
+        const id='ATT-'+Date.now().toString(36).toUpperCase()+'-'+Math.random().toString(36).slice(2,7).toUpperCase();
+        await db.query(`INSERT INTO school_attendance(attendance_id,school_id,class_id,learner_email,attendance_date,status,note,marked_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT(school_id,class_id,learner_email,attendance_date) DO UPDATE SET status=EXCLUDED.status,note=EXCLUDED.note,marked_by=EXCLUDED.marked_by,updated_at=NOW()`,[id,req.school.schoolId,classId,email,date,status,note||null,req.user.email]);
+      }
+      await db.query('COMMIT');
+    }catch(e){await db.query('ROLLBACK');throw e}
+    res.json({ok:true,message:'Attendance saved.'});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not save attendance.'})}
+});
+
+app.get('/api/learner/attendance', requireRole('learner'), async (req,res)=>{
+  try{
+    const r=await db.query(`SELECT a.attendance_date AS "attendanceDate",a.status,a.note,c.class_name AS "className" FROM school_attendance a JOIN school_classes c ON c.class_id=a.class_id WHERE a.learner_email=$1 ORDER BY a.attendance_date DESC LIMIT 365`,[req.user.email]);
+    const total=r.rows.length, presentLike=r.rows.filter(x=>['present','late','excused'].includes(x.status)).length;
+    res.json({ok:true,summary:{total,attendancePercent:total?Math.round(presentLike/total*10000)/100:0},rows:r.rows});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not load learner attendance.'})}
+});
+
+app.get('/api/parent/attendance', requireRole('parent'), async (req,res)=>{
+  try{
+    const learner=String(req.query.learnerEmail||'').trim().toLowerCase(); if(!learner)return res.status(400).json({error:'Learner is required.'});
+    const linked=await db.query(`SELECT 1 FROM parent_guardian_links WHERE parent_email=$1 AND learner_email=$2 LIMIT 1`,[req.user.email,learner]);
+    if(!linked.rowCount)return res.status(403).json({error:'This learner is not linked to your account.'});
+    const r=await db.query(`SELECT a.attendance_date AS "attendanceDate",a.status,a.note,c.class_name AS "className",sc.school_name AS "schoolName" FROM school_attendance a JOIN school_classes c ON c.class_id=a.class_id JOIN schools sc ON sc.school_id=a.school_id WHERE a.learner_email=$1 ORDER BY a.attendance_date DESC LIMIT 365`,[learner]);
+    const total=r.rows.length, presentLike=r.rows.filter(x=>['present','late','excused'].includes(x.status)).length;
+    res.json({ok:true,summary:{total,attendancePercent:total?Math.round(presentLike/total*10000)/100:0},rows:r.rows});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not load learner attendance.'})}
+});
+
+app.get('/api/schools/calendar', requireSchoolMembership, async (req,res)=>{
+  try{
+    const r=await db.query(`SELECT event_id AS "eventId",title,description,event_date AS "eventDate",end_date AS "endDate",event_type AS "eventType",created_by AS "createdBy" FROM school_calendar_events WHERE school_id=$1 ORDER BY event_date ASC LIMIT 300`,[req.school.schoolId]);
+    res.json({ok:true,events:r.rows});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not load school calendar.'})}
+});
+
+app.post('/api/schools/calendar', requireSchoolMembership, async (req,res)=>{
+  try{
+    if(!['admin'].includes(req.school.memberRole) && req.user.role!=='admin')return res.status(403).json({error:'School admin access is required.'});
+    const title=String(req.body?.title||'').trim().slice(0,160), description=String(req.body?.description||'').trim().slice(0,1000), eventDate=String(req.body?.eventDate||'').slice(0,10), endDate=String(req.body?.endDate||'').slice(0,10)||null, eventType=['school','term','holiday','exam','meeting','activity','other'].includes(req.body?.eventType)?req.body.eventType:'school';
+    if(!title||!/^\d{4}-\d{2}-\d{2}$/.test(eventDate))return res.status(400).json({error:'Title and valid event date are required.'});
+    const id='EVT-'+Date.now().toString(36).toUpperCase()+'-'+Math.random().toString(36).slice(2,7).toUpperCase();
+    await db.query(`INSERT INTO school_calendar_events(event_id,school_id,title,description,event_date,end_date,event_type,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,[id,req.school.schoolId,title,description||null,eventDate,endDate,eventType,req.user.email]);
+    res.status(201).json({ok:true,eventId:id,message:'Calendar event created.'});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not create calendar event.'})}
+});
+
+app.delete('/api/schools/calendar/:id', requireSchoolMembership, async (req,res)=>{
+  try{
+    if(!['admin'].includes(req.school.memberRole) && req.user.role!=='admin')return res.status(403).json({error:'School admin access is required.'});
+    await db.query(`DELETE FROM school_calendar_events WHERE event_id=$1 AND school_id=$2`,[req.params.id,req.school.schoolId]); res.json({ok:true});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not delete calendar event.'})}
 });
 
 app.use(express.static(__dirname));

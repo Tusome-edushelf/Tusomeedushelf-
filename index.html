@@ -210,6 +210,7 @@ body.a11y-reduced-motion *,body.a11y-reduced-motion *::before,body.a11y-reduced-
     <button class="learner-quick-card" type="button" onclick="showRecommendedMaterials()"><span>⭐</span><b>Recommended</b><small>Explore useful materials</small></button>
     <button class="learner-quick-card" type="button" onclick="document.getElementById('search').focus();document.getElementById('search').scrollIntoView({behavior:'smooth',block:'center'})"><span>🔎</span><b>Search Materials</b><small>Find a topic quickly</small></button>
     <button class="learner-quick-card" type="button" onclick="show('practice')"><span>🧠</span><b>Practice Mode</b><small>Test yourself and learn</small></button><button class="learner-quick-card" type="button" onclick="show('discussions')"><span>💬</span><b>Discussions</b><small>Text, voice or video study rooms</small></button>
+    <button class="learner-quick-card" type="button" onclick="show('attendance')"><span>📅</span><b>Attendance</b><small>View your attendance history</small></button>
   </div>
 
 
@@ -550,7 +551,7 @@ body.a11y-reduced-motion *,body.a11y-reduced-motion *::before,body.a11y-reduced-
 </section>
 
 <section id="parent" class="page">
-  <div class="topline"><div><h2>👪 Parent / Guardian Dashboard</h2><p>View only the learners that an authorised school has linked to your account.</p></div><button class="btn primary" onclick="loadParentChildren()">↻ Refresh</button></div>
+  <div class="topline"><div><h2>👪 Parent / Guardian Dashboard</h2><p>View only the learners that an authorised school has linked to your account.</p></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" onclick="show('attendance')">📅 Attendance</button><button class="btn primary" onclick="loadParentChildren()">↻ Refresh</button></div></div>
   <div class="parent-safety"><b>Privacy:</b> This portal is read-only. It shows academic information for linked learners only. Do not share your login with other people.</div>
   <div class="card parent-child-picker"><label>Linked learner<select id="parentChildSelect" onchange="loadParentDashboard()"><option value="">Loading linked learners…</option></select></label><span id="parentChildStatus" class="small"></span></div>
   <div id="parentDashboardContent" style="display:none">
@@ -606,6 +607,7 @@ body.a11y-reduced-motion *,body.a11y-reduced-motion *::before,body.a11y-reduced-
     <button class="teacher-quick-card" onclick="setTeacherFocusGoal()"><span>🎯</span><b>Teaching Goal</b><small id="teacherGoalQuick">Set your focus for this period.</small></button>
     <button class="teacher-quick-card" onclick="show('membership')"><span>👑</span><b>Membership</b><small>Premium tools and school plans.</small></button>
     <button class="teacher-quick-card" onclick="show('schoolManagement')"><span>🏫</span><b>School Management</b><small>Classes, members and shared resources.</small></button>
+    <button class="teacher-quick-card" onclick="show('attendance')"><span>✅</span><b>Attendance</b><small>Mark today's class attendance.</small></button>
   </div>
   <div class="cards teacher-stats">
     <div class="card"><h3>📤 Uploaded</h3><p><b id="count">3</b> materials</p></div>
@@ -647,6 +649,31 @@ body.a11y-reduced-motion *,body.a11y-reduced-motion *::before,body.a11y-reduced-
     <div class="card" style="margin-top:16px"><h3>📝 Assignment Submissions & Grading</h3><p class="small">Review learner submissions, enter marks and return constructive feedback. Teachers see submissions for their assigned classes and subjects.</p><div class="table-like"><table><thead><tr><th>Learner</th><th>Assignment</th><th>Class</th><th>Status</th><th>Marks</th><th>Feedback</th><th>Action</th></tr></thead><tbody id="schoolSubmissionsRows"><tr><td colspan="7">Loading submissions…</td></tr></tbody></table></div></div>
     <div class="card" style="margin-top:16px"><div class="topline"><div><h3>📊 School Gradebook</h3><p class="small">View assignment performance by class. Teachers see only their assigned classes and subjects; school administrators can view the school gradebook.</p></div><button class="btn" type="button" onclick="loadSchoolGradebook()">↻ Refresh</button></div><div class="gradebook-wrap"><table class="gradebook-table"><thead><tr><th>Learner</th><th>Class</th><th>Subject</th><th>Assignment</th><th>Status</th><th>Score</th><th>Feedback</th></tr></thead><tbody id="schoolGradebookRows"><tr><td colspan="7">Loading…</td></tr></tbody></table></div></div>
     <div class="card" style="margin-top:16px"><h3>📚 Shared Learning Resources</h3><p class="small">Approved platform resources available for school learning.</p><div id="schoolResources" class="school-resource-list"></div></div>
+  </div>
+</section>
+
+
+<section id="attendance" class="page">
+  <div class="topline"><div><h2>📅 Attendance & School Calendar</h2><p>Track learner attendance and keep important school dates in one place.</p></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" onclick="loadAttendance()">↻ Refresh</button><button class="btn" onclick="show(getSessionRole()==='parent'?'parent':getSessionRole()==='learner'?'learner':'schoolManagement')">Back</button></div></div>
+  <div class="notice"><b>Attendance note:</b> Attendance records are school records. Teachers and authorised school administrators enter or correct attendance; learners and parents can view records relevant to them.</div>
+  <div id="attendanceTeacherPanel" class="card" style="margin-top:16px;display:none">
+    <div class="topline"><div><h3>✅ Daily Register</h3><p class="small">Choose a date, review your assigned class learners and save attendance.</p></div><label style="max-width:190px">Date<input id="attendanceDate" type="date" onchange="loadAttendanceRegister()"></label></div>
+    <div class="attendance-actions"><button class="btn" onclick="markAllAttendance('present')">✓ Mark All Present</button><button class="btn" onclick="markAllAttendance('absent')">✕ Mark All Absent</button><button class="btn primary" onclick="saveAttendanceRegister()">💾 Save Attendance</button></div>
+    <div class="table-like" style="margin-top:12px;overflow:auto"><table><thead><tr><th>Learner</th><th>Class</th><th>Status</th><th>Note</th></tr></thead><tbody id="attendanceRegisterRows"><tr><td colspan="4">Loading…</td></tr></tbody></table></div>
+  </div>
+  <div id="attendanceLearnerPanel" class="card" style="margin-top:16px;display:none">
+    <div class="cards" style="margin-bottom:12px"><div class="card"><h3>📊 Attendance Rate</h3><p><b id="learnerAttendanceRate">—</b></p></div><div class="card"><h3>🗓️ Recorded Days</h3><p><b id="learnerAttendanceDays">0</b></p></div></div>
+    <div class="table-like" style="overflow:auto"><table><thead><tr><th>Date</th><th>Class</th><th>Status</th><th>Note</th></tr></thead><tbody id="learnerAttendanceRows"><tr><td colspan="4">Loading…</td></tr></tbody></table></div>
+  </div>
+  <div id="attendanceParentPanel" class="card" style="margin-top:16px;display:none">
+    <label>Linked learner<select id="attendanceParentChild" onchange="loadParentAttendance()"><option value="">Select learner</option></select></label>
+    <div class="cards" style="margin:12px 0"><div class="card"><h3>📊 Attendance Rate</h3><p><b id="parentAttendanceRate">—</b></p></div><div class="card"><h3>🗓️ Recorded Days</h3><p><b id="parentAttendanceDays">0</b></p></div></div>
+    <div class="table-like" style="overflow:auto"><table><thead><tr><th>Date</th><th>School</th><th>Class</th><th>Status</th><th>Note</th></tr></thead><tbody id="parentAttendanceRows"><tr><td colspan="5">Select a learner.</td></tr></tbody></table></div>
+  </div>
+  <div class="card" style="margin-top:16px">
+    <div class="topline"><div><h3>🗓️ School Calendar</h3><p class="small">Terms, holidays, exams, meetings and school activities.</p></div><button class="btn" onclick="loadSchoolCalendar()">↻ Refresh</button></div>
+    <div id="calendarAdminForm" style="display:none" class="school-panel"><label>Event title<input id="calendarTitle" maxlength="160" placeholder="Parents meeting"></label><label>Description<textarea id="calendarDescription" maxlength="1000" rows="2" placeholder="Optional details"></textarea></label><div class="school-grid"><label>Start date<input id="calendarStart" type="date"></label><label>End date<input id="calendarEnd" type="date"></label><label>Type<select id="calendarType"><option value="school">School</option><option value="term">Term</option><option value="holiday">Holiday</option><option value="exam">Exam</option><option value="meeting">Meeting</option><option value="activity">Activity</option><option value="other">Other</option></select></label></div><button class="btn primary" onclick="createSchoolCalendarEvent()">＋ Add Event</button></div>
+    <div class="table-like" style="margin-top:14px;overflow:auto"><table><thead><tr><th>Date</th><th>Event</th><th>Type</th><th>Description</th><th>Action</th></tr></thead><tbody id="schoolCalendarRows"><tr><td colspan="5">Loading…</td></tr></tbody></table></div>
   </div>
 </section>
 
@@ -1305,7 +1332,7 @@ function toggleHelpFaq(button){const item=button.closest('.help-faq');if(!item)r
 function filterHelp(){const q=(document.getElementById('helpSearch')?.value||'').trim().toLowerCase();const items=[...document.querySelectorAll('#helpFaqs .help-faq')];let visible=0;items.forEach(item=>{const match=!q||item.dataset.help.includes(q)||item.textContent.toLowerCase().includes(q);item.style.display=match?'block':'none';if(match)visible++});const no=document.getElementById('helpNoResults');if(no)no.style.display=visible?'none':'block'}
 
 function show(id){
-  const protectedRoles={learner:'learner',teacher:'teacher',admin:'admin',communication:'user',account:'user',reader:'learner',practice:'learner',discussions:'learner',membership:'user',schoolManagement:'user',parent:'parent'};
+  const protectedRoles={learner:'learner',teacher:'teacher',admin:'admin',communication:'user',account:'user',reader:'learner',practice:'learner',discussions:'learner',membership:'user',schoolManagement:'user',attendance:'user',parent:'parent'};
   if(protectedRoles[id]){
     const role=getSessionRole();
     if(!role){show('login');return}
@@ -1321,7 +1348,7 @@ function show(id){
   const el=document.getElementById(id);if(el)el.classList.add('active');
   if(id==='teacher'){loadServerMaterials().then(renderTeacher);loadTeacherEarnings();loadTeacherAnalytics()}
   if(id==='membership'){loadMembership()}
-  if(id==='schoolManagement'){loadSchoolManagement()}
+  if(id==='schoolManagement'){loadSchoolManagement()} if(id==='attendance'){loadAttendance()}
   if(id==='learner'){loadLearnerAssignments();loadLearnerGradebook()}
   if(id==='admin'){adminRefreshAll();loadAdminAnalytics()}
   if(id==='communication'){renderMyFeedback();renderAdminFeedback()}
@@ -1722,6 +1749,40 @@ function startLivePolling(){clearInterval(livePollTimer);livePollTimer=setInterv
 async function pollLiveSignals(){if(!liveRoom||!livePc)return;try{const r=await fetch('/api/discussions/signals?room='+encodeURIComponent(liveRoom)+'&after='+liveLastSignal,{credentials:'include'});const d=await r.json();for(const x of (d.signals||[])){liveLastSignal=Math.max(liveLastSignal,Number(x.id));if(x.kind==='offer'){await livePc.setRemoteDescription(x.payload);const ans=await livePc.createAnswer();await livePc.setLocalDescription(ans);await sendLiveSignal('answer',ans);setLiveStatus('Connected to the room. Waiting for media…')}else if(x.kind==='answer'&&liveInitiator){await livePc.setRemoteDescription(x.payload)}else if(x.kind==='ice'){try{await livePc.addIceCandidate(x.payload)}catch{}}} }catch{}}
 function setLiveStatus(t){const el=document.getElementById('liveRoomStatus');if(el)el.textContent=t;}
 function leaveLiveRoom(){clearInterval(livePollTimer);livePollTimer=null;if(screenStream)screenStream.getTracks().forEach(t=>t.stop());if(liveStream)liveStream.getTracks().forEach(t=>t.stop());if(livePc)livePc.close();screenStream=null;cameraStream=null;liveStream=null;livePc=null;liveRoom='';liveLastSignal=0;liveInitiator=false;document.getElementById('localLiveVideo').srcObject=null;document.getElementById('remoteLiveVideo').srcObject=null;setLiveStatus('You left the live room.')}
+</script>
+
+<script>
+function attendanceToday(){return new Date().toISOString().slice(0,10)}
+async function loadAttendance(){
+  const role=getSessionRole();
+  const tp=document.getElementById('attendanceTeacherPanel'), lp=document.getElementById('attendanceLearnerPanel'), pp=document.getElementById('attendanceParentPanel'), af=document.getElementById('calendarAdminForm');
+  if(!tp)return;
+  tp.style.display=['teacher','admin'].includes(role)?'block':'none'; lp.style.display=role==='learner'?'block':'none'; pp.style.display=role==='parent'?'block':'none'; af.style.display=role==='admin'?'block':'none';
+  const date=document.getElementById('attendanceDate'); if(date&&!date.value)date.value=attendanceToday();
+  if(role==='teacher'||role==='admin')await loadAttendanceRegister();
+  if(role==='learner')await loadLearnerAttendance();
+  if(role==='parent')await loadParentAttendanceChildren();
+  await loadSchoolCalendar();
+}
+async function loadAttendanceRegister(){
+  const date=document.getElementById('attendanceDate')?.value||attendanceToday(), box=document.getElementById('attendanceRegisterRows'); if(!box)return;
+  box.innerHTML='<tr><td colspan="4">Loading…</td></tr>';
+  try{const r=await fetch('/api/schools/attendance?date='+encodeURIComponent(date),{credentials:'include'}),d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load attendance.');window.attendanceRows=d.rows||[];box.innerHTML=window.attendanceRows.length?window.attendanceRows.map((x,i)=>`<tr data-attendance-index="${i}"><td>${escHtml(x.learnerEmail)}</td><td>${escHtml(x.className||'—')}</td><td><select class="attendance-status"><option value="present" ${x.status==='present'?'selected':''}>Present</option><option value="absent" ${x.status==='absent'?'selected':''}>Absent</option><option value="late" ${x.status==='late'?'selected':''}>Late</option><option value="excused" ${x.status==='excused'?'selected':''}>Excused</option></select></td><td><input class="attendance-note" maxlength="300" value="${escHtml(x.note||'')}" placeholder="Optional note"></td></tr>`).join(''):'<tr><td colspan="4">No learners are assigned to your school/class.</td></tr>'}catch(e){box.innerHTML=`<tr><td colspan="4">${escHtml(e.message)}</td></tr>`}
+}
+function markAllAttendance(status){document.querySelectorAll('#attendanceRegisterRows .attendance-status').forEach(x=>x.value=status)}
+async function saveAttendanceRegister(){
+  const rows=[...document.querySelectorAll('#attendanceRegisterRows tr[data-attendance-index]')]; const date=document.getElementById('attendanceDate')?.value||attendanceToday(); const entries=rows.map(r=>{const i=Number(r.dataset.attendanceIndex),x=window.attendanceRows?.[i];return x?{learnerEmail:x.learnerEmail,classId:x.classId,status:r.querySelector('.attendance-status')?.value||'present',note:r.querySelector('.attendance-note')?.value||''}:null}).filter(Boolean);
+  if(!entries.length){showToast?.('There are no attendance records to save.','info');return}
+  try{const r=await fetch('/api/schools/attendance',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({date,entries})}),d=await r.json();if(!r.ok)throw new Error(d.error||'Could not save attendance.');showToast?.('Attendance saved successfully.','success');loadAttendanceRegister()}catch(e){showToast?.(e.message,'error')}
+}
+async function loadLearnerAttendance(){try{const r=await fetch('/api/learner/attendance',{credentials:'include'}),d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load attendance.');document.getElementById('learnerAttendanceRate').textContent=(d.summary?.attendancePercent??0)+'%';document.getElementById('learnerAttendanceDays').textContent=d.summary?.total||0;document.getElementById('learnerAttendanceRows').innerHTML=(d.rows||[]).length?d.rows.map(x=>`<tr><td>${escHtml(x.attendanceDate)}</td><td>${escHtml(x.className||'—')}</td><td>${escHtml(x.status)}</td><td>${escHtml(x.note||'')}</td></tr>`).join(''):'<tr><td colspan="4">No attendance records yet.</td></tr>'}catch(e){document.getElementById('learnerAttendanceRows').innerHTML=`<tr><td colspan="4">${escHtml(e.message)}</td></tr>`}}
+async function loadParentAttendanceChildren(){
+  const sel=document.getElementById('attendanceParentChild'); if(!sel)return;
+  try{const r=await fetch('/api/parent/children',{credentials:'include'}),d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load linked learners.');sel.innerHTML=(d.children||[]).map(x=>`<option value="${escHtml(x.learnerEmail)}">${escHtml(x.learnerEmail)}${x.className?' — '+escHtml(x.className):''}</option>`).join('')||'<option value="">No linked learners</option>';await loadParentAttendance()}catch(e){sel.innerHTML='<option value="">Could not load learners</option>';document.getElementById('parentAttendanceRows').innerHTML=`<tr><td colspan="5">${escHtml(e.message)}</td></tr>`}}
+async function loadParentAttendance(){const learner=document.getElementById('attendanceParentChild')?.value;if(!learner)return;try{const r=await fetch('/api/parent/attendance?learnerEmail='+encodeURIComponent(learner),{credentials:'include'}),d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load attendance.');document.getElementById('parentAttendanceRate').textContent=(d.summary?.attendancePercent??0)+'%';document.getElementById('parentAttendanceDays').textContent=d.summary?.total||0;document.getElementById('parentAttendanceRows').innerHTML=(d.rows||[]).length?d.rows.map(x=>`<tr><td>${escHtml(x.attendanceDate)}</td><td>${escHtml(x.schoolName||'—')}</td><td>${escHtml(x.className||'—')}</td><td>${escHtml(x.status)}</td><td>${escHtml(x.note||'')}</td></tr>`).join(''):'<tr><td colspan="5">No attendance records yet.</td></tr>'}catch(e){document.getElementById('parentAttendanceRows').innerHTML=`<tr><td colspan="5">${escHtml(e.message)}</td></tr>`}}
+async function loadSchoolCalendar(){const box=document.getElementById('schoolCalendarRows');if(!box)return;try{const r=await fetch('/api/schools/calendar',{credentials:'include'}),d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load school calendar.');box.innerHTML=(d.events||[]).length?d.events.map(x=>`<tr><td>${escHtml(x.eventDate)}${x.endDate&&x.endDate!==x.eventDate?' → '+escHtml(x.endDate):''}</td><td><b>${escHtml(x.title)}</b></td><td>${escHtml(x.eventType)}</td><td>${escHtml(x.description||'')}</td><td>${getSessionRole()==='admin'?`<button class="btn" onclick="deleteSchoolCalendarEvent('${escHtml(x.eventId)}')">Delete</button>`:'—'}</td></tr>`).join(''):'<tr><td colspan="5">No calendar events yet.</td></tr>'}catch(e){box.innerHTML=`<tr><td colspan="5">${escHtml(e.message)}</td></tr>`}}
+async function createSchoolCalendarEvent(){const payload={title:document.getElementById('calendarTitle')?.value||'',description:document.getElementById('calendarDescription')?.value||'',eventDate:document.getElementById('calendarStart')?.value||'',endDate:document.getElementById('calendarEnd')?.value||'',eventType:document.getElementById('calendarType')?.value||'school'};try{const r=await fetch('/api/schools/calendar',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(payload)}),d=await r.json();if(!r.ok)throw new Error(d.error||'Could not create event.');document.getElementById('calendarTitle').value='';document.getElementById('calendarDescription').value='';showToast?.('Calendar event added.','success');loadSchoolCalendar()}catch(e){showToast?.(e.message,'error')}}
+async function deleteSchoolCalendarEvent(id){if(!confirm('Delete this calendar event?'))return;try{const r=await fetch('/api/schools/calendar/'+encodeURIComponent(id),{method:'DELETE',credentials:'include'}),d=await r.json();if(!r.ok)throw new Error(d.error||'Could not delete event.');loadSchoolCalendar()}catch(e){showToast?.(e.message,'error')}}
 </script>
 </body>
 </html>

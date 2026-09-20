@@ -4,6 +4,7 @@ import { Pool } from 'pg';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
+import { gzipSync, gunzipSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -13,6 +14,10 @@ app.use(express.json({ limit: '18mb' }));
 const PORT = Number(process.env.PORT || 3000);
 const DATA_DIR = path.join(__dirname, 'data');
 const TX_FILE = path.join(DATA_DIR, 'transactions.json');
+const BACKUP_DIR = process.env.BACKUP_DIR || path.join(DATA_DIR, 'backups');
+const BACKUP_INTERVAL_HOURS = Math.max(1, Number(process.env.BACKUP_INTERVAL_HOURS || 24));
+const BACKUP_RETENTION_DAYS = Math.max(1, Number(process.env.BACKUP_RETENTION_DAYS || 30));
+const RESTORE_CONFIRMATION = 'RESTORE TUSOME EDUSHELF';
 
 // Step 2 database connection. Render provides DATABASE_URL for the PostgreSQL service.
 // The file store remains only as a temporary migration/development fallback.
@@ -220,6 +225,54 @@ async function initDatabase() {
       paid_at TIMESTAMPTZ
     );
 
+    ALTER TABLE materials ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+    ALTER TABLE materials ADD COLUMN IF NOT EXISTS deleted_by TEXT;
+    ALTER TABLE materials ADD COLUMN IF NOT EXISTS delete_reason TEXT;
+
+    CREATE TABLE IF NOT EXISTS material_versions (
+      version_id TEXT PRIMARY KEY,
+      material_id TEXT NOT NULL REFERENCES materials(id) ON DELETE CASCADE,
+      version_number INTEGER NOT NULL,
+      file_name TEXT NOT NULL,
+      mime_type TEXT NOT NULL,
+      file_size BIGINT NOT NULL,
+      file_data BYTEA NOT NULL,
+      metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_by TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(material_id, version_number)
+    );
+
+    CREATE TABLE IF NOT EXISTS audit_logs (
+      audit_id BIGSERIAL PRIMARY KEY,
+      actor_email TEXT,
+      actor_role TEXT,
+      action TEXT NOT NULL,
+      entity_type TEXT,
+      entity_id TEXT,
+      details JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS backup_records (
+      backup_id TEXT PRIMARY KEY,
+      file_name TEXT NOT NULL,
+      file_path TEXT NOT NULL,
+      size_bytes BIGINT NOT NULL DEFAULT 0,
+      sha256 TEXT NOT NULL,
+      trigger TEXT NOT NULL DEFAULT 'scheduled',
+      status TEXT NOT NULL DEFAULT 'completed',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      restore_tested_at TIMESTAMPTZ,
+      restore_test_status TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS curriculum_data (
+      curriculum_key TEXT PRIMARY KEY,
+      curriculum_value TEXT NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
     CREATE INDEX IF NOT EXISTS idx_transactions_user_email ON transactions (user_email);
     CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions (status);
     CREATE INDEX IF NOT EXISTS idx_transactions_teacher_amount ON transactions (teacher_amount);
@@ -228,6 +281,12 @@ async function initDatabase() {
 
   const defaultTeacherRevenue = Math.min(100, Math.max(0, Number(process.env.TEACHER_REVENUE_PERCENT || 80)));
   await db.query(`INSERT INTO platform_settings(setting_key,setting_value) VALUES ('teacher_revenue_percentage',$1),('platform_revenue_percentage',$2) ON CONFLICT(setting_key) DO NOTHING`, [String(defaultTeacherRevenue), String(100-defaultTeacherRevenue)]);
+  const curriculumSeeds = [
+    ['7|Mathematics','KICD Grade 7 Mathematics includes Numbers, Algebra, Measurements, Geometry, and Data Handling and Probability.'],
+    ['8|Mathematics','KICD Grade 8 Mathematics includes Numbers, Algebra, Measurements, Geometry, and Data Handling and Probability.'],
+    ['9|Mathematics','Use the KICD Grade 9 Mathematics curriculum context where available; verify specific strands and learning outcomes before publication.']
+  ];
+  for (const [k,v] of curriculumSeeds) await db.query(`INSERT INTO curriculum_data(curriculum_key,curriculum_value) VALUES($1,$2) ON CONFLICT(curriculum_key) DO NOTHING`,[k,v]);
 
 
   // Seed/update the three current demo accounts from Render environment variables.
@@ -281,6 +340,83 @@ async function initDatabase() {
 
   databaseReady = true;
   console.log('PostgreSQL connected and EduShelf schema is ready.');
+}
+
+
+async function audit(req, action, entityType = null, entityId = null, details = {}) {
+  if (!db || !databaseReady) return;
+  try { await db.query(`INSERT INTO audit_logs(actor_email,actor_role,action,entity_type,entity_id,details) VALUES($1,$2,$3,$4,$5,$6)`, [req?.user?.email || null, req?.user?.role || null, action, entityType, entityId == null ? null : String(entityId), details || {}]); }
+  catch (e) { console.warn('Audit log failed:', e.message); }
+}
+
+async function createBackup(trigger = 'scheduled') {
+  if (!db || !databaseReady) throw new Error('Database is not ready.');
+  await fs.mkdir(BACKUP_DIR, { recursive: true });
+  const tables = ['users','materials','material_files','transactions','platform_settings','teacher_payouts','material_versions','audit_logs','curriculum_data'];
+  const snapshot = { schemaVersion: 1, product: 'Tusome EduShelf', createdAt: new Date().toISOString(), trigger, tables: {} };
+  for (const table of tables) {
+    const r = await db.query(`SELECT * FROM ${table}`);
+    snapshot.tables[table] = r.rows.map(row => {
+      const out = { ...row };
+      if (table === 'material_files' && out.file_data) out.file_data = Buffer.from(out.file_data).toString('base64');
+      if (table === 'material_versions' && out.file_data) out.file_data = Buffer.from(out.file_data).toString('base64');
+      return out;
+    });
+  }
+  const raw = Buffer.from(JSON.stringify(snapshot));
+  const gz = gzipSync(raw, { level: 6 });
+  const hash = crypto.createHash('sha256').update(gz).digest('hex');
+  const backupId = `BKP-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
+  const fileName = `${backupId}.json.gz`;
+  const filePath = path.join(BACKUP_DIR, fileName);
+  await fs.writeFile(filePath, gz);
+  await db.query(`INSERT INTO backup_records(backup_id,file_name,file_path,size_bytes,sha256,trigger,status) VALUES($1,$2,$3,$4,$5,$6,'completed')`, [backupId,fileName,filePath,gz.length,hash,trigger]);
+  const cutoff = Date.now() - BACKUP_RETENTION_DAYS * 86400000;
+  const old = await db.query(`SELECT backup_id,file_path FROM backup_records WHERE created_at < to_timestamp($1)`, [cutoff/1000]);
+  for (const row of old.rows) { try { await fs.unlink(row.file_path); } catch {} await db.query(`DELETE FROM backup_records WHERE backup_id=$1`, [row.backup_id]); }
+  return { backupId, fileName, sizeBytes: gz.length, sha256: hash, createdAt: snapshot.createdAt, trigger };
+}
+
+async function readBackup(backupId) {
+  const r = await db.query(`SELECT * FROM backup_records WHERE backup_id=$1 LIMIT 1`, [backupId]);
+  if (!r.rowCount) throw new Error('Backup not found.');
+  const row = r.rows[0];
+  const gz = await fs.readFile(row.file_path);
+  const hash = crypto.createHash('sha256').update(gz).digest('hex');
+  if (hash !== row.sha256) throw new Error('Backup integrity check failed.');
+  return { row, snapshot: JSON.parse(gunzipSync(gz).toString('utf8')) };
+}
+
+function validateBackupSnapshot(snapshot) {
+  const required = ['users','materials','material_files','transactions','platform_settings','teacher_payouts','material_versions','audit_logs','curriculum_data'];
+  if (!snapshot || snapshot.schemaVersion !== 1 || !snapshot.tables) throw new Error('Unsupported or invalid backup format.');
+  for (const t of required) if (!Array.isArray(snapshot.tables[t])) throw new Error(`Backup is missing table: ${t}`);
+  for (const row of snapshot.tables.material_files) if (row.file_data && !/^[A-Za-z0-9+/=]*$/.test(row.file_data)) throw new Error('Backup contains invalid material file data.');
+  for (const row of snapshot.tables.material_versions) if (row.file_data && !/^[A-Za-z0-9+/=]*$/.test(row.file_data)) throw new Error('Backup contains invalid version file data.');
+  return { tables: Object.fromEntries(required.map(t => [t, snapshot.tables[t].length])), createdAt: snapshot.createdAt };
+}
+
+async function restoreBackup(backupId) {
+  const { snapshot } = await readBackup(backupId);
+  validateBackupSnapshot(snapshot);
+  const t = snapshot.tables;
+  await db.query('BEGIN');
+  try {
+    for (const table of ['material_versions','material_files','teacher_payouts','transactions','materials','platform_settings','audit_logs','curriculum_data','users']) await db.query(`DELETE FROM ${table}`);
+    const insertRows = async (table, rows, columns, transform = x => columns.map(c => x[c] ?? null)) => {
+      for (const row of rows) { const vals = transform(row); const placeholders = vals.map((_,i)=>`$${i+1}`).join(','); await db.query(`INSERT INTO ${table}(${columns.join(',')}) VALUES(${placeholders})`, vals); }
+    };
+    await insertRows('users', t.users, ['id','email','role','password_hash','created_at','updated_at'], r=>[r.id,r.email,r.role,r.password_hash,r.created_at,r.updated_at]);
+    await insertRows('materials', t.materials, ['id','title','subject','grade','strand','competency','topic','file_name','file_type','file_size','price','approval_status','description','teacher_email','file_id','approved_at','created_at','updated_at','deleted_at','deleted_by','delete_reason']);
+    await insertRows('material_files', t.material_files, ['file_id','material_id','file_name','mime_type','file_size','file_data','created_at'], r=>[r.file_id,r.material_id,r.file_name,r.mime_type,r.file_size,Buffer.from(r.file_data||'', 'base64'),r.created_at]);
+    await insertRows('transactions', t.transactions, ['transaction_id','checkout_request_id','merchant_request_id','material_id','title','amount','phone','status','result_code','result_description','mpesa_receipt','paid_amount','paid_phone','transaction_date','user_email','created_at','updated_at','teacher_percentage','teacher_amount','platform_percentage','platform_amount']);
+    await insertRows('platform_settings', t.platform_settings, ['setting_key','setting_value','updated_at']);
+    await insertRows('teacher_payouts', t.teacher_payouts, ['payout_id','teacher_email','amount','status','notes','created_at','paid_at']);
+    await insertRows('material_versions', t.material_versions, ['version_id','material_id','version_number','file_name','mime_type','file_size','file_data','metadata','created_by','created_at'], r=>[r.version_id,r.material_id,r.version_number,r.file_name,r.mime_type,r.file_size,Buffer.from(r.file_data||'', 'base64'),r.metadata||{},r.created_by,r.created_at]);
+    await insertRows('audit_logs', t.audit_logs, ['audit_id','actor_email','actor_role','action','entity_type','entity_id','details','created_at'], r=>[r.audit_id,r.actor_email,r.actor_role,r.action,r.entity_type,r.entity_id,r.details||{},r.created_at]);
+    await insertRows('curriculum_data', t.curriculum_data, ['curriculum_key','curriculum_value','updated_at']);
+    await db.query('COMMIT');
+  } catch (e) { await db.query('ROLLBACK'); throw e; }
 }
 
 async function dbFindUser(email) {
@@ -653,12 +789,36 @@ const parts = [];
   throw new Error(`Gemini is temporarily busy. Automatic fallback was attempted across ${models.length} models. Please try again shortly. Last error: ${lastError?.message || 'unknown error'}`);
 }
 
+app.post('/api/auth/register', async (req, res) => {
+  const { email, password, role } = req.body || {};
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+  const normalizedRole = String(role || '').trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) return res.status(400).json({ error: 'Please enter a valid email address.' });
+  if (String(password || '').length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters long.' });
+  if (!['learner','teacher'].includes(normalizedRole)) return res.status(400).json({ error: 'New accounts can only be Learner or Teacher accounts.' });
+  const existing = await findUser(normalizedEmail);
+  if (existing) return res.status(409).json({ error: 'An account with that email already exists. Please use Sign In instead.' });
+  const passwordHash = hashPassword(password);
+  if (db) {
+    await db.query('INSERT INTO users (email, role, password_hash) VALUES ($1,$2,$3)', [normalizedEmail, normalizedRole, passwordHash]);
+  } else {
+    const users = await readJson(USERS_FILE, []);
+    users.push({ email: normalizedEmail, role: normalizedRole, passwordHash, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+    await writeJson(USERS_FILE, users);
+  }
+  const user = { email: normalizedEmail, role: normalizedRole };
+  setSessionCookie(res, user);
+  void audit({user}, 'register', 'user', normalizedEmail);
+  res.status(201).json({ ok: true, user });
+});
+
 app.post('/api/auth/login', async (req, res) => {
   const { email, password, role } = req.body || {};
   const user = await findUser(email);
   if (!user || !verifyPassword(password, user.passwordHash)) return res.status(401).json({ error: 'Invalid email or password.' });
   if (!['learner', 'teacher', 'admin'].includes(String(role)) || user.role !== role) return res.status(403).json({ error: 'The selected account type does not match this account.' });
   setSessionCookie(res, user);
+  void audit({user}, 'login', 'user', user.email);
   res.json({ ok: true, user: { email: user.email, role: user.role } });
 });
 
@@ -693,12 +853,12 @@ function decodeDataUrl(dataUrl) {
 app.get('/api/materials', requireAuth, async (req, res) => {
   if (!databaseReady) return res.status(503).json({ error: 'Database is not ready.' });
   try {
-    let sql = `SELECT id,title,subject,grade,strand,competency,topic,file_name AS file,"file_type" AS "fileType",file_size AS "fileSize",price,approval_status AS "approvalStatus",description,teacher_email AS "teacherEmail",file_id AS "fileId",approved_at AS "approvedAt",created_at AS "createdAt" FROM materials`;
+    let sql = `SELECT id,title,subject,grade,strand,competency,topic,file_name AS file,"file_type" AS "fileType",file_size AS "fileSize",price,approval_status AS "approvalStatus",description,teacher_email AS "teacherEmail",file_id AS "fileId",approved_at AS "approvedAt",created_at AS "createdAt" FROM materials WHERE deleted_at IS NULL`;
     const params = [];
     if (req.user.role === 'learner') {
       sql += ` WHERE approval_status = 'approved'`;
     } else if (req.user.role === 'teacher') {
-      sql += ` WHERE teacher_email = $1`;
+      sql += ` AND teacher_email = $1`;
       params.push(req.user.email);
     }
     sql += ` ORDER BY created_at DESC`;
@@ -723,7 +883,9 @@ app.post('/api/materials', requireRole('teacher'), async (req, res) => {
     await db.query('BEGIN');
     await db.query(`INSERT INTO materials (id,title,subject,grade,strand,competency,topic,file_name,file_type,file_size,price,approval_status,description,teacher_email,file_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'pending',$12,$13,$14)`, [id, String(title).trim(), subject || null, grade || null, strand || null, competency || null, topic || null, file.name, mimeType, buffer.length, Math.max(0, Number(price || 0)), description || null, req.user.email, fileId]);
     await db.query(`INSERT INTO material_files (file_id,material_id,file_name,mime_type,file_size,file_data) VALUES ($1,$2,$3,$4,$5,$6)`, [fileId, id, file.name, mimeType, buffer.length, buffer]);
+    await db.query(`INSERT INTO material_versions(version_id,material_id,version_number,file_name,mime_type,file_size,file_data,metadata,created_by) VALUES($1,$2,1,$3,$4,$5,$6,$7,$8)`, [`VER-${crypto.randomBytes(10).toString('hex')}`,id,file.name,mimeType,buffer.length,buffer,JSON.stringify({title:String(title).trim(),subject,grade,topic}),req.user.email]);
     await db.query('COMMIT');
+    void audit(req, 'material_upload', 'material', id, { title: String(title).trim(), fileName: file.name });
     res.status(201).json({ ok: true, material: { id, title: String(title).trim(), subject, grade, strand, competency, topic, file: file.name, fileType: mimeType, fileSize: buffer.length, price: Math.max(0, Number(price || 0)), approvalStatus: 'pending', description, teacherEmail: req.user.email, fileId } });
   } catch (e) {
     try { await db.query('ROLLBACK'); } catch {}
@@ -757,11 +919,86 @@ app.patch('/api/materials/:id/review', requireRole('admin'), async (req, res) =>
   try {
     const result = await db.query(`UPDATE materials SET approval_status=$2,price=$3,approved_at=CASE WHEN $2='approved' THEN NOW() ELSE NULL END,updated_at=NOW() WHERE id=$1 RETURNING id,title,price,approval_status AS "approvalStatus",approved_at AS "approvedAt"`, [req.params.id, status, price]);
     if (!result.rowCount) return res.status(404).json({ error: 'Material not found.' });
+    void audit(req, 'material_review', 'material', req.params.id, { approvalStatus: status, price });
     res.json({ ok: true, material: result.rows[0] });
   } catch (e) {
     console.error('Material review error:', e);
     res.status(500).json({ error: 'Could not update the material.' });
   }
+});
+
+
+// Backup, recovery, versioning and audit controls.
+app.get('/api/admin/backups', requireRole('admin'), async (req,res)=>{
+  try {
+    const rows=await db.query(`SELECT backup_id AS "backupId",file_name AS "fileName",size_bytes AS "sizeBytes",sha256,trigger,status,created_at AS "createdAt",restore_tested_at AS "restoreTestedAt",restore_test_status AS "restoreTestStatus" FROM backup_records ORDER BY created_at DESC LIMIT 100`);
+    const deleted=await db.query(`SELECT id,title,teacher_email AS "teacherEmail",deleted_at AS "deletedAt",deleted_by AS "deletedBy",delete_reason AS "deleteReason" FROM materials WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC LIMIT 100`);
+    const versions=await db.query(`SELECT v.version_id AS "versionId",v.material_id AS "materialId",m.title,v.version_number AS "versionNumber",v.file_name AS "fileName",v.file_size AS "fileSize",v.created_by AS "createdBy",v.created_at AS "createdAt" FROM material_versions v JOIN materials m ON m.id=v.material_id ORDER BY v.created_at DESC LIMIT 100`);
+    const audits=await db.query(`SELECT audit_id AS "auditId",actor_email AS "actorEmail",actor_role AS "actorRole",action,entity_type AS "entityType",entity_id AS "entityId",details,created_at AS "createdAt" FROM audit_logs ORDER BY created_at DESC LIMIT 100`);
+    res.json({ok:true,settings:{intervalHours:BACKUP_INTERVAL_HOURS,retentionDays:BACKUP_RETENTION_DAYS,confirmation:RESTORE_CONFIRMATION},backups:rows.rows,deletedMaterials:deleted.rows,versions:versions.rows,auditLogs:audits.rows});
+  } catch(e){console.error(e);res.status(500).json({error:'Could not load backup and recovery information.'})}
+});
+
+app.post('/api/admin/backups/run', requireRole('admin'), async (req,res)=>{
+  try { const result=await createBackup('manual'); void audit(req,'backup_created','backup',result.backupId,{trigger:'manual'}); res.status(201).json({ok:true,backup:result}); }
+  catch(e){console.error(e);res.status(500).json({error:e.message||'Backup failed.'})}
+});
+
+app.get('/api/admin/backups/:id/download', requireRole('admin'), async (req,res)=>{
+  try { const {row}=await readBackup(req.params.id); res.download(row.file_path,row.file_name); }
+  catch(e){res.status(404).json({error:e.message||'Backup not found.'})}
+});
+
+app.post('/api/admin/backups/:id/test-restore', requireRole('admin'), async (req,res)=>{
+  try {
+    const {snapshot}=await readBackup(req.params.id); const report=validateBackupSnapshot(snapshot);
+    await db.query(`UPDATE backup_records SET restore_tested_at=NOW(),restore_test_status='passed' WHERE backup_id=$1`,[req.params.id]);
+    void audit(req,'restore_test','backup',req.params.id,report); res.json({ok:true,report});
+  } catch(e) {
+    try { await db.query(`UPDATE backup_records SET restore_tested_at=NOW(),restore_test_status='failed' WHERE backup_id=$1`,[req.params.id]); } catch {}
+    res.status(400).json({error:e.message||'Restore test failed.'});
+  }
+});
+
+app.post('/api/admin/backups/:id/restore', requireRole('admin'), async (req,res)=>{
+  if(String(req.body?.confirmation||'')!==RESTORE_CONFIRMATION) return res.status(400).json({error:`Admin confirmation required. Type exactly: ${RESTORE_CONFIRMATION}`});
+  try { const {snapshot}=await readBackup(req.params.id); const report=validateBackupSnapshot(snapshot); await restoreBackup(req.params.id); void audit(req,'backup_restored','backup',req.params.id,report); res.json({ok:true,report,message:'Backup restored successfully. Current database data has been replaced by the selected backup.'}); }
+  catch(e){console.error(e);res.status(500).json({error:e.message||'Restore failed.'})}
+});
+
+app.delete('/api/admin/materials/:id', requireRole('admin'), async (req,res)=>{
+  if(String(req.body?.confirmation||'')!=='DELETE MATERIAL') return res.status(400).json({error:'Admin confirmation required. Type exactly: DELETE MATERIAL'});
+  try { const r=await db.query(`UPDATE materials SET deleted_at=NOW(),deleted_by=$2,delete_reason=$3,approval_status='deleted',updated_at=NOW() WHERE id=$1 AND deleted_at IS NULL RETURNING id,title`,[req.params.id,req.user.email,String(req.body?.reason||'Admin recovery bin')]); if(!r.rowCount)return res.status(404).json({error:'Material not found or already deleted.'}); void audit(req,'material_deleted','material',req.params.id,{title:r.rows[0].title}); res.json({ok:true,material:r.rows[0]}); }
+  catch(e){res.status(500).json({error:'Could not move material to the recovery bin.'})}
+});
+
+app.post('/api/admin/materials/:id/restore', requireRole('admin'), async (req,res)=>{
+  if(String(req.body?.confirmation||'')!=='RESTORE MATERIAL') return res.status(400).json({error:'Admin confirmation required. Type exactly: RESTORE MATERIAL'});
+  try { const r=await db.query(`UPDATE materials SET deleted_at=NULL,deleted_by=NULL,delete_reason=NULL,approval_status='pending',updated_at=NOW() WHERE id=$1 AND deleted_at IS NOT NULL RETURNING id,title`,[req.params.id]); if(!r.rowCount)return res.status(404).json({error:'Deleted material not found.'}); void audit(req,'material_restored','material',req.params.id,{title:r.rows[0].title}); res.json({ok:true,material:r.rows[0]}); }
+  catch(e){res.status(500).json({error:'Could not restore material.'})}
+});
+
+app.get('/api/admin/materials/:id/versions', requireRole('admin'), async (req,res)=>{
+  try { const r=await db.query(`SELECT version_id AS "versionId",version_number AS "versionNumber",file_name AS "fileName",mime_type AS "mimeType",file_size AS "fileSize",created_by AS "createdBy",created_at AS "createdAt" FROM material_versions WHERE material_id=$1 ORDER BY version_number DESC`,[req.params.id]); res.json({ok:true,versions:r.rows}); }
+  catch(e){res.status(500).json({error:'Could not load material versions.'})}
+});
+
+app.put('/api/materials/:id/file', requireRole('teacher','admin'), async (req,res)=>{
+  if(!databaseReady)return res.status(503).json({error:'Database is not ready.'});
+  try {
+    const {mimeType,buffer}=decodeDataUrl(req.body?.file?.data); const name=String(req.body?.file?.name||'Updated material');
+    if(!buffer.length||buffer.length>12*1024*1024)return res.status(400).json({error:'File must be between 1 byte and 12 MB.'});
+    const current=await db.query(`SELECT id,title,teacher_email AS "teacherEmail" FROM materials WHERE id=$1 AND deleted_at IS NULL`,[req.params.id]);
+    if(!current.rowCount)return res.status(404).json({error:'Material not found.'});
+    if(req.user.role==='teacher'&&current.rows[0].teacherEmail!==req.user.email)return res.status(403).json({error:'You can only version your own materials.'});
+    const n=await db.query(`SELECT COALESCE(MAX(version_number),0)+1 AS n FROM material_versions WHERE material_id=$1`,[req.params.id]); const version=Number(n.rows[0].n);
+    const fileId=`FILE-${crypto.randomBytes(12).toString('hex')}`;
+    await db.query('BEGIN');
+    await db.query(`INSERT INTO material_files(file_id,material_id,file_name,mime_type,file_size,file_data,created_at) VALUES($1,$2,$3,$4,$5,$6,NOW()) ON CONFLICT(material_id) DO UPDATE SET file_id=EXCLUDED.file_id,file_name=EXCLUDED.file_name,mime_type=EXCLUDED.mime_type,file_size=EXCLUDED.file_size,file_data=EXCLUDED.file_data,created_at=NOW()`,[fileId,req.params.id,name,mimeType,buffer.length,buffer]);
+    await db.query(`UPDATE materials SET file_id=$2,file_name=$3,file_type=$4,file_size=$5,updated_at=NOW() WHERE id=$1`,[req.params.id,fileId,name,mimeType,buffer.length]);
+    await db.query(`INSERT INTO material_versions(version_id,material_id,version_number,file_name,mime_type,file_size,file_data,metadata,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`,[`VER-${crypto.randomBytes(10).toString('hex')}`,req.params.id,version,name,mimeType,buffer.length,buffer,JSON.stringify({title:current.rows[0].title}),req.user.email]);
+    await db.query('COMMIT'); void audit(req,'material_new_version','material',req.params.id,{version,fileName:name}); res.json({ok:true,version});
+  } catch(e){try{await db.query('ROLLBACK')}catch{};res.status(500).json({error:'Could not create the new material version.'})}
 });
 
 // Public onboarding assistant: deliberately limited to general Tusome EduShelf guidance.
@@ -1017,6 +1254,11 @@ app.use(express.static(__dirname));
 
 try {
   await initDatabase();
+  if (databaseReady) {
+    await fs.mkdir(BACKUP_DIR, { recursive: true });
+    setTimeout(() => createBackup('startup').then(r => console.log('Automatic startup backup:', r.fileName)).catch(e => console.warn('Startup backup skipped:', e.message)), 60000);
+    setInterval(() => createBackup('scheduled').then(r => console.log('Automatic scheduled backup:', r.fileName)).catch(e => console.warn('Scheduled backup failed:', e.message)), BACKUP_INTERVAL_HOURS * 60 * 60 * 1000);
+  }
 } catch (e) {
   console.error('PostgreSQL initialization failed:', e.message);
   console.warn('The server will continue, but database-backed features will use the temporary file fallback until the database is reachable.');

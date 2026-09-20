@@ -1,24 +1,14 @@
-# Tusome EduShelf v43 — Attendance & School Calendar
+# Tusome EduShelf v44 — Exams, Report Cards & Academic Reports
 
-Built on v42 Parent/Guardian Portal.
+Adds a connected school assessment workflow on top of v43:
+- school exam creation
+- marks entry for class learners
+- automatic indicative grading (EE/ME/AE/BE) based on percentage bands
+- learner results view
+- parent-ready published-result architecture
+- draft report-card generation from recorded exam results
+- teacher/admin verification reminder
 
-## Attendance
-- School attendance table with present, absent, late and excused statuses.
-- Teachers can mark attendance for learners in their assigned classes.
-- School administrators can review and mark school attendance.
-- Bulk mark all present/absent and save a daily register.
-- Learners can view their own attendance history and percentage.
-- Linked parents/guardians can view attendance for linked learners only.
+Important: the automatic grade is an indicative configurable default, not an official curriculum grading rule. Schools must verify their grading scale and final results before publishing. Report-card publishing/approval should be added to the school's controlled workflow before production use.
 
-## School Calendar
-- School admins can add events for school days, terms, holidays, exams, meetings and activities.
-- School members can view calendar events.
-- Admins can delete calendar events.
-
-## Security
-- Attendance writes are scoped to the user's school.
-- Teachers can only edit attendance for learners in classes they teach.
-- Parent attendance is restricted to existing parent-guardian links.
-- Learners can only read their own attendance.
-
-Existing v42 features are preserved, including Parent/Guardian Portal, school management, classes/subjects, assignments/submissions/grading, gradebook, marketplace, premium membership, M-PESA, discussions, large video and screen sharing.
+Existing v43 attendance, school calendar, parent portal, marketplace, memberships, M-PESA, discussions, video and screen sharing are preserved.

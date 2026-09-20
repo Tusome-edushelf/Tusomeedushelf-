@@ -80,6 +80,9 @@ body.a11y-reduced-motion *,body.a11y-reduced-motion *::before,body.a11y-reduced-
 /* v27 Teacher Dashboard Personalization */
 .teacher-welcome{display:flex;justify-content:space-between;align-items:center;gap:18px;margin:18px 0 20px;padding:24px 26px;border-radius:22px;background:linear-gradient(135deg,#eef6ff,#f8fbff);border:1px solid #d9e6f5;box-shadow:0 8px 28px #173f8a12}.teacher-welcome h2{margin:5px 0 7px;color:#173f8a}.teacher-welcome p{margin:0;max-width:760px;color:#516173}.teacher-eyebrow{font-size:11px;font-weight:800;letter-spacing:.12em;color:#2563eb}.teacher-quick-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;margin-bottom:20px}.teacher-quick-card{appearance:none;border:1px solid #dce5f0;background:#fff;border-radius:15px;padding:16px 12px;text-align:left;cursor:pointer;box-shadow:0 3px 12px #0000000a;transition:transform .15s ease,box-shadow .15s ease,border-color .15s ease;color:#18212f}.teacher-quick-card:hover,.teacher-quick-card:focus-visible{transform:translateY(-2px);box-shadow:0 7px 18px #173f8a18;border-color:#8db0e4;outline:3px solid #93c5fd55}.teacher-quick-card span{display:block;font-size:24px;margin-bottom:8px}.teacher-quick-card b{display:block;color:#173f8a;font-size:14px}.teacher-quick-card small{display:block;color:#687386;margin-top:4px;line-height:1.35}.teacher-stats{margin-top:0}.teacher-goal-card{display:flex;justify-content:space-between;align-items:center;gap:18px;background:#f8fbff;border-color:#d9e6f5}.teacher-goal-card h3{margin:5px 0;color:#173f8a}.teacher-section-card{scroll-margin-top:18px}.teacher-section-card.is-hidden{display:none!important}.teacher-customizer{position:fixed;inset:0;background:#0f172a66;z-index:10000;display:flex;align-items:center;justify-content:center;padding:18px}.teacher-customizer-panel{width:min(560px,96vw);max-height:90vh;overflow:auto;background:#fff;border-radius:20px;padding:22px;box-shadow:0 20px 60px #0004}.teacher-customizer-panel h3{margin-top:0;color:#173f8a}.teacher-custom-row{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:13px 0;border-bottom:1px solid #e8edf3}.teacher-custom-row:last-of-type{border-bottom:0}.teacher-custom-row input{width:20px;height:20px}.teacher-custom-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px;flex-wrap:wrap}@media(max-width:980px){.teacher-quick-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}@media(max-width:700px){.teacher-welcome{align-items:flex-start;flex-direction:column;padding:20px}.teacher-quick-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.teacher-goal-card{align-items:flex-start;flex-direction:column}}@media(max-width:480px){.teacher-quick-grid{grid-template-columns:1fr 1fr;gap:8px}.teacher-quick-card{padding:13px 10px}.teacher-quick-card small{font-size:11px}}@media(prefers-reduced-motion:reduce){.teacher-quick-card{transition:none}}
 
+
+/* v32 Learner Quiz & Practice Mode */
+.practice-shell{max-width:1100px;margin:0 auto;padding:20px}.practice-hero{background:linear-gradient(135deg,#173f8a,#2563eb);color:#fff;border-radius:22px;padding:24px;box-shadow:0 14px 32px #173f8a22}.practice-controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin:16px 0}.practice-card{background:#fff;border:1px solid #dbe5f0;border-radius:16px;padding:18px;box-shadow:0 8px 24px #173f8a10;margin-top:14px}.practice-question{font-size:18px;font-weight:700;margin-bottom:14px}.practice-option{display:flex;gap:10px;align-items:flex-start;padding:12px;border:1px solid #dbe5f0;border-radius:12px;margin:8px 0;cursor:pointer}.practice-option:hover{background:#f8fbff}.practice-result{padding:16px;border-radius:14px;background:#f0fdf4;border:1px solid #bbf7d0}.practice-wrong{background:#fff7ed;border-color:#fed7aa}.practice-score{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}.practice-stat{background:#f8fbff;border:1px solid #dbe5f0;border-radius:12px;padding:12px;text-align:center}.practice-stat b{display:block;font-size:22px;color:#173f8a}.practice-progress{height:10px;background:#e2e8f0;border-radius:99px;overflow:hidden}.practice-progress>div{height:100%;background:#2563eb;width:0}.practice-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}@media(max-width:700px){.practice-shell{padding:10px}}
 /* v31 Learner Notes & Highlights */
 .notes-layout{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:14px;margin-top:14px}.notes-card{background:#fff;border:1px solid #dbe5f0;border-radius:16px;padding:16px;box-shadow:0 8px 24px #173f8a10}.notes-card h3{margin:0 0 10px;color:#173f8a}.notes-toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}.notes-textarea{width:100%;min-height:150px;resize:vertical;padding:12px;border:1px solid #d8e1ec;border-radius:10px;font:inherit}.note-item{padding:12px;border:1px solid #e2e8f0;border-radius:12px;margin-top:9px;background:#f8fbff}.note-item-head{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}.note-time{font-size:11px;color:#64748b}.note-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.highlight-list{display:grid;gap:8px}.highlight-item{padding:10px 12px;border-left:4px solid #2563eb;background:#f8fbff;border-radius:8px}.notes-empty{padding:14px;border:1px dashed #cbd5e1;border-radius:10px;color:#64748b}.notes-status{min-height:22px;font-size:13px;margin-top:8px;color:#166534}@media(max-width:900px){.notes-layout{grid-template-columns:1fr}}
 
@@ -198,6 +201,7 @@ body.a11y-reduced-motion *,body.a11y-reduced-motion *::before,body.a11y-reduced-
     <button class="learner-quick-card" type="button" onclick="showRecentLearning()"><span>🕒</span><b>Recent Activity</b><small>See your latest learning</small></button>
     <button class="learner-quick-card" type="button" onclick="showRecommendedMaterials()"><span>⭐</span><b>Recommended</b><small>Explore useful materials</small></button>
     <button class="learner-quick-card" type="button" onclick="document.getElementById('search').focus();document.getElementById('search').scrollIntoView({behavior:'smooth',block:'center'})"><span>🔎</span><b>Search Materials</b><small>Find a topic quickly</small></button>
+    <button class="learner-quick-card" type="button" onclick="show('practice')"><span>🧠</span><b>Practice Mode</b><small>Test yourself and learn</small></button>
   </div>
 
 
@@ -251,6 +255,28 @@ body.a11y-reduced-motion *,body.a11y-reduced-motion *::before,body.a11y-reduced-
 </section>
 
 
+
+
+<section id="practice" class="page">
+  <div class="practice-shell">
+    <div class="practice-hero">
+      <div class="small">🧠 LEARNER PRACTICE MODE</div>
+      <h2>Practice, check, learn</h2>
+      <p>Choose a subject and topic, answer the questions, then review your score and explanations. Practice is for learning and self-checking, not grading.</p>
+    </div>
+    <div class="practice-card">
+      <div class="practice-controls">
+        <label><b>Subject</b><select id="practiceSubject" aria-label="Practice subject" onchange="updatePracticeTopics()"></select></label>
+        <label><b>Topic</b><select id="practiceTopic" aria-label="Practice topic"></select></label>
+        <label><b>Number of questions</b><select id="practiceCount" aria-label="Number of practice questions"><option value="5">5</option><option value="10">10</option></select></label>
+      </div>
+      <div class="practice-actions"><button class="btn primary" type="button" onclick="startPractice()">▶ Start Practice</button><button class="btn" type="button" onclick="resetPractice()">↺ Reset</button><button class="btn" type="button" onclick="showPracticeHistory()">🏆 My Best Scores</button></div>
+    </div>
+    <div id="practiceArea" class="practice-card" aria-live="polite">
+      <p><b>Ready?</b> Choose a subject and start a practice set.</p>
+    </div>
+  </div>
+</section>
 
 <section id="reader" class="page">
   <div class="reader-shell">
@@ -1136,12 +1162,13 @@ function toggleHelpFaq(button){const item=button.closest('.help-faq');if(!item)r
 function filterHelp(){const q=(document.getElementById('helpSearch')?.value||'').trim().toLowerCase();const items=[...document.querySelectorAll('#helpFaqs .help-faq')];let visible=0;items.forEach(item=>{const match=!q||item.dataset.help.includes(q)||item.textContent.toLowerCase().includes(q);item.style.display=match?'block':'none';if(match)visible++});const no=document.getElementById('helpNoResults');if(no)no.style.display=visible?'none':'block'}
 
 function show(id){
-  const protectedRoles={learner:'learner',teacher:'teacher',admin:'admin',communication:'user',account:'user',reader:'learner'};
+  const protectedRoles={learner:'learner',teacher:'teacher',admin:'admin',communication:'user',account:'user',reader:'learner',practice:'learner'};
   if(protectedRoles[id]){
     const role=getSessionRole();
     if(!role){show('login');return}
     if(id==='learner'&&role!=='learner'){alert('This dashboard is for learners.');return}
     if(id==='reader'&&role!=='learner'){alert('The material reader is for learners.');return}
+    if(id==='practice'&&role!=='learner'){alert('Practice Mode is for learners.');return}
     if(id==='teacher'&&role!=='teacher'){alert('This dashboard is for teachers.');return}
     if(id==='admin'&&role!=='admin'){alert('Administrator access is required.');return}
   }
@@ -1308,6 +1335,61 @@ function setTeacherFocusGoal(){const current=localStorage.getItem('tusomeTeacher
 function initTeacherPersonalization(){applyTeacherPrefs()}
 initTeacherPersonalization();
 restoreServerSession();
+
+const practiceBank=[
+ {subject:'Mathematics',topic:'Linear Functions',q:'If y = 2x + 3, what is y when x = 4?',options:['7','8','11','12'],answer:2,why:'Substitute x = 4: y = 2(4) + 3 = 11.'},
+ {subject:'Mathematics',topic:'Fractions',q:'Which fraction is equivalent to 1/2?',options:['2/3','2/4','3/5','4/6'],answer:1,why:'Multiplying numerator and denominator of 1/2 by 2 gives 2/4.'},
+ {subject:'English',topic:'Grammar',q:'Which word is an adjective in the sentence: “The bright learner read.”?',options:['learner','read','bright','the'],answer:2,why:'“Bright” describes the learner, so it is an adjective.'},
+ {subject:'English',topic:'Reading',q:'What is the main purpose of a summary?',options:['To add unrelated details','To give the key ideas briefly','To copy every sentence','To change the author’s message'],answer:1,why:'A summary presents the main ideas briefly and accurately.'},
+ {subject:'Biology',topic:'Cells',q:'Which structure controls many activities of a cell?',options:['Nucleus','Cell wall','Vacuole','Cytoplasm'],answer:0,why:'The nucleus contains genetic material and helps control cell activities.'},
+ {subject:'Biology',topic:'Photosynthesis',q:'Plants use sunlight during photosynthesis mainly to help make:',options:['Water','Glucose','Nitrogen','Protein'],answer:1,why:'Light energy helps plants make glucose from carbon dioxide and water.'},
+ {subject:'Science',topic:'Energy',q:'Which is an example of kinetic energy?',options:['A book on a shelf','A stretched rubber band','A moving bicycle','Water stored behind a dam'],answer:2,why:'Kinetic energy is energy of motion.'},
+ {subject:'History',topic:'Sources',q:'Which is a primary historical source?',options:['A modern textbook','A diary written during the event','A recent encyclopedia','A student’s summary'],answer:1,why:'A diary created during the period is a first-hand historical source.'}
+];
+let practiceState={questions:[],index:0,answers:[],score:0,started:false};
+function initPractice(){
+ const subjects=[...new Set(practiceBank.map(x=>x.subject))];
+ const sel=document.getElementById('practiceSubject');if(!sel)return;
+ sel.innerHTML='<option value="">Choose subject</option>'+subjects.map(x=>`<option value="${escHtml(x)}">${escHtml(x)}</option>`).join('');
+ updatePracticeTopics();
+}
+function updatePracticeTopics(){
+ const subject=document.getElementById('practiceSubject')?.value||'';const t=document.getElementById('practiceTopic');if(!t)return;
+ const topics=[...new Set(practiceBank.filter(x=>!subject||x.subject===subject).map(x=>x.topic))];
+ t.innerHTML='<option value="">All topics</option>'+topics.map(x=>`<option value="${escHtml(x)}">${escHtml(x)}</option>`).join('');
+}
+function startPractice(){
+ const subject=document.getElementById('practiceSubject')?.value||'';const topic=document.getElementById('practiceTopic')?.value||'';const count=Number(document.getElementById('practiceCount')?.value||5);
+ let pool=practiceBank.filter(x=>(!subject||x.subject===subject)&&(!topic||x.topic===topic));
+ if(!pool.length){showToast?.('Choose a subject with available practice questions.','error');return}
+ pool=pool.sort(()=>Math.random()-.5).slice(0,Math.min(count,pool.length));
+ practiceState={questions:pool,index:0,answers:[],score:0,started:true};renderPracticeQuestion();
+}
+function renderPracticeQuestion(){
+ const area=document.getElementById('practiceArea');if(!area)return;const q=practiceState.questions[practiceState.index];if(!q){finishPractice();return}
+ const n=practiceState.index+1,total=practiceState.questions.length;
+ area.innerHTML=`<div class="practice-score"><div class="practice-stat"><b>${n}/${total}</b><span>Question</span></div><div class="practice-stat"><b>${practiceState.score}</b><span>Score</span></div></div><div class="practice-progress" aria-label="Practice progress"><div style="width:${Math.round((n-1)/total*100)}%"></div></div><div class="practice-card" style="box-shadow:none;margin-top:16px"><div class="small">${escHtml(q.subject)} • ${escHtml(q.topic)}</div><div class="practice-question">${escHtml(q.q)}</div><fieldset style="border:0;padding:0;margin:0"><legend class="small">Choose one answer</legend>${q.options.map((o,i)=>`<label class="practice-option"><input type="radio" name="practiceAnswer" value="${i}"><span>${escHtml(o)}</span></label>`).join('')}</fieldset><div id="practiceFeedback" class="practice-result" style="display:none;margin-top:12px"></div><div class="practice-actions"><button class="btn primary" type="button" onclick="checkPracticeAnswer()">Check Answer</button><button class="btn" type="button" onclick="skipPracticeQuestion()">Skip</button></div></div>`;
+}
+function checkPracticeAnswer(){
+ const q=practiceState.questions[practiceState.index];const selected=document.querySelector('input[name="practiceAnswer"]:checked');if(!selected){showToast?.('Choose an answer first.','error');return}
+ const val=Number(selected.value),correct=val===q.answer;if(correct)practiceState.score++;
+ practiceState.answers[practiceState.index]={selected:val,correct};
+ const f=document.getElementById('practiceFeedback');if(f){f.style.display='block';f.className='practice-result '+(correct?'':'practice-wrong');f.innerHTML=`<b>${correct?'✓ Correct':'Not quite'}</b><p>${escHtml(q.why)}</p><p><b>Answer:</b> ${escHtml(q.options[q.answer])}</p>`}
+ document.querySelectorAll('input[name="practiceAnswer"]').forEach(x=>x.disabled=true);
+ const btns=document.querySelectorAll('#practiceArea .practice-actions button');if(btns[0]){btns[0].textContent=practiceState.index===practiceState.questions.length-1?'Finish':'Next Question';btns[0].onclick=nextPracticeQuestion}
+ showToast?.(correct?'Correct answer.':'Answer checked. Review the explanation.','success');
+}
+function nextPracticeQuestion(){practiceState.index++;renderPracticeQuestion()}
+function skipPracticeQuestion(){practiceState.answers[practiceState.index]={selected:null,correct:false,skipped:true};practiceState.index++;renderPracticeQuestion()}
+function finishPractice(){
+ const total=practiceState.questions.length,pct=total?Math.round(practiceState.score/total*100):0;const subject=document.getElementById('practiceSubject')?.value||'All subjects';
+ const key='tusomePracticeBestScores';let scores=JSON.parse(localStorage.getItem(key)||'{}');const old=Number(scores[subject]||0);if(pct>old)scores[subject]=pct;localStorage.setItem(key,JSON.stringify(scores));
+ const area=document.getElementById('practiceArea');if(area)area.innerHTML=`<div class="practice-result"><h3>🎉 Practice complete</h3><div class="practice-score"><div class="practice-stat"><b>${practiceState.score}/${total}</b><span>Correct</span></div><div class="practice-stat"><b>${pct}%</b><span>Score</span></div><div class="practice-stat"><b>${Math.max(old,pct)}%</b><span>Best score</span></div></div><p>${pct>=80?'Great work. Keep practising to strengthen your understanding.':pct>=50?'Good effort. Review the explanations and try again.':'Keep going. Use the explanations, revisit your material, and try another set.'}</p><div class="practice-actions"><button class="btn primary" type="button" onclick="startPractice()">↻ Try Again</button><button class="btn" type="button" onclick="showPracticeHistory()">🏆 View Best Scores</button></div></div>`;
+ showToast?.('Practice set completed.','success');
+}
+function resetPractice(){practiceState={questions:[],index:0,answers:[],score:0,started:false};const a=document.getElementById('practiceArea');if(a)a.innerHTML='<p><b>Ready?</b> Choose a subject and start a practice set.</p>';}
+function showPracticeHistory(){const scores=JSON.parse(localStorage.getItem('tusomePracticeBestScores')||'{}');const rows=Object.entries(scores);alert('My Best Scores\n\n'+(rows.length?rows.map(([s,v])=>`${s}: ${v}%`).join('\n'):'No practice scores yet.'))}
+initPractice();
 function showLearningGoals(){
   const current=localStorage.getItem('tusomeLearningGoal')||'';
   const goal=prompt('What is your main learning goal? Example: Improve Mathematics revision',current);

@@ -84,8 +84,17 @@ function filterMaterials(){
 function resetMaterialFilters(){['search','subjectFilter','gradeFilter','topicFilter','strandFilter','fileTypeFilter','priceFilter','savedFilter'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=''});const sort=document.getElementById('materialSort');if(sort)sort.value='newest';filterMaterials()}
 async function openMaterial(i){const m=materials[i];if(!m)return;const price=materialPrice(m);if(price>0&&!isPurchased(m.id)){showPaymentForMaterial(m);return}localStorage.setItem('tusomeViews',String(Number(localStorage.getItem('tusomeViews')||0)+1));await recordMaterialView(m.id);logActivity('Viewed material: '+m.title);logNotification('Opened learning material: '+m.title);refreshProgress();openMaterialReader(m)}
 let activeReaderMaterialId=null;
-function openMaterialReader(m){if(!m)return;activeReaderMaterialId=String(m.id);const url='/api/materials/'+encodeURIComponent(m.id)+'/file';const title=document.getElementById('readerTitle'),meta=document.getElementById('readerMeta'),frame=document.getElementById('readerFrame'),loading=document.getElementById('readerLoading'),download=document.getElementById('readerDownload'),save=document.getElementById('readerBookmarkBtn');if(title)title.textContent=m.title||'Learning material';if(meta)meta.textContent=[m.subject||'General',m.grade||'All grades',m.topic||''].filter(Boolean).join(' • ');if(download){download.href=url;download.setAttribute('download',m.file||'learning-material');download.setAttribute('aria-label','Download '+(m.title||'learning material'))}if(save){const saved=!!learnerActivity[String(m.id)]?.bookmarked;save.textContent=saved?'🔖 Saved':'🔖 Save';save.setAttribute('aria-label',saved?'Remove bookmark':'Save material')}if(frame){frame.style.display='none';frame.src='';frame.onload=()=>{if(loading)loading.style.display='none';frame.style.display='block'};frame.onerror=()=>{if(loading)loading.innerHTML='<div class="reader-error"><b>This file could not be displayed here.</b><p>Use the Download button above to open the material.</p></div>';frame.style.display='none'};frame.src=url}if(loading)loading.innerHTML='Loading your material…';show('reader')}
+function openMaterialReader(m){if(!m)return;activeReaderMaterialId=String(m.id);const url='/api/materials/'+encodeURIComponent(m.id)+'/file';const title=document.getElementById('readerTitle'),meta=document.getElementById('readerMeta'),frame=document.getElementById('readerFrame'),loading=document.getElementById('readerLoading'),download=document.getElementById('readerDownload'),save=document.getElementById('readerBookmarkBtn');if(title)title.textContent=m.title||'Learning material';if(meta)meta.textContent=[m.subject||'General',m.grade||'All grades',m.topic||''].filter(Boolean).join(' • ');if(download){download.href=url;download.setAttribute('download',m.file||'learning-material');download.setAttribute('aria-label','Download '+(m.title||'learning material'))}if(save){const saved=!!learnerActivity[String(m.id)]?.bookmarked;save.textContent=saved?'🔖 Saved':'🔖 Save';save.setAttribute('aria-label',saved?'Remove bookmark':'Save material')}if(frame){frame.style.display='none';frame.src='';frame.onload=()=>{if(loading)loading.style.display='none';frame.style.display='block'};frame.onerror=()=>{if(loading)loading.innerHTML='<div class="reader-error"><b>This file could not be displayed here.</b><p>Use the Download button above to open the material.</p></div>';frame.style.display='none'};frame.src=url}if(loading)loading.innerHTML='Loading your material…';loadReaderAnnotations();const note=document.getElementById('readerNoteText');if(note)note.value='';setReaderNoteStatus('');show('reader')}
 async function readerBookmark(){if(!activeReaderMaterialId)return;await toggleBookmark(activeReaderMaterialId);const save=document.getElementById('readerBookmarkBtn');if(save){const saved=!!learnerActivity[String(activeReaderMaterialId)]?.bookmarked;save.textContent=saved?'🔖 Saved':'🔖 Save'}}
+function readerNotesKey(){return 'tusomeReaderNotes:'+String(activeReaderMaterialId||'')}
+function readerHighlightsKey(){return 'tusomeReaderHighlights:'+String(activeReaderMaterialId||'')}
+function loadReaderAnnotations(){const notes=JSON.parse(localStorage.getItem(readerNotesKey())||'[]');const highlights=JSON.parse(localStorage.getItem(readerHighlightsKey())||'[]');const nl=document.getElementById('readerNotesList');const hl=document.getElementById('readerHighlightList');if(nl){nl.innerHTML=notes.length?notes.map((n,i)=>`<div class="note-item"><div class="note-item-head"><b>Note ${i+1}</b><span class="note-time">${new Date(n.createdAt).toLocaleString()}</span></div><div style="white-space:pre-wrap;margin-top:7px">${escapeHtml(n.text)}</div><div class="note-actions"><button class="btn" type="button" onclick="deleteReaderNote(${i})">Delete</button></div></div>`).join(''):'<div class="notes-empty">No notes yet. Add your first study note.</div>'}if(hl){hl.innerHTML=highlights.length?highlights.map((h,i)=>`<div class="highlight-item"><div style="white-space:pre-wrap">${escapeHtml(h.text)}</div><div class="note-actions"><button class="btn" type="button" onclick="deleteReaderHighlight(${i})">Delete</button></div></div>`).join(''):'<div class="notes-empty">No highlights yet.</div>'}}
+function saveReaderNote(){if(!activeReaderMaterialId)return;const el=document.getElementById('readerNoteText');const text=(el?.value||'').trim();if(!text){setReaderNoteStatus('Write a note first.');return}const notes=JSON.parse(localStorage.getItem(readerNotesKey())||'[]');notes.unshift({text,createdAt:new Date().toISOString()});localStorage.setItem(readerNotesKey(),JSON.stringify(notes.slice(0,50)));if(el)el.value='';loadReaderAnnotations();setReaderNoteStatus('Note saved.')}
+function clearReaderNote(){const el=document.getElementById('readerNoteText');if(el)el.value='';setReaderNoteStatus('')}
+function setReaderNoteStatus(msg){const el=document.getElementById('readerNoteStatus');if(el)el.textContent=msg}
+function deleteReaderNote(i){const notes=JSON.parse(localStorage.getItem(readerNotesKey())||'[]');notes.splice(i,1);localStorage.setItem(readerNotesKey(),JSON.stringify(notes));loadReaderAnnotations();setReaderNoteStatus('Note deleted.')}
+function saveReaderHighlight(){if(!activeReaderMaterialId)return;const el=document.getElementById('readerNoteText');const text=(el?.value||'').trim();if(!text){setReaderNoteStatus('Write the point to highlight in the note box first.');return}const highlights=JSON.parse(localStorage.getItem(readerHighlightsKey())||'[]');highlights.unshift({text,createdAt:new Date().toISOString()});localStorage.setItem(readerHighlightsKey(),JSON.stringify(highlights.slice(0,30)));if(el)el.value='';loadReaderAnnotations();setReaderNoteStatus('Highlight saved.')}
+function deleteReaderHighlight(i){const highlights=JSON.parse(localStorage.getItem(readerHighlightsKey())||'[]');highlights.splice(i,1);localStorage.setItem(readerHighlightsKey(),JSON.stringify(highlights));loadReaderAnnotations();setReaderNoteStatus('Highlight deleted.')}
 function showPaymentForMaterial(m){
   const box=document.getElementById('paymentMaterial');
   if(!box){alert('Payment section is unavailable. Please refresh the page.');return;}
@@ -449,12 +458,13 @@ function toggleHelpFaq(button){const item=button.closest('.help-faq');if(!item)r
 function filterHelp(){const q=(document.getElementById('helpSearch')?.value||'').trim().toLowerCase();const items=[...document.querySelectorAll('#helpFaqs .help-faq')];let visible=0;items.forEach(item=>{const match=!q||item.dataset.help.includes(q)||item.textContent.toLowerCase().includes(q);item.style.display=match?'block':'none';if(match)visible++});const no=document.getElementById('helpNoResults');if(no)no.style.display=visible?'none':'block'}
 
 function show(id){
-  const protectedRoles={learner:'learner',teacher:'teacher',admin:'admin',communication:'user',account:'user',reader:'learner'};
+  const protectedRoles={learner:'learner',teacher:'teacher',admin:'admin',communication:'user',account:'user',reader:'learner',practice:'learner'};
   if(protectedRoles[id]){
     const role=getSessionRole();
     if(!role){show('login');return}
     if(id==='learner'&&role!=='learner'){alert('This dashboard is for learners.');return}
     if(id==='reader'&&role!=='learner'){alert('The material reader is for learners.');return}
+    if(id==='practice'&&role!=='learner'){alert('Practice Mode is for learners.');return}
     if(id==='teacher'&&role!=='teacher'){alert('This dashboard is for teachers.');return}
     if(id==='admin'&&role!=='admin'){alert('Administrator access is required.');return}
   }
@@ -621,6 +631,61 @@ function setTeacherFocusGoal(){const current=localStorage.getItem('tusomeTeacher
 function initTeacherPersonalization(){applyTeacherPrefs()}
 initTeacherPersonalization();
 restoreServerSession();
+
+const practiceBank=[
+ {subject:'Mathematics',topic:'Linear Functions',q:'If y = 2x + 3, what is y when x = 4?',options:['7','8','11','12'],answer:2,why:'Substitute x = 4: y = 2(4) + 3 = 11.'},
+ {subject:'Mathematics',topic:'Fractions',q:'Which fraction is equivalent to 1/2?',options:['2/3','2/4','3/5','4/6'],answer:1,why:'Multiplying numerator and denominator of 1/2 by 2 gives 2/4.'},
+ {subject:'English',topic:'Grammar',q:'Which word is an adjective in the sentence: “The bright learner read.”?',options:['learner','read','bright','the'],answer:2,why:'“Bright” describes the learner, so it is an adjective.'},
+ {subject:'English',topic:'Reading',q:'What is the main purpose of a summary?',options:['To add unrelated details','To give the key ideas briefly','To copy every sentence','To change the author’s message'],answer:1,why:'A summary presents the main ideas briefly and accurately.'},
+ {subject:'Biology',topic:'Cells',q:'Which structure controls many activities of a cell?',options:['Nucleus','Cell wall','Vacuole','Cytoplasm'],answer:0,why:'The nucleus contains genetic material and helps control cell activities.'},
+ {subject:'Biology',topic:'Photosynthesis',q:'Plants use sunlight during photosynthesis mainly to help make:',options:['Water','Glucose','Nitrogen','Protein'],answer:1,why:'Light energy helps plants make glucose from carbon dioxide and water.'},
+ {subject:'Science',topic:'Energy',q:'Which is an example of kinetic energy?',options:['A book on a shelf','A stretched rubber band','A moving bicycle','Water stored behind a dam'],answer:2,why:'Kinetic energy is energy of motion.'},
+ {subject:'History',topic:'Sources',q:'Which is a primary historical source?',options:['A modern textbook','A diary written during the event','A recent encyclopedia','A student’s summary'],answer:1,why:'A diary created during the period is a first-hand historical source.'}
+];
+let practiceState={questions:[],index:0,answers:[],score:0,started:false};
+function initPractice(){
+ const subjects=[...new Set(practiceBank.map(x=>x.subject))];
+ const sel=document.getElementById('practiceSubject');if(!sel)return;
+ sel.innerHTML='<option value="">Choose subject</option>'+subjects.map(x=>`<option value="${escHtml(x)}">${escHtml(x)}</option>`).join('');
+ updatePracticeTopics();
+}
+function updatePracticeTopics(){
+ const subject=document.getElementById('practiceSubject')?.value||'';const t=document.getElementById('practiceTopic');if(!t)return;
+ const topics=[...new Set(practiceBank.filter(x=>!subject||x.subject===subject).map(x=>x.topic))];
+ t.innerHTML='<option value="">All topics</option>'+topics.map(x=>`<option value="${escHtml(x)}">${escHtml(x)}</option>`).join('');
+}
+function startPractice(){
+ const subject=document.getElementById('practiceSubject')?.value||'';const topic=document.getElementById('practiceTopic')?.value||'';const count=Number(document.getElementById('practiceCount')?.value||5);
+ let pool=practiceBank.filter(x=>(!subject||x.subject===subject)&&(!topic||x.topic===topic));
+ if(!pool.length){showToast?.('Choose a subject with available practice questions.','error');return}
+ pool=pool.sort(()=>Math.random()-.5).slice(0,Math.min(count,pool.length));
+ practiceState={questions:pool,index:0,answers:[],score:0,started:true};renderPracticeQuestion();
+}
+function renderPracticeQuestion(){
+ const area=document.getElementById('practiceArea');if(!area)return;const q=practiceState.questions[practiceState.index];if(!q){finishPractice();return}
+ const n=practiceState.index+1,total=practiceState.questions.length;
+ area.innerHTML=`<div class="practice-score"><div class="practice-stat"><b>${n}/${total}</b><span>Question</span></div><div class="practice-stat"><b>${practiceState.score}</b><span>Score</span></div></div><div class="practice-progress" aria-label="Practice progress"><div style="width:${Math.round((n-1)/total*100)}%"></div></div><div class="practice-card" style="box-shadow:none;margin-top:16px"><div class="small">${escHtml(q.subject)} • ${escHtml(q.topic)}</div><div class="practice-question">${escHtml(q.q)}</div><fieldset style="border:0;padding:0;margin:0"><legend class="small">Choose one answer</legend>${q.options.map((o,i)=>`<label class="practice-option"><input type="radio" name="practiceAnswer" value="${i}"><span>${escHtml(o)}</span></label>`).join('')}</fieldset><div id="practiceFeedback" class="practice-result" style="display:none;margin-top:12px"></div><div class="practice-actions"><button class="btn primary" type="button" onclick="checkPracticeAnswer()">Check Answer</button><button class="btn" type="button" onclick="skipPracticeQuestion()">Skip</button></div></div>`;
+}
+function checkPracticeAnswer(){
+ const q=practiceState.questions[practiceState.index];const selected=document.querySelector('input[name="practiceAnswer"]:checked');if(!selected){showToast?.('Choose an answer first.','error');return}
+ const val=Number(selected.value),correct=val===q.answer;if(correct)practiceState.score++;
+ practiceState.answers[practiceState.index]={selected:val,correct};
+ const f=document.getElementById('practiceFeedback');if(f){f.style.display='block';f.className='practice-result '+(correct?'':'practice-wrong');f.innerHTML=`<b>${correct?'✓ Correct':'Not quite'}</b><p>${escHtml(q.why)}</p><p><b>Answer:</b> ${escHtml(q.options[q.answer])}</p>`}
+ document.querySelectorAll('input[name="practiceAnswer"]').forEach(x=>x.disabled=true);
+ const btns=document.querySelectorAll('#practiceArea .practice-actions button');if(btns[0]){btns[0].textContent=practiceState.index===practiceState.questions.length-1?'Finish':'Next Question';btns[0].onclick=nextPracticeQuestion}
+ showToast?.(correct?'Correct answer.':'Answer checked. Review the explanation.','success');
+}
+function nextPracticeQuestion(){practiceState.index++;renderPracticeQuestion()}
+function skipPracticeQuestion(){practiceState.answers[practiceState.index]={selected:null,correct:false,skipped:true};practiceState.index++;renderPracticeQuestion()}
+function finishPractice(){
+ const total=practiceState.questions.length,pct=total?Math.round(practiceState.score/total*100):0;const subject=document.getElementById('practiceSubject')?.value||'All subjects';
+ const key='tusomePracticeBestScores';let scores=JSON.parse(localStorage.getItem(key)||'{}');const old=Number(scores[subject]||0);if(pct>old)scores[subject]=pct;localStorage.setItem(key,JSON.stringify(scores));
+ const area=document.getElementById('practiceArea');if(area)area.innerHTML=`<div class="practice-result"><h3>🎉 Practice complete</h3><div class="practice-score"><div class="practice-stat"><b>${practiceState.score}/${total}</b><span>Correct</span></div><div class="practice-stat"><b>${pct}%</b><span>Score</span></div><div class="practice-stat"><b>${Math.max(old,pct)}%</b><span>Best score</span></div></div><p>${pct>=80?'Great work. Keep practising to strengthen your understanding.':pct>=50?'Good effort. Review the explanations and try again.':'Keep going. Use the explanations, revisit your material, and try another set.'}</p><div class="practice-actions"><button class="btn primary" type="button" onclick="startPractice()">↻ Try Again</button><button class="btn" type="button" onclick="showPracticeHistory()">🏆 View Best Scores</button></div></div>`;
+ showToast?.('Practice set completed.','success');
+}
+function resetPractice(){practiceState={questions:[],index:0,answers:[],score:0,started:false};const a=document.getElementById('practiceArea');if(a)a.innerHTML='<p><b>Ready?</b> Choose a subject and start a practice set.</p>';}
+function showPracticeHistory(){const scores=JSON.parse(localStorage.getItem('tusomePracticeBestScores')||'{}');const rows=Object.entries(scores);alert('My Best Scores\n\n'+(rows.length?rows.map(([s,v])=>`${s}: ${v}%`).join('\n'):'No practice scores yet.'))}
+initPractice();
 function showLearningGoals(){
   const current=localStorage.getItem('tusomeLearningGoal')||'';
   const goal=prompt('What is your main learning goal? Example: Improve Mathematics revision',current);
@@ -660,11 +725,3 @@ function initStudyPlanner(){const goal=localStorage.getItem('tusomeLearningGoal'
 initStudyPlanner();
 configureAIAssistant(getSessionRole()||'learner');
 (async()=>{await loadServerMaterials();if(getSessionRole()==='learner'){await loadServerPurchases();await loadLearnerActivity()}populateMaterialFilters();populateMaterialFilters();renderMaterials();renderTeacher();renderAdmin();refreshProgress();checkAIStatus()})();
-
-
-function applyAccessibility(){const b=document.body;const mode=localStorage.getItem('tusomeA11yText')||'normal';b.classList.toggle('a11y-large',mode==='large');b.classList.toggle('a11y-contrast',localStorage.getItem('tusomeA11yContrast')==='true');b.classList.toggle('a11y-reduced-motion',localStorage.getItem('tusomeA11yMotion')==='true');document.getElementById('a11yNormal')?.classList.toggle('active',mode==='normal');document.getElementById('a11yLarge')?.classList.toggle('active',mode==='large');document.getElementById('a11yContrast')?.classList.toggle('active',localStorage.getItem('tusomeA11yContrast')==='true');document.getElementById('a11yMotion')?.classList.toggle('active',localStorage.getItem('tusomeA11yMotion')==='true')}
-function toggleAccessibilityPanel(){const p=document.getElementById('accessibilityPanel');if(!p)return;const open=!p.classList.contains('open');p.classList.toggle('open',open);document.querySelector('.a11y-toggle')?.setAttribute('aria-expanded',String(open));if(open)document.getElementById('a11yNormal')?.focus()}
-function setAccessibility(mode){localStorage.setItem('tusomeA11yText',mode);applyAccessibility()}
-function toggleAccessibilityOption(type){const key=type==='contrast'?'tusomeA11yContrast':'tusomeA11yMotion';localStorage.setItem(key,localStorage.getItem(key)==='true'?'false':'true');applyAccessibility()}
-function resetAccessibility(){['tusomeA11yText','tusomeA11yContrast','tusomeA11yMotion'].forEach(k=>localStorage.removeItem(k));applyAccessibility()}
-applyAccessibility();

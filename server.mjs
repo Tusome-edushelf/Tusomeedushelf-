@@ -438,6 +438,26 @@ async function initDatabase() {
       subject_id TEXT NOT NULL REFERENCES school_subjects(subject_id) ON DELETE CASCADE, teacher_email TEXT NOT NULL, title TEXT NOT NULL, instructions TEXT, due_at TIMESTAMPTZ, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
     CREATE INDEX IF NOT EXISTS idx_school_assignments_class ON school_assignments(school_id,class_id,created_at DESC);
+    CREATE TABLE IF NOT EXISTS school_assignment_submissions (
+      submission_id TEXT PRIMARY KEY,
+      assignment_id TEXT NOT NULL REFERENCES school_assignments(assignment_id) ON DELETE CASCADE,
+      school_id TEXT NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
+      learner_email TEXT NOT NULL,
+      text_answer TEXT,
+      file_name TEXT,
+      file_mime TEXT,
+      file_data BYTEA,
+      submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      status TEXT NOT NULL DEFAULT 'submitted' CHECK(status IN ('submitted','graded','returned')),
+      marks NUMERIC,
+      max_marks NUMERIC NOT NULL DEFAULT 100,
+      feedback TEXT,
+      graded_by TEXT,
+      graded_at TIMESTAMPTZ,
+      UNIQUE(assignment_id, learner_email)
+    );
+    CREATE INDEX IF NOT EXISTS idx_school_assignment_submissions_assignment ON school_assignment_submissions(school_id,assignment_id,submitted_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_school_assignment_submissions_learner ON school_assignment_submissions(learner_email,submitted_at DESC);
 
     INSERT INTO subscription_plans(plan_key,name,audience,price_monthly,price_yearly,description,features)
     VALUES
@@ -1891,6 +1911,72 @@ app.post('/api/schools/assignments', requireAuth, async (req,res)=>{
     if(req.user.role==='teacher'){const a=await db.query(`SELECT 1 FROM school_teacher_subjects WHERE school_id=$1 AND class_id=$2 AND subject_id=$3 AND teacher_email=$4`,[req.school.schoolId,classId,subjectId,teacher]);if(!a.rowCount)return res.status(403).json({error:'You can only create assignments for your assigned class and subject.'})}
     const id='ASN-'+Date.now().toString(36).toUpperCase()+'-'+Math.random().toString(36).slice(2,6).toUpperCase(); await db.query(`INSERT INTO school_assignments(assignment_id,school_id,class_id,subject_id,teacher_email,title,instructions,due_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,[id,req.school.schoolId,classId,subjectId,teacher,title,instructions||null,req.body?.dueAt||null]); res.status(201).json({ok:true,assignmentId:id});
   }catch(e){console.error(e);res.status(500).json({error:'Could not create assignment.'})}})
+});
+
+// v40 Assignment submissions, grading and feedback.
+app.get('/api/learner/assignments', requireRole('learner'), async (req,res)=>{
+  if(!databaseReady) return res.status(503).json({error:'Database is not ready.'});
+  try{
+    const r=await db.query(`SELECT a.assignment_id AS "assignmentId",a.school_id AS "schoolId",sc.school_name AS "schoolName",a.title,a.instructions,a.due_at AS "dueAt",ss.subject_name AS "subjectName",c.class_name AS "className",a.teacher_email AS "teacherEmail",s.submission_id AS "submissionId",s.submitted_at AS "submittedAt",s.status,s.marks,s.max_marks AS "maxMarks",s.feedback,s.file_name AS "fileName",s.text_answer AS "textAnswer" FROM school_assignments a JOIN school_classes c ON c.class_id=a.class_id JOIN school_subjects ss ON ss.subject_id=a.subject_id JOIN schools sc ON sc.school_id=a.school_id JOIN school_memberships sm ON sm.school_id=a.school_id AND sm.class_id=a.class_id AND sm.user_email=$1 AND sm.member_role='learner' AND sm.status='active' LEFT JOIN school_assignment_submissions s ON s.assignment_id=a.assignment_id AND s.learner_email=$1 WHERE sc.status='active' ORDER BY a.due_at NULLS LAST,a.created_at DESC LIMIT 200`,[req.user.email]);
+    res.json({ok:true,assignments:r.rows});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not load learner assignments.'})}
+});
+
+app.post('/api/learner/assignments/:id/submit', requireRole('learner'), async (req,res)=>{
+  if(!databaseReady) return res.status(503).json({error:'Database is not ready.'});
+  try{
+    const a=await db.query(`SELECT a.assignment_id,a.school_id,a.class_id,a.due_at FROM school_assignments a JOIN school_memberships sm ON sm.school_id=a.school_id AND sm.class_id=a.class_id AND sm.user_email=$1 AND sm.member_role='learner' AND sm.status='active' WHERE a.assignment_id=$2 LIMIT 1`,[req.user.email,req.params.id]);
+    if(!a.rowCount) return res.status(403).json({error:'You are not enrolled in the class for this assignment.'});
+    const text=String(req.body?.textAnswer||'').trim().slice(0,12000);
+    const fileData=String(req.body?.fileData||'');
+    const fileName=String(req.body?.fileName||'').trim().slice(0,180);
+    const fileMime=String(req.body?.fileMime||'').trim().slice(0,100);
+    if(!text && !fileData) return res.status(400).json({error:'Add a written answer or upload a file.'});
+    let buffer=null;
+    if(fileData){ const m=fileData.match(/^data:[^;]+;base64,(.+)$/s); if(!m)return res.status(400).json({error:'Invalid file upload.'}); buffer=Buffer.from(m[1],'base64'); if(buffer.length>6*1024*1024)return res.status(400).json({error:'Submission file must be 6 MB or smaller.'}); }
+    const id='SUBM-'+Date.now().toString(36).toUpperCase()+'-'+Math.random().toString(36).slice(2,7).toUpperCase();
+    await db.query(`INSERT INTO school_assignment_submissions(submission_id,assignment_id,school_id,learner_email,text_answer,file_name,file_mime,file_data) VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT(assignment_id,learner_email) DO UPDATE SET text_answer=EXCLUDED.text_answer,file_name=EXCLUDED.file_name,file_mime=EXCLUDED.file_mime,file_data=EXCLUDED.file_data,submitted_at=NOW(),status='submitted',marks=NULL,feedback=NULL,graded_by=NULL,graded_at=NULL RETURNING submission_id AS "submissionId"`,[id,a.rows[0].assignment_id,a.rows[0].school_id,req.user.email,text||null,fileName||null,fileMime||null,buffer]);
+    res.status(201).json({ok:true,message:'Assignment submitted successfully.'});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not submit assignment.'})}
+});
+
+app.get('/api/learner/assignments/:id/file', requireRole('learner'), async (req,res)=>{
+  try{
+    const r=await db.query(`SELECT s.file_name AS "fileName",s.file_mime AS "fileMime",s.file_data AS "fileData" FROM school_assignment_submissions s JOIN school_assignments a ON a.assignment_id=s.assignment_id JOIN school_memberships sm ON sm.school_id=a.school_id AND sm.class_id=a.class_id AND sm.user_email=$1 AND sm.member_role='learner' AND sm.status='active' WHERE s.assignment_id=$2 AND s.learner_email=$1 LIMIT 1`,[req.user.email,req.params.id]);
+    if(!r.rowCount || !r.rows[0].fileData)return res.status(404).send('File not found.');
+    res.setHeader('Content-Type',r.rows[0].fileMime||'application/octet-stream');res.setHeader('Content-Disposition',`attachment; filename="${String(r.rows[0].fileName||'submission').replace(/[^a-zA-Z0-9._-]/g,'_')}"`);res.send(r.rows[0].fileData);
+  }catch(e){console.error(e);res.status(500).send('Could not open submission file.')}
+});
+
+app.get('/api/schools/submissions', requireSchoolMembership, async (req,res)=>{
+  try{
+    const teacherOnly=req.school.memberRole==='teacher' && req.user.role!=='admin';
+    const q=`SELECT s.submission_id AS "submissionId",s.assignment_id AS "assignmentId",s.learner_email AS "learnerEmail",s.text_answer AS "textAnswer",s.file_name AS "fileName",s.file_mime AS "fileMime",s.submitted_at AS "submittedAt",s.status,s.marks,s.max_marks AS "maxMarks",s.feedback,s.graded_by AS "gradedBy",s.graded_at AS "gradedAt",a.title,a.due_at AS "dueAt",c.class_name AS "className",ss.subject_name AS "subjectName",a.teacher_email AS "teacherEmail" FROM school_assignment_submissions s JOIN school_assignments a ON a.assignment_id=s.assignment_id JOIN school_classes c ON c.class_id=a.class_id JOIN school_subjects ss ON ss.subject_id=a.subject_id WHERE s.school_id=$1 ${teacherOnly?'AND a.teacher_email=$2':''} ORDER BY s.submitted_at DESC LIMIT 300`;
+    const r=await db.query(q,teacherOnly?[req.school.schoolId,req.user.email]:[req.school.schoolId]);
+    res.json({ok:true,submissions:r.rows});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not load submissions.'})}
+});
+
+app.get('/api/schools/submissions/:id/file', requireSchoolMembership, async (req,res)=>{
+  try{
+    const teacherOnly=req.school.memberRole==='teacher' && req.user.role!=='admin';
+    const q=`SELECT s.file_name AS "fileName",s.file_mime AS "fileMime",s.file_data AS "fileData" FROM school_assignment_submissions s JOIN school_assignments a ON a.assignment_id=s.assignment_id WHERE s.submission_id=$1 AND s.school_id=$2 ${teacherOnly?'AND a.teacher_email=$3':''} LIMIT 1`;
+    const r=await db.query(q,teacherOnly?[req.params.id,req.school.schoolId,req.user.email]:[req.params.id,req.school.schoolId]);
+    if(!r.rowCount || !r.rows[0].fileData)return res.status(404).send('File not found.');
+    res.setHeader('Content-Type',r.rows[0].fileMime||'application/octet-stream');res.setHeader('Content-Disposition',`attachment; filename="${String(r.rows[0].fileName||'submission').replace(/[^a-zA-Z0-9._-]/g,'_')}"`);res.send(r.rows[0].fileData);
+  }catch(e){console.error(e);res.status(500).send('Could not open submission file.')}
+});
+
+app.patch('/api/schools/submissions/:id/grade', requireSchoolMembership, async (req,res)=>{
+  try{
+    if(!['teacher','admin'].includes(req.school.memberRole) && req.user.role!=='admin')return res.status(403).json({error:'Teacher or school admin access is required.'});
+    const marks=Number(req.body?.marks), maxMarks=Number(req.body?.maxMarks||100), feedback=String(req.body?.feedback||'').trim().slice(0,4000);
+    if(!Number.isFinite(marks)||!Number.isFinite(maxMarks)||maxMarks<=0||marks<0||marks>maxMarks)return res.status(400).json({error:'Enter valid marks within the maximum.'});
+    const teacherOnly=req.school.memberRole==='teacher' && req.user.role!=='admin';
+    const q=`UPDATE school_assignment_submissions s SET marks=$1,max_marks=$2,feedback=$3,status='returned',graded_by=$4,graded_at=NOW() FROM school_assignments a WHERE s.submission_id=$5 AND s.assignment_id=a.assignment_id AND s.school_id=$6 ${teacherOnly?'AND a.teacher_email=$7':''} RETURNING s.submission_id`;
+    const params=teacherOnly?[marks,maxMarks,feedback||null,req.user.email,req.params.id,req.school.schoolId,req.user.email]:[marks,maxMarks,feedback||null,req.user.email,req.params.id,req.school.schoolId];
+    const r=await db.query(q,params);if(!r.rowCount)return res.status(404).json({error:'Submission not found or outside your assigned classes.'});res.json({ok:true,message:'Grade and feedback saved.'});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not save grade.'})}
 });
 
 app.use(express.static(__dirname));

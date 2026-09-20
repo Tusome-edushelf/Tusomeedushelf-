@@ -202,6 +202,19 @@ async function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_materials_approval_status ON materials (approval_status);
     CREATE INDEX IF NOT EXISTS idx_materials_teacher_email ON materials (teacher_email);
 
+    CREATE TABLE IF NOT EXISTS material_reviews (
+      id BIGSERIAL PRIMARY KEY,
+      material_id TEXT NOT NULL REFERENCES materials(id) ON DELETE CASCADE,
+      learner_email TEXT NOT NULL,
+      rating INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),
+      review TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(material_id, learner_email)
+    );
+    CREATE INDEX IF NOT EXISTS idx_material_reviews_material ON material_reviews(material_id);
+
+
     CREATE TABLE IF NOT EXISTS material_files (
       file_id TEXT PRIMARY KEY,
       material_id TEXT NOT NULL UNIQUE REFERENCES materials(id) ON DELETE CASCADE,
@@ -1459,6 +1472,58 @@ app.get('/api/payments/my', requireRole('learner'), async (req, res) => {
 });
 
 
+
+// Marketplace: ratings, reviews and marketplace summaries.
+app.get('/api/marketplace/featured', requireAuth, async (req,res)=>{
+  if(!databaseReady) return res.json({ok:true,materials:[]});
+  try{
+    const r=await db.query(`SELECT m.id,m.title,m.subject,m.grade,m.topic,m.price,m.teacher_email AS "teacherEmail",m.created_at AS "createdAt",
+      COALESCE(AVG(r.rating),0)::numeric(3,2) AS "averageRating",COUNT(r.id)::int AS "reviewCount",
+      COALESCE((SELECT COUNT(*) FROM transactions t WHERE t.material_id=m.id AND t.status='paid'),0)::int AS "purchaseCount"
+      FROM materials m LEFT JOIN material_reviews r ON r.material_id=m.id
+      WHERE m.approval_status='approved' AND m.deleted_at IS NULL
+      GROUP BY m.id ORDER BY "purchaseCount" DESC,"averageRating" DESC,m.created_at DESC LIMIT 20`);
+    res.json({ok:true,materials:r.rows});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not load marketplace materials.'})}
+});
+
+app.get('/api/materials/:id/reviews', requireAuth, async (req,res)=>{
+  try{
+    const r=await db.query(`SELECT rating,review,created_at AS "createdAt",learner_email AS "learnerEmail" FROM material_reviews WHERE material_id=$1 ORDER BY created_at DESC LIMIT 50`,[String(req.params.id)]);
+    const avg=await db.query(`SELECT COALESCE(AVG(rating),0) AS average,COUNT(*)::int AS count FROM material_reviews WHERE material_id=$1`,[String(req.params.id)]);
+    res.json({ok:true,reviews:r.rows.map(x=>({...x,learnerEmail: x.learnerEmail===req.user.email?x.learnerEmail.replace(/(^.).*(@.*$)/,'$1***$2'):'Learner'})),averageRating:Number(avg.rows[0]?.average||0),reviewCount:Number(avg.rows[0]?.count||0)});
+  }catch(e){res.status(500).json({error:'Could not load reviews.'})}
+});
+
+app.post('/api/materials/:id/reviews', requireRole('learner'), async (req,res)=>{
+  try{
+    const rating=Number(req.body?.rating); const review=String(req.body?.review||'').trim().slice(0,1000); const materialId=String(req.params.id);
+    if(!Number.isInteger(rating)||rating<1||rating>5)return res.status(400).json({error:'Rating must be between 1 and 5.'});
+    const purchased=await db.query(`SELECT 1 FROM transactions WHERE user_email=$1 AND material_id=$2 AND status='paid' LIMIT 1`,[req.user.email,materialId]);
+    const free=await db.query(`SELECT 1 FROM materials WHERE id=$1 AND approval_status='approved' AND COALESCE(price,0)=0 LIMIT 1`,[materialId]);
+    if(!purchased.rowCount&&!free.rowCount)return res.status(403).json({error:'You can review a material after purchasing or accessing it for free.'});
+    const r=await db.query(`INSERT INTO material_reviews(material_id,learner_email,rating,review) VALUES($1,$2,$3,$4) ON CONFLICT(material_id,learner_email) DO UPDATE SET rating=EXCLUDED.rating,review=EXCLUDED.review,updated_at=NOW() RETURNING id,rating,review,created_at AS "createdAt"`,[materialId,req.user.email,rating,review]);
+    res.status(201).json({ok:true,review:r.rows[0]});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not save review.'})}
+});
+
+app.get('/api/admin/marketplace', requireRole('admin'), async (_req,res)=>{
+  try{
+    const summary=await db.query(`SELECT COUNT(*) FILTER(WHERE approval_status='approved' AND deleted_at IS NULL)::int AS approved,
+      COUNT(*) FILTER(WHERE approval_status='approved' AND price>0 AND deleted_at IS NULL)::int AS paid,
+      COUNT(*) FILTER(WHERE approval_status='approved' AND COALESCE(price,0)=0 AND deleted_at IS NULL)::int AS free FROM materials`);
+    const sales=await db.query(`SELECT COUNT(*) FILTER(WHERE status='paid')::int AS purchases,
+      COALESCE(SUM(CASE WHEN status='paid' THEN COALESCE(paid_amount,amount) ELSE 0 END),0) AS gross,
+      COALESCE(SUM(CASE WHEN status='paid' THEN COALESCE(platform_amount,0) ELSE 0 END),0) AS platform,
+      COALESCE(SUM(CASE WHEN status='paid' THEN COALESCE(teacher_amount,0) ELSE 0 END),0) AS teacher FROM transactions`);
+    const top=await db.query(`SELECT m.id,m.title,m.price,m.teacher_email AS "teacherEmail",COUNT(t.transaction_id) FILTER(WHERE t.status='paid')::int AS purchases,
+      COALESCE(SUM(CASE WHEN t.status='paid' THEN COALESCE(t.platform_amount,0) ELSE 0 END),0) AS platformRevenue,
+      COALESCE(AVG(r.rating),0)::numeric(3,2) AS "averageRating",COUNT(DISTINCT r.id)::int AS "reviewCount"
+      FROM materials m LEFT JOIN transactions t ON t.material_id=m.id LEFT JOIN material_reviews r ON r.material_id=m.id
+      WHERE m.approval_status='approved' AND m.deleted_at IS NULL GROUP BY m.id ORDER BY purchases DESC,m.created_at DESC LIMIT 50`);
+    res.json({ok:true,summary:summary.rows[0]||{},sales:sales.rows[0]||{},top:top.rows});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not load marketplace analytics.'})}
+});
 
 // Learner discussion centre: text discussion plus a lightweight WebRTC signalling channel.
 app.get('/api/discussions/posts', requireAuth, async (req,res)=>{

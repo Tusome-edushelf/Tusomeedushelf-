@@ -415,6 +415,29 @@ async function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_school_invites_email ON school_invites(email,status);
     ALTER TABLE school_memberships ADD COLUMN IF NOT EXISTS class_id TEXT REFERENCES school_classes(class_id) ON DELETE SET NULL;
     CREATE INDEX IF NOT EXISTS idx_school_memberships_class ON school_memberships(school_id,class_id,status);
+    CREATE TABLE IF NOT EXISTS school_subjects (
+      subject_id TEXT PRIMARY KEY, school_id TEXT NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
+      subject_name TEXT NOT NULL, learning_area TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(school_id, subject_name)
+    );
+    CREATE INDEX IF NOT EXISTS idx_school_subjects_school ON school_subjects(school_id);
+    CREATE TABLE IF NOT EXISTS school_teacher_subjects (
+      school_id TEXT NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE, subject_id TEXT NOT NULL REFERENCES school_subjects(subject_id) ON DELETE CASCADE,
+      teacher_email TEXT NOT NULL, class_id TEXT NOT NULL REFERENCES school_classes(class_id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), PRIMARY KEY(subject_id,teacher_email,class_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_school_teacher_subjects_teacher ON school_teacher_subjects(school_id,teacher_email);
+    CREATE TABLE IF NOT EXISTS school_terms (
+      term_id TEXT PRIMARY KEY, school_id TEXT NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
+      academic_year TEXT NOT NULL, term_name TEXT NOT NULL, starts_on DATE, ends_on DATE, status TEXT NOT NULL DEFAULT 'planned' CHECK(status IN ('planned','active','closed')),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_school_terms_school ON school_terms(school_id,academic_year);
+    CREATE TABLE IF NOT EXISTS school_assignments (
+      assignment_id TEXT PRIMARY KEY, school_id TEXT NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE, class_id TEXT NOT NULL REFERENCES school_classes(class_id) ON DELETE CASCADE,
+      subject_id TEXT NOT NULL REFERENCES school_subjects(subject_id) ON DELETE CASCADE, teacher_email TEXT NOT NULL, title TEXT NOT NULL, instructions TEXT, due_at TIMESTAMPTZ, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_school_assignments_class ON school_assignments(school_id,class_id,created_at DESC);
 
     INSERT INTO subscription_plans(plan_key,name,audience,price_monthly,price_yearly,description,features)
     VALUES
@@ -1822,6 +1845,52 @@ app.post('/api/schools/invites', requireAuth, async (req,res)=>{
 app.delete('/api/schools/members/:email', requireAuth, async (req,res)=>{
   req.query={schoolId:req.body?.schoolId||req.query.schoolId};
   return requireSchoolMembership(req,res,async()=>{try{if(req.school.memberRole!=='admin'&&req.user.role!=='admin')return res.status(403).json({error:'School admin access is required.'});const email=decodeURIComponent(req.params.email).toLowerCase();if(email===req.user.email)return res.status(400).json({error:'School admins cannot remove their own access here.'});const r=await db.query(`UPDATE school_memberships SET status='suspended' WHERE school_id=$1 AND user_email=$2 RETURNING user_email`,[req.school.schoolId,email]);if(!r.rowCount)return res.status(404).json({error:'Member not found.'});res.json({ok:true})}catch(e){res.status(500).json({error:'Could not suspend member.'})}})
+});
+
+// v39 Academic Management: subjects, teacher allocations, terms and class assignments.
+app.get('/api/schools/academic', requireSchoolMembership, async (req,res)=>{
+  try{
+    const [subjects,allocations,terms,assignments]=await Promise.all([
+      db.query(`SELECT subject_id AS "subjectId",subject_name AS "subjectName",learning_area AS "learningArea" FROM school_subjects WHERE school_id=$1 ORDER BY subject_name`,[req.school.schoolId]),
+      db.query(`SELECT tsa.subject_id AS "subjectId",ss.subject_name AS "subjectName",tsa.teacher_email AS "teacherEmail",tsa.class_id AS "classId",sc.class_name AS "className" FROM school_teacher_subjects tsa JOIN school_subjects ss ON ss.subject_id=tsa.subject_id JOIN school_classes sc ON sc.class_id=tsa.class_id WHERE tsa.school_id=$1 ORDER BY sc.class_name,ss.subject_name,tsa.teacher_email`,[req.school.schoolId]),
+      db.query(`SELECT term_id AS "termId",academic_year AS "academicYear",term_name AS "termName",starts_on AS "startsOn",ends_on AS "endsOn",status FROM school_terms WHERE school_id=$1 ORDER BY academic_year DESC,term_name`,[req.school.schoolId]),
+      db.query(`SELECT a.assignment_id AS "assignmentId",a.title,a.instructions,a.due_at AS "dueAt",a.teacher_email AS "teacherEmail",ss.subject_name AS "subjectName",sc.class_name AS "className" FROM school_assignments a JOIN school_subjects ss ON ss.subject_id=a.subject_id JOIN school_classes sc ON sc.class_id=a.class_id WHERE a.school_id=$1 ORDER BY a.created_at DESC LIMIT 100`,[req.school.schoolId])
+    ]);
+    res.json({ok:true,subjects:subjects.rows,allocations:allocations.rows,terms:terms.rows,assignments:assignments.rows});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not load academic management.'})}
+});
+app.post('/api/schools/subjects', requireAuth, async (req,res)=>{
+  req.query={schoolId:req.body?.schoolId}; return requireSchoolMembership(req,res,async()=>{try{
+    if(req.school.memberRole!=='admin'&&req.user.role!=='admin')return res.status(403).json({error:'School admin access is required.'});
+    const name=String(req.body?.subjectName||'').trim().slice(0,100); const area=String(req.body?.learningArea||'').trim().slice(0,100); if(!name)return res.status(400).json({error:'Subject name is required.'});
+    const id='SUB-'+Date.now().toString(36).toUpperCase()+'-'+Math.random().toString(36).slice(2,6).toUpperCase();
+    const r=await db.query(`INSERT INTO school_subjects(subject_id,school_id,subject_name,learning_area) VALUES($1,$2,$3,$4) ON CONFLICT(school_id,subject_name) DO UPDATE SET learning_area=EXCLUDED.learning_area RETURNING subject_id AS "subjectId"`,[id,req.school.schoolId,name,area||null]);
+    res.status(201).json({ok:true,subjectId:r.rows[0].subjectId});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not create subject.'})}})
+});
+app.post('/api/schools/allocations', requireAuth, async (req,res)=>{
+  req.query={schoolId:req.body?.schoolId}; return requireSchoolMembership(req,res,async()=>{try{
+    if(req.school.memberRole!=='admin'&&req.user.role!=='admin')return res.status(403).json({error:'School admin access is required.'});
+    const subjectId=String(req.body?.subjectId||''); const classId=String(req.body?.classId||''); const teacher=String(req.body?.teacherEmail||'').trim().toLowerCase(); if(!subjectId||!classId||!teacher)return res.status(400).json({error:'Subject, class and teacher are required.'});
+    const check=await db.query(`SELECT 1 FROM school_memberships WHERE school_id=$1 AND user_email=$2 AND member_role='teacher' AND status='active'`,[req.school.schoolId,teacher]); if(!check.rowCount)return res.status(400).json({error:'Teacher must be an active school teacher.'});
+    await db.query(`INSERT INTO school_teacher_subjects(school_id,subject_id,teacher_email,class_id) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING`,[req.school.schoolId,subjectId,teacher,classId]); res.status(201).json({ok:true});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not assign teacher.'})}})
+});
+app.post('/api/schools/terms', requireAuth, async (req,res)=>{
+  req.query={schoolId:req.body?.schoolId}; return requireSchoolMembership(req,res,async()=>{try{
+    if(req.school.memberRole!=='admin'&&req.user.role!=='admin')return res.status(403).json({error:'School admin access is required.'});
+    const year=String(req.body?.academicYear||'').trim().slice(0,20), name=String(req.body?.termName||'').trim().slice(0,40); if(!year||!name)return res.status(400).json({error:'Academic year and term name are required.'});
+    const id='TERM-'+Date.now().toString(36).toUpperCase(); await db.query(`INSERT INTO school_terms(term_id,school_id,academic_year,term_name,starts_on,ends_on,status) VALUES($1,$2,$3,$4,$5,$6,$7)`,[id,req.school.schoolId,year,name,req.body?.startsOn||null,req.body?.endsOn||null,['planned','active','closed'].includes(req.body?.status)?req.body.status:'planned']); res.status(201).json({ok:true,termId:id});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not create term.'})}})
+});
+app.post('/api/schools/assignments', requireAuth, async (req,res)=>{
+  req.query={schoolId:req.body?.schoolId}; return requireSchoolMembership(req,res,async()=>{try{
+    if(!['teacher','admin'].includes(req.school.memberRole)&&req.user.role!=='admin')return res.status(403).json({error:'Teacher or school admin access is required.'});
+    const classId=String(req.body?.classId||''), subjectId=String(req.body?.subjectId||''), title=String(req.body?.title||'').trim().slice(0,160), instructions=String(req.body?.instructions||'').trim().slice(0,3000); if(!classId||!subjectId||!title)return res.status(400).json({error:'Class, subject and title are required.'});
+    const teacher=req.user.role==='teacher'?req.user.email:String(req.body?.teacherEmail||req.user.email).trim().toLowerCase();
+    if(req.user.role==='teacher'){const a=await db.query(`SELECT 1 FROM school_teacher_subjects WHERE school_id=$1 AND class_id=$2 AND subject_id=$3 AND teacher_email=$4`,[req.school.schoolId,classId,subjectId,teacher]);if(!a.rowCount)return res.status(403).json({error:'You can only create assignments for your assigned class and subject.'})}
+    const id='ASN-'+Date.now().toString(36).toUpperCase()+'-'+Math.random().toString(36).slice(2,6).toUpperCase(); await db.query(`INSERT INTO school_assignments(assignment_id,school_id,class_id,subject_id,teacher_email,title,instructions,due_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,[id,req.school.schoolId,classId,subjectId,teacher,title,instructions||null,req.body?.dueAt||null]); res.status(201).json({ok:true,assignmentId:id});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not create assignment.'})}})
 });
 
 app.use(express.static(__dirname));

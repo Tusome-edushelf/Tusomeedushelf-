@@ -142,7 +142,7 @@ async function initDatabase() {
     CREATE TABLE IF NOT EXISTS users (
       id BIGSERIAL PRIMARY KEY,
       email TEXT NOT NULL UNIQUE,
-      role TEXT NOT NULL CHECK (role IN ('learner','teacher','admin')),
+      role TEXT NOT NULL CHECK (role IN ('learner','teacher','admin','parent')),
       password_hash TEXT NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -401,6 +401,17 @@ async function initDatabase() {
       PRIMARY KEY (school_id,user_email)
     );
     CREATE INDEX IF NOT EXISTS idx_school_memberships_user ON school_memberships(user_email,status);
+    CREATE TABLE IF NOT EXISTS parent_guardian_links (
+      link_id TEXT PRIMARY KEY,
+      school_id TEXT NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
+      parent_email TEXT NOT NULL,
+      learner_email TEXT NOT NULL,
+      created_by TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(school_id,parent_email,learner_email)
+    );
+    CREATE INDEX IF NOT EXISTS idx_parent_links_parent ON parent_guardian_links(parent_email);
+    CREATE INDEX IF NOT EXISTS idx_parent_links_learner ON parent_guardian_links(learner_email);
     CREATE TABLE IF NOT EXISTS school_classes (
       class_id TEXT PRIMARY KEY, school_id TEXT NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
       class_name TEXT NOT NULL, grade TEXT, stream TEXT, teacher_email TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -1021,7 +1032,7 @@ app.post('/api/auth/login', async (req, res) => {
   const { email, password, role } = req.body || {};
   const user = await findUser(email);
   if (!user || !verifyPassword(password, user.passwordHash)) return res.status(401).json({ error: 'Invalid email or password.' });
-  if (!['learner', 'teacher', 'admin'].includes(String(role)) || user.role !== role) return res.status(403).json({ error: 'The selected account type does not match this account.' });
+  if (!['learner', 'teacher', 'admin', 'parent'].includes(String(role)) || user.role !== role) return res.status(403).json({ error: 'The selected account type does not match this account.' });
   setSessionCookie(res, user);
   void audit({user}, 'login', 'user', user.email);
   res.json({ ok: true, user: { email: user.email, role: user.role } });
@@ -1865,6 +1876,57 @@ app.post('/api/schools/invites', requireAuth, async (req,res)=>{
 app.delete('/api/schools/members/:email', requireAuth, async (req,res)=>{
   req.query={schoolId:req.body?.schoolId||req.query.schoolId};
   return requireSchoolMembership(req,res,async()=>{try{if(req.school.memberRole!=='admin'&&req.user.role!=='admin')return res.status(403).json({error:'School admin access is required.'});const email=decodeURIComponent(req.params.email).toLowerCase();if(email===req.user.email)return res.status(400).json({error:'School admins cannot remove their own access here.'});const r=await db.query(`UPDATE school_memberships SET status='suspended' WHERE school_id=$1 AND user_email=$2 RETURNING user_email`,[req.school.schoolId,email]);if(!r.rowCount)return res.status(404).json({error:'Member not found.'});res.json({ok:true})}catch(e){res.status(500).json({error:'Could not suspend member.'})}})
+});
+
+// v42 Parent/Guardian Portal: school-controlled links and read-only academic visibility.
+app.get('/api/parent/children', requireRole('parent'), async (req,res)=>{
+  try{
+    const r=await db.query(`SELECT pgl.link_id AS "linkId",pgl.school_id AS "schoolId",sc.school_name AS "schoolName",pgl.learner_email AS "learnerEmail",c.class_name AS "className",c.grade,c.stream FROM parent_guardian_links pgl JOIN schools sc ON sc.school_id=pgl.school_id LEFT JOIN school_memberships sm ON sm.school_id=pgl.school_id AND sm.user_email=pgl.learner_email AND sm.member_role='learner' AND sm.status='active' LEFT JOIN school_classes c ON c.class_id=sm.class_id WHERE pgl.parent_email=$1 AND sc.status='active' ORDER BY sc.school_name,pgl.learner_email`,[req.user.email]);
+    res.json({ok:true,children:r.rows});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not load linked learners.'})}
+});
+
+app.get('/api/parent/dashboard', requireRole('parent'), async (req,res)=>{
+  try{
+    const learner=String(req.query?.learnerEmail||'').trim().toLowerCase();
+    if(!learner) return res.status(400).json({error:'Select a linked learner.'});
+    const link=await db.query(`SELECT pgl.school_id AS "schoolId",sc.school_name AS "schoolName" FROM parent_guardian_links pgl JOIN schools sc ON sc.school_id=pgl.school_id WHERE pgl.parent_email=$1 AND pgl.learner_email=$2 AND sc.status='active' LIMIT 1`,[req.user.email,learner]);
+    if(!link.rowCount)return res.status(403).json({error:'That learner is not linked to this parent account.'});
+    const schoolId=link.rows[0].schoolId;
+    const [profile,grades,assignments]=await Promise.all([
+      db.query(`SELECT sm.user_email AS "learnerEmail",c.class_name AS "className",c.grade,c.stream FROM school_memberships sm LEFT JOIN school_classes c ON c.class_id=sm.class_id WHERE sm.school_id=$1 AND sm.user_email=$2 AND sm.member_role='learner' AND sm.status='active' LIMIT 1`,[schoolId,learner]),
+      db.query(`SELECT ss.subject_name AS "subjectName",COUNT(s.submission_id)::int AS "gradedCount",SUM(s.marks)::numeric AS "marks",SUM(s.max_marks)::numeric AS "maxMarks",ROUND(CASE WHEN SUM(s.max_marks)>0 THEN SUM(s.marks)/SUM(s.max_marks)*100 ELSE 0 END,2) AS "percent" FROM school_assignment_submissions s JOIN school_assignments a ON a.assignment_id=s.assignment_id JOIN school_subjects ss ON ss.subject_id=a.subject_id WHERE s.school_id=$1 AND s.learner_email=$2 AND s.status IN ('graded','returned') GROUP BY ss.subject_name ORDER BY ss.subject_name`,[schoolId,learner]),
+      db.query(`SELECT a.title,ss.subject_name AS "subjectName",a.due_at AS "dueAt",s.status,s.marks,s.max_marks AS "maxMarks",s.feedback,s.submitted_at AS "submittedAt" FROM school_assignments a JOIN school_subjects ss ON ss.subject_id=a.subject_id JOIN school_classes c ON c.class_id=a.class_id JOIN school_memberships sm ON sm.school_id=a.school_id AND sm.class_id=a.class_id AND sm.user_email=$2 AND sm.member_role='learner' AND sm.status='active' LEFT JOIN school_assignment_submissions s ON s.assignment_id=a.assignment_id AND s.learner_email=$2 WHERE a.school_id=$1 ORDER BY a.due_at NULLS LAST,a.created_at DESC LIMIT 100`,[schoolId,learner])
+    ]);
+    const rows=grades.rows; const totalMarks=rows.reduce((n,x)=>n+Number(x.marks||0),0),totalMax=rows.reduce((n,x)=>n+Number(x.maxMarks||0),0);
+    res.json({ok:true,school:link.rows[0],profile:profile.rows[0]||{learnerEmail:learner},grades:rows,assignments:assignments.rows,summary:{gradedSubjects:rows.length,averagePercent:totalMax?Math.round(totalMarks/totalMax*10000)/100:0}});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not load parent dashboard.'})}
+});
+
+app.get('/api/schools/parent-links', requireSchoolMembership, async (req,res)=>{
+  try{if(req.school.memberRole!=='admin'&&req.user.role!=='admin')return res.status(403).json({error:'School admin access is required.'});const r=await db.query(`SELECT pgl.link_id AS "linkId",pgl.parent_email AS "parentEmail",pgl.learner_email AS "learnerEmail",c.class_name AS "className",pgl.created_at AS "createdAt" FROM parent_guardian_links pgl LEFT JOIN school_memberships sm ON sm.school_id=pgl.school_id AND sm.user_email=pgl.learner_email AND sm.member_role='learner' LEFT JOIN school_classes c ON c.class_id=sm.class_id WHERE pgl.school_id=$1 ORDER BY pgl.created_at DESC`,[req.school.schoolId]);res.json({ok:true,links:r.rows})}catch(e){res.status(500).json({error:'Could not load parent links.'})}
+});
+
+app.post('/api/schools/parent-links', requireAuth, async (req,res)=>{
+  req.query={schoolId:req.body?.schoolId};
+  return requireSchoolMembership(req,res,async()=>{try{
+    if(req.school.memberRole!=='admin'&&req.user.role!=='admin')return res.status(403).json({error:'School admin access is required.'});
+    const parent=String(req.body?.parentEmail||'').trim().toLowerCase(), learner=String(req.body?.learnerEmail||'').trim().toLowerCase();
+    if(!parent.includes('@')||!learner.includes('@'))return res.status(400).json({error:'Enter valid parent and learner emails.'});
+    const pu=await db.query(`SELECT email,role FROM users WHERE email=$1`,[parent]);
+    if(!pu.rowCount||pu.rows[0].role!=='parent')return res.status(400).json({error:'The parent account must already exist as a Parent/Guardian account.'});
+    const lm=await db.query(`SELECT 1 FROM school_memberships WHERE school_id=$1 AND user_email=$2 AND member_role='learner' AND status='active'`,[req.school.schoolId,learner]);
+    if(!lm.rowCount)return res.status(400).json({error:'The learner must be an active learner in this school.'});
+    const id='PGL-'+Date.now().toString(36).toUpperCase()+'-'+Math.random().toString(36).slice(2,6).toUpperCase();
+    await db.query(`INSERT INTO parent_guardian_links(link_id,school_id,parent_email,learner_email,created_by) VALUES($1,$2,$3,$4,$5) ON CONFLICT(school_id,parent_email,learner_email) DO NOTHING`,[id,req.school.schoolId,parent,learner,req.user.email]);
+    await createNotification(parent,'Learner linked to your parent account',`A school has linked ${learner} to your Tusome EduShelf Parent/Guardian account.`,'success');
+    res.status(201).json({ok:true,linkId:id});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not link parent and learner.'})}});
+});
+
+app.delete('/api/schools/parent-links/:id', requireAuth, async (req,res)=>{
+  req.query={schoolId:req.body?.schoolId||req.query.schoolId};
+  return requireSchoolMembership(req,res,async()=>{try{if(req.school.memberRole!=='admin'&&req.user.role!=='admin')return res.status(403).json({error:'School admin access is required.'});const r=await db.query(`DELETE FROM parent_guardian_links WHERE link_id=$1 AND school_id=$2 RETURNING link_id`,[req.params.id,req.school.schoolId]);if(!r.rowCount)return res.status(404).json({error:'Parent link not found.'});res.json({ok:true})}catch(e){res.status(500).json({error:'Could not remove parent link.'})}});
 });
 
 // v39 Academic Management: subjects, teacher allocations, terms and class assignments.

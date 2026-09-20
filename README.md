@@ -1,12 +1,30 @@
-# Tusome EduShelf v41 — Gradebook & Learner Progress
+# Tusome EduShelf v42 — Parent / Guardian Portal
 
-Fresh rebuild from v40. Adds a school gradebook and learner progress view on top of the existing assignment/submission system.
+v42 adds a school-controlled Parent/Guardian portal on top of v41.
 
-- Learner dashboard gradebook with assignment scores, status and teacher feedback
-- Learner summary KPIs and average percentage across graded assignments
-- Teacher/school-admin gradebook by learner, class, subject and assignment
-- Teacher access limited to assignments they own in the selected school workspace
-- Learners only see their own records
-- Existing v40 features preserved
+## Parent features
+- Parent/Guardian login role
+- Read-only linked learner dashboard
+- School and class information
+- Subject-level academic progress and averages
+- Assignment status and approved marks/feedback visibility
+- Multiple linked learners supported
+- Parent AI study-support entry point
 
-The gradebook is a progress aid and does not automatically determine an official report-card grade.
+## School admin features
+- Link an existing Parent/Guardian account to an active learner
+- View current parent/learner links
+- Remove a parent/learner link
+- Parent access is limited to explicitly linked learners
+
+## Privacy
+- Parent APIs verify the authenticated parent owns the link before returning learner data.
+- Parents cannot edit grades, assignments, submissions, school membership, or other school records.
+- Parent accounts are not available through the public learner/teacher sign-up flow; they should be provisioned by the school/platform process.
+- The portal avoids exposing unrelated school operational data.
+
+## Preserved
+v41 Gradebook, v40 Assignments/Submissions/Grading, v39 Academic Management, v38 School Management, memberships, marketplace, M-PESA, discussions, large video and screen sharing remain included.
+
+## Production note
+Use verified parent/guardian identity and appropriate school authorization before linking an adult to a learner. Keep child data access limited to what is necessary for education and school administration.

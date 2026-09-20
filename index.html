@@ -480,6 +480,7 @@ footer{text-align:center;padding:30px;color:#687386}.ai-answer{line-height:1.7;b
 <footer>© 2026 EduShelf • Kenya CBE Learning Materials Platform Prototype</footer>
 
 <script>
+function escapeHtml(value){return String(value??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
 const key='edushelfMaterials';
 const curriculumSubjects=['Mathematics','English','Kiswahili','Integrated Science','Biology','Chemistry','Physics','Agriculture','Social Studies','Pre-Technical Studies','Creative Arts & Sports','Business Studies','Geography','History & Citizenship','Computer Studies','ICT','Home Science'];
 let materials=JSON.parse(localStorage.getItem(key)||'null')||[

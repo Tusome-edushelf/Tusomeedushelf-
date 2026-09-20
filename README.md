@@ -1,20 +1,12 @@
-# Tusome EduShelf v40 — Assignments, Submissions & Grading
+# Tusome EduShelf v41 — Gradebook & Learner Progress
 
-Built from v39 Classes & Academic Management.
+Fresh rebuild from v40. Adds a school gradebook and learner progress view on top of the existing assignment/submission system.
 
-## Included
-- Teacher/school-admin assignment creation from the existing academic management area.
-- Learner dashboard "My Class Assignments" section.
-- Learners can submit written answers and optional files up to 6 MB.
-- Learners can resubmit work.
-- Teachers see submissions for their assigned classes/subjects; school admins can see school submissions.
-- Teacher/admin marking with marks, maximum marks and written feedback.
-- Learners see returned marks and feedback.
-- Submission file access is scoped to the learner or authorized school teacher/admin.
-- PostgreSQL-backed submission records.
-- Existing v39 school, academic, marketplace, premium, M-PESA, discussions, large video and screen-sharing features are preserved.
+- Learner dashboard gradebook with assignment scores, status and teacher feedback
+- Learner summary KPIs and average percentage across graded assignments
+- Teacher/school-admin gradebook by learner, class, subject and assignment
+- Teacher access limited to assignments they own in the selected school workspace
+- Learners only see their own records
+- Existing v40 features preserved
 
-## Notes
-- AI is not used to make final grading decisions. Teacher/admin review remains the authority for school assessment.
-- This version stores uploaded submission files in PostgreSQL; production deployments should consider durable storage and file retention policies.
-- File uploads are limited to 6 MB in the assignment workflow.
+The gradebook is a progress aid and does not automatically determine an official report-card grade.

@@ -1979,6 +1979,32 @@ app.patch('/api/schools/submissions/:id/grade', requireSchoolMembership, async (
   }catch(e){console.error(e);res.status(500).json({error:'Could not save grade.'})}
 });
 
+
+
+// v41 Gradebook & learner progress.
+app.get('/api/learner/gradebook', requireRole('learner'), async (req,res)=>{
+  try{
+    const r=await db.query(`SELECT a.assignment_id AS "assignmentId",a.title,a.due_at AS "dueAt",ss.subject_name AS "subjectName",c.class_name AS "className",s.status,s.marks,s.max_marks AS "maxMarks",s.feedback,s.submitted_at AS "submittedAt" FROM school_assignments a JOIN school_classes c ON c.class_id=a.class_id JOIN school_subjects ss ON ss.subject_id=a.subject_id JOIN school_memberships sm ON sm.school_id=a.school_id AND sm.class_id=a.class_id AND sm.user_email=$1 AND sm.member_role='learner' AND sm.status='active' LEFT JOIN school_assignment_submissions s ON s.assignment_id=a.assignment_id AND s.learner_email=$1 WHERE a.school_id=sm.school_id ORDER BY ss.subject_name,a.due_at NULLS LAST,a.created_at DESC LIMIT 300`,[req.user.email]);
+    const rows=r.rows; const graded=rows.filter(x=>x.marks!=null); const total=graded.reduce((a,x)=>a+Number(x.marks||0),0); const max=graded.reduce((a,x)=>a+Number(x.maxMarks||0),0);
+    res.json({ok:true,summary:{assignments:rows.length,graded:graded.length,submitted:rows.filter(x=>x.submittedAt).length,averagePercent:max?Math.round(total/max*10000)/100:0},rows});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not load learner gradebook.'})}
+});
+
+app.get('/api/schools/gradebook', requireSchoolMembership, async (req,res)=>{
+  try{
+    if(!['teacher','admin'].includes(req.school.memberRole) && req.user.role!=='admin') return res.status(403).json({error:'Teacher or school admin access is required.'});
+    const teacherOnly=req.school.memberRole==='teacher' && req.user.role!=='admin';
+    const params=[req.school.schoolId];
+    let extra='';
+    if(teacherOnly){params.push(req.user.email);extra=' AND a.teacher_email=$2';}
+    const a=await db.query(`SELECT a.assignment_id AS "assignmentId",a.title,a.due_at AS "dueAt",a.teacher_email AS "teacherEmail",c.class_id AS "classId",c.class_name AS "className",ss.subject_id AS "subjectId",ss.subject_name AS "subjectName" FROM school_assignments a JOIN school_classes c ON c.class_id=a.class_id JOIN school_subjects ss ON ss.subject_id=a.subject_id WHERE a.school_id=$1 ${extra} ORDER BY c.class_name,ss.subject_name,a.created_at DESC LIMIT 300`,params);
+    const learners=await db.query(`SELECT sm.user_email AS "learnerEmail",sm.class_id AS "classId",c.class_name AS "className" FROM school_memberships sm JOIN school_classes c ON c.class_id=sm.class_id WHERE sm.school_id=$1 AND sm.member_role='learner' AND sm.status='active' ORDER BY c.class_name,sm.user_email`,[req.school.schoolId]);
+    const subs=await db.query(`SELECT s.assignment_id AS "assignmentId",s.learner_email AS "learnerEmail",s.status,s.marks,s.max_marks AS "maxMarks",s.feedback,s.submitted_at AS "submittedAt" FROM school_assignment_submissions s WHERE s.school_id=$1`,[req.school.schoolId]);
+    const subMap=new Map(subs.rows.map(x=>[x.assignmentId+'|'+x.learnerEmail,x]));
+    res.json({ok:true,assignments:a.rows,learners:learners.rows,submissions:subs.rows,teacherOnly});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not load school gradebook.'})}
+});
+
 app.use(express.static(__dirname));
 
 try {

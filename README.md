@@ -1,18 +1,16 @@
-# Tusome EduShelf v16 — Learner Progress & Saved Materials
+# Tusome EduShelf v17 — Advanced Search & Filters
 
-This release builds on v15 and adds persistent learner learning history and bookmarks.
+Built on v16. Adds a richer learner material discovery experience while preserving the existing authentication, AI, payments, backups/recovery, bookmarks, progress, teacher and admin features.
 
 ## New
-- Learner dashboard **Continue Learning** card.
-- Learner **Saved Materials** / bookmarks.
-- Save/unsave approved materials with a visible bookmark button.
-- Persistent learner material activity in PostgreSQL.
-- Last-viewed material and view counts per learner.
-- Learner activity survives refresh and login on the same account.
-- Existing payments, AI, teacher/admin tools, backups and recovery remain included.
+- Search across title, subject, grade, topic, strand, competency, description and file name.
+- Subject, grade, topic and strand filters.
+- File-type filter.
+- Free-only / paid-only filter.
+- Saved-only and not-opened-yet filters.
+- Newest, title A–Z and price sorting.
+- Accessible labels on filter controls.
+- Reset clears every advanced filter.
 
-## Accessibility
-Controls use clear labels and predictable navigation. Important learner actions are surfaced directly on the dashboard, following W3C guidance on findability and clear navigation.
-
-## Database
-A new `learner_material_activity` table stores bookmark state, view count and last-viewed time per learner/material.
+## Notes
+Filtering is performed against approved materials already loaded by the application. No B2C payment changes were made.

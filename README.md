@@ -1,14 +1,15 @@
-# Tusome EduShelf v53 — Personalized Learning Engine
+# Tusome EduShelf — Home Navigation Upgrade
 
-Online-only personalized learning layer built on v52.
+This upgrade refreshes the public home screen for faster navigation and a cleaner visual hierarchy inspired by the supplied reference image.
 
-- Learner-selected learning preferences
-- Preferred learning area and grade
-- Focus topics and daily study time
-- Personalized digital-resource recommendations based on preferences and recent activity
-- Recent learning activity view
-- Learner-controlled recommendations; no public ranking
-- Recommendations are suggestions, not grades or high-stakes decisions
-- Existing v52 Learning Community, V51 portfolio, digital library and other features preserved
+## Home changes
+- Sticky, clearer header navigation with Home, Materials, Help, Account, Sign In and Sign Up.
+- Large full-width learner hero image with concise call-to-action buttons.
+- Three primary navigation cards: Learning Materials, For Teachers, For Learners.
+- Quick navigation shortcuts for Materials, Help, Account creation and Sign In.
+- Existing public Home AI onboarding remains available lower on the page.
+- Curriculum verification reminder retained.
+- Responsive layout for mobile and desktop.
 
-AI/personalization design keeps learner agency and transparency central; recommendations should support learning rather than dictate it.
+## Scope
+This is a UI/navigation upgrade only. Existing server APIs, authentication, learning features and role dashboards are preserved.

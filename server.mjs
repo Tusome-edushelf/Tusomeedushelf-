@@ -1381,7 +1381,14 @@ app.get('/api/materials/:id/file', requireAuth, async (req, res) => {
     const result = await db.query(`SELECT m.approval_status AS "approvalStatus",m.teacher_email AS "teacherEmail",f.file_name AS "fileName",f.mime_type AS "mimeType",f.file_data AS "fileData" FROM materials m JOIN material_files f ON f.material_id=m.id WHERE m.id=$1 LIMIT 1`, [req.params.id]);
     const row = result.rows[0];
     if (!row) return res.status(404).json({ error: 'Material file not found.' });
-    const allowed = req.user.role === 'admin' || (req.user.role === 'teacher' && row.teacherEmail === req.user.email) || (req.user.role === 'learner' && row.approvalStatus === 'approved');
+    let allowed = req.user.role === 'admin' || (req.user.role === 'teacher' && row.teacherEmail === req.user.email);
+    if (req.user.role === 'learner' && row.approvalStatus === 'approved') {
+      const paid = await db.query(`SELECT 1 FROM transactions WHERE user_email=$1 AND material_id=$2 AND status='paid' LIMIT 1`, [req.user.email, String(req.params.id)]);
+      const priceResult = await db.query(`SELECT price FROM materials WHERE id=$1 LIMIT 1`, [String(req.params.id)]);
+      const price = Number(priceResult.rows[0]?.price || 0);
+      allowed = price <= 0 || paid.rowCount > 0;
+      if (!allowed) return res.status(402).json({ error: 'Payment required before opening this material.', code: 'PAYMENT_REQUIRED' });
+    }
     if (!allowed) return res.status(403).json({ error: 'This material is not available to your account.' });
     res.setHeader('Content-Type', row.mimeType || 'application/octet-stream');
     res.setHeader('Content-Disposition', `inline; filename="${String(row.fileName).replace(/"/g, '')}"`);

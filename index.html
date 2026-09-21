@@ -440,7 +440,7 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
         <div id="readerMeta" class="reader-meta">Open a material to begin studying.</div>
       </div>
       <div class="reader-actions">
-        <button class="btn" type="button" onclick="show('learner')">← Back to Materials</button>
+        <button class="btn" type="button" onclick="navigateBack('learner')">← Back</button>
         <button class="btn" type="button" onclick="readerBookmark()" id="readerBookmarkBtn">🔖 Save</button>
         <a class="btn primary" id="readerDownload" href="#" target="_blank" rel="noopener">⬇ Download</a>
       </div>
@@ -670,7 +670,7 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
 </section>
 
 <section id="payments" class="page">
-  <div class="topline"><div><h2>💳 Tusome EduShelf Payments</h2><p>Buy learning materials and track teacher earnings.</p></div><button class="btn primary" onclick="show('learner')">Back to Materials</button></div>
+  <div class="topline"><div><h2>💳 Tusome EduShelf Payments</h2><p>Buy learning materials and track teacher earnings.</p></div><button class="btn primary" onclick="navigateBack('learner')">← Back</button></div>
   <div class="notice"><b>Daraja sandbox:</b> Payments are sent through the server to Safaricom Daraja. Consumer credentials and the HTTPS callback URL stay in Render environment variables. In sandbox mode, the standard Safaricom test shortcode/passkey are supplied by the server unless you explicitly override them.</div>
   <div id="paymentMaterial" class="card" style="max-width:700px;margin:20px auto"><h3>Select a paid material</h3><p>Paid materials will ask for the learner's M-PESA number before unlocking.</p></div>
   <div class="cards">
@@ -932,7 +932,7 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
 
 <section id="digitalLibrary" class="page">
   <div class="digital-library-shell">
-    <div class="topline"><div><h2>📚 Digital Library & Resource Centre</h2><p>Find approved digital learning resources in one place — PDFs, notes, videos, links and other online study materials.</p></div><button class="btn primary" type="button" onclick="loadDigitalLibrary()">↻ Refresh</button></div>
+    <div class="topline"><div><h2>📚 Digital Library & Resource Centre</h2><p>Find approved digital learning resources in one place — PDFs, notes, videos, links and other online study materials.</p></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" type="button" onclick="navigateBack('learner')">← Back</button><button class="btn primary" type="button" onclick="loadDigitalLibrary()">↻ Refresh</button></div></div>
     <div class="digital-library-hero"><h3 style="margin-top:0">A digital-only learning shelf</h3><p style="margin-bottom:0">This centre does not track physical books, borrowing, returns or stock. It is for online resources only.</p></div>
     <div class="digital-library-kpis" aria-label="Digital library statistics">
       <div class="digital-library-kpi"><small>Total resources</small><b id="dlTotal">0</b></div>
@@ -1197,7 +1197,7 @@ function showPaymentForMaterial(m){
     <label for="payPhone">M-PESA phone number</label>
     <input id="payPhone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="07XXXXXXXX" maxlength="13">
     <button class="btn primary" type="button" onclick="startDarajaPayment('${String(m.id).replace(/'/g,"\\'")}')">📲 Pay with M-PESA</button>
-    <button class="btn" type="button" onclick="show('learner')">Cancel</button>`;
+    <button class="btn" type="button" onclick="navigateBack('learner')">← Back</button>`;
   show('payments');
   setTimeout(()=>document.getElementById('payPhone')?.focus(),50);
 }
@@ -1252,7 +1252,8 @@ async function pollPayment(checkoutRequestId,m){
         logActivity('M-PESA payment confirmed: '+m.title+' • KES '+price);
         logNotification('Payment confirmed. You can now open: '+m.title);
         renderMaterials();renderPayments();show('learner');
-        alert('Payment confirmed. The material is now unlocked.');
+        showToast?.('Payment confirmed. The material is now unlocked. Opening it now.','success');
+        setTimeout(()=>openMaterial(materials.findIndex(x=>String(x.id)===String(m.id))),120);
       }else if(data.status==='failed'){
         clearInterval(timer);
         alert(data.resultDescription||'The M-PESA payment was not completed.');
@@ -1522,7 +1523,8 @@ async function registerUser(e){
     setSessionRole(data.user.role,data.user.email);
     form.reset();
     alert('Account created successfully. Welcome to Tusome EduShelf!');
-    show(data.user.role==='teacher'?'teacher':data.user.role==='parent'?'parent':'learner');
+    appPageHistory=[];
+    show(data.user.role==='teacher'?'teacher':data.user.role==='parent'?'parent':'learner',true);
   }catch(err){alert(err.message)}
   finally{button.disabled=false;button.textContent='Sign Up'}
 }
@@ -1540,7 +1542,8 @@ async function login(e){
     try{data=JSON.parse(raw)}catch{throw new Error('The EduShelf server returned an unexpected response. Please redeploy the latest EduShelf files on Render and try again.')} 
     if(!res.ok)throw new Error(data.error||'Login failed.');
     setSessionRole(data.user.role,data.user.email);
-    show(data.user.role==='admin'?'admin':data.user.role==='teacher'?'teacher':'learner');
+    appPageHistory=[];
+    show(data.user.role==='admin'?'admin':data.user.role==='teacher'?'teacher':'learner',true);
     form.reset();
   }catch(err){alert(err.message)}
   finally{button.disabled=false;button.textContent='Sign In'}
@@ -1552,7 +1555,8 @@ async function logoutUser(){
   sessionStorage.removeItem('tusomeRole');
   sessionStorage.removeItem('tusomeCurrentUser');
   localStorage.removeItem('tusomeCurrentUser');
-  show('home');
+  appPageHistory=[];
+  show('home',true);
 }
 
 function escapeHomeAIText(value){return String(value||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
@@ -1617,7 +1621,19 @@ async function saveExamMarksV44(){const rows=[...document.querySelectorAll('#exa
 async function generateReportsV44(){try{const r=await fetch('/api/schools/report-cards/generate',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({classId:document.getElementById('reportClass').value})}),d=await r.json();if(!r.ok)throw new Error(d.error||'Could not generate reports.');document.getElementById('reportGenerateStatus').textContent=`Created ${d.count||0} draft report cards. Review and publish them before sharing with families.`;showToast?.('Draft report cards generated.','success')}catch(e){showToast?.(e.message,'error')}}
 async function loadLearnerResultsV44(){try{const r=await fetch('/api/learner/exams',{credentials:'include'}),d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load results.');document.getElementById('learnerResultsRows').innerHTML=(d.rows||[]).map(x=>`<tr><td>${escHtml(x.title)}</td><td>${escHtml(x.subjectName||'—')}</td><td>${escHtml(x.examDate||'—')}</td><td>${escHtml(x.marks??'—')} / ${escHtml(x.maxMarks)}</td><td>${escHtml(x.grade||'—')}</td><td>${escHtml(x.comment||'')}</td></tr>`).join('')||'<tr><td colspan="6">No published results yet.</td></tr>';const rr=await fetch('/api/learner/report-cards',{credentials:'include'}),rd=await rr.json();document.getElementById('learnerReportsList').innerHTML=(rd.rows||[]).map(x=>`<div class="card" style="margin-top:8px"><b>Report Card</b><p>Overall average: ${escHtml(x.overallAverage??'—')}% · Published: ${escHtml(x.publishedAt||'—')}</p><p>${escHtml(x.teacherComment||'')}</p><button class="btn" onclick="window.print()">🖨️ Print</button></div>`).join('')||'<p class="small">No published report cards yet.</p>'}catch(e){document.getElementById('learnerResultsRows').innerHTML=`<tr><td colspan="6">${escHtml(e.message)}</td></tr>`}}
 
-function show(id){
+let appPageHistory=[];
+function navigateBack(fallback='home'){
+  const previous=appPageHistory.pop();
+  show(previous||fallback,true);
+}
+function show(id,skipHistory=false){
+  const active=document.querySelector('.page.active');
+  const current=active?.id;
+  if(!skipHistory && current && current!==id && current!=='login'){
+    appPageHistory=appPageHistory.filter(x=>x!==id);
+    appPageHistory.push(current);
+    if(appPageHistory.length>12)appPageHistory.shift();
+  }
   const protectedRoles={learner:'learner',teacher:'teacher',admin:'admin',communication:'user',account:'user',reader:'learner',practice:'learner',discussions:'learner',portfolio:'learner',community:'learner',membership:'user',schoolManagement:'user',attendance:'user',exams:'user',fees:'user',timetable:'user',parent:'parent',digitalLibrary:'user'};
   if(protectedRoles[id]){
     const role=getSessionRole();
@@ -2100,6 +2116,7 @@ async function loadDigitalLibrary(){
   const d=await r.json();
   if(!r.ok){showToast?.(d.error||'Could not load the digital library.','error');return}
   digitalLibraryResources=Array.isArray(d.resources)?d.resources:[];
+  if(role==='learner'){await loadServerMaterials();await loadServerPurchases();}
   document.getElementById('dlTotal').textContent=d.counts?.total??digitalLibraryResources.length;
   document.getElementById('dlLinks').textContent=d.counts?.links??digitalLibraryResources.filter(x=>x.kind==='link').length;
   document.getElementById('dlUploaded').textContent=d.counts?.uploaded??digitalLibraryResources.filter(x=>x.kind==='material').length;
@@ -2123,7 +2140,7 @@ function renderDigitalLibrary(){
   let rows=digitalLibraryResources.filter(x=>{const hay=[x.title,x.subject,x.grade,x.topic,x.strand,x.description,x.resourceType].filter(Boolean).join(' ').toLowerCase();return(!q||hay.includes(q))&&(!subject||x.subject===subject)&&(!grade||x.grade===grade)&&(!type||x.resourceType===type)});
   if(sort==='az')rows.sort((a,b)=>String(a.title||'').localeCompare(String(b.title||'')));else rows.sort((a,b)=>new Date(b.createdAt||0)-new Date(a.createdAt||0));
   const box=document.getElementById('digitalLibraryResults');
-  box.innerHTML=rows.length?rows.map(x=>{const meta=[x.subject,x.grade,x.topic].filter(Boolean);const desc=escHtml(x.description||'Digital learning resource.');const title=escHtml(x.title||'Untitled resource');const typeLabel=escHtml(x.resourceType||'Resource');const id=escHtml(x.resourceId||'');const button=x.kind==='material'?`<button class="btn primary" type="button" onclick="openDigitalLibraryMaterial('${id}')">Open</button>`:`<button class="btn primary" type="button" onclick="openDigitalLibraryLink('${id}')">Open Resource</button>`;return `<article class="digital-resource-card"><div class="digital-resource-meta"><span class="tag">${typeLabel}</span>${meta.map(v=>`<span class="tag">${escHtml(v)}</span>`).join('')}</div><h3>${title}</h3><p class="small">${desc}</p><small class="small">${x.kind==='material'?'Approved Tusome EduShelf material':'Curated online resource'}</small><div class="digital-resource-actions">${button}${x.kind==='material'&&getSessionRole()==='learner'?`<button class="btn" type="button" onclick="saveDigitalLibraryMaterial('${id}')">🔖 Save</button>`:''}</div></article>`}).join(''):'<div class="notice" style="grid-column:1/-1">No digital resources match your filters.</div>';
+  box.innerHTML=rows.length?rows.map(x=>{const meta=[x.subject,x.grade,x.topic].filter(Boolean);const desc=escHtml(x.description||'Digital learning resource.');const title=escHtml(x.title||'Untitled resource');const typeLabel=escHtml(x.resourceType||'Resource');const id=escHtml(x.resourceId||'');const paid=x.kind==='material'&&isPurchased(x.resourceId);const m= x.kind==='material' ? materials.find(mm=>String(mm.id)===String(x.resourceId)) : null;const price=m?materialPrice(m):0;const button=x.kind==='material'?(price>0&&!paid?`<button class="btn primary" type="button" onclick="openDigitalLibraryMaterial('${id}')">Buy — KES ${price}</button>`:`<button class="btn primary" type="button" onclick="openDigitalLibraryMaterial('${id}')">Open</button>`):`<button class="btn primary" type="button" onclick="openDigitalLibraryLink('${id}')">Open Resource</button>`;return `<article class="digital-resource-card"><div class="digital-resource-meta"><span class="tag">${typeLabel}</span>${meta.map(v=>`<span class="tag">${escHtml(v)}</span>`).join('')}</div><h3>${title}</h3><p class="small">${desc}</p><small class="small">${x.kind==='material'?'Approved Tusome EduShelf material':'Curated online resource'}</small><div class="digital-resource-actions">${button}${x.kind==='material'&&getSessionRole()==='learner'?`<button class="btn" type="button" onclick="saveDigitalLibraryMaterial('${id}')">🔖 Save</button>`:''}</div></article>`}).join(''):'<div class="notice" style="grid-column:1/-1">No digital resources match your filters.</div>';
 }
 function openDigitalLibraryLink(id){const item=digitalLibraryResources.find(x=>String(x.resourceId)===String(id));if(item?.url)window.open(item.url,'_blank','noopener,noreferrer')}
 async function openDigitalLibraryMaterial(id){

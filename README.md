@@ -17,3 +17,10 @@ Role-specific premium placement:
 - The generic membership page remains available for subscription processing.
 
 No physical-school or physical-book features were added.
+
+## v55 Payment Gate + Navigation
+- Added history-aware Back navigation to deeper learner pages including Digital Library, Payments and Material Reader.
+- Digital Library paid materials now display Buy until the learner has a confirmed purchase.
+- Successful payment unlocks the material and opens it automatically.
+- Server-side material-file access now independently verifies a learner's confirmed paid transaction for priced materials, preventing direct URL access from bypassing the paywall.
+- Previously purchased materials open directly.

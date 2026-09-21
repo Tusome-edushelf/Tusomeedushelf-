@@ -796,6 +796,37 @@ function resetPlannerGoal(){updateGoalProgress(0);showToast?.('Goal progress res
 function initStudyPlanner(){const goal=localStorage.getItem('tusomeLearningGoal');const pct=localStorage.getItem('tusomeGoalProgress')||'0';const t=document.getElementById('plannerGoalText');if(t)t.textContent=goal||'No learning goal set yet.';const slider=document.getElementById('plannerGoalPercent');if(slider)slider.value=pct;updateGoalProgress(pct);renderStudyPlan();}
 initStudyPlanner();
 
+async function loadDashboardPremiumTrial(role){
+  const card=document.getElementById(role==='learner'?'learnerPremiumTrialCard':'teacherPremiumTrialCard');
+  const text=document.getElementById(role==='learner'?'learnerTrialText':'teacherTrialText');
+  const button=document.getElementById(role==='learner'?'learnerTrialButton':'teacherTrialButton');
+  if(!card)return;
+  try{
+    const [pRes,sRes]=await Promise.all([fetch('/api/plans',{credentials:'include'}),fetch('/api/my/subscription',{credentials:'include'})]);
+    const p=await pRes.json(), d=await sRes.json();
+    if(!pRes.ok||!sRes.ok)throw new Error('Could not load premium trial status.');
+    const plan=(p.plans||[]).find(x=>x.audience===role);
+    const active=(d.subscriptions||[]).find(x=>x.status==='trial' && x.trialEndsAt && new Date(x.trialEndsAt)>new Date());
+    if(active){
+      card.style.display='flex'; text.textContent=`${active.name||'Premium'} is active until ${new Date(active.trialEndsAt).toLocaleString()}.`; text.className='trial-status'; button.style.display='none'; return;
+    }
+    if(d.trialAvailable && plan){
+      card.style.display='flex'; text.textContent='Try premium features free for 2 days. No payment is required to start the trial.'; text.className=''; button.style.display='inline-flex'; return;
+    }
+    card.style.display='none';
+  }catch(e){card.style.display='none';}
+}
+
+async function startDashboardPremiumTrial(role){
+  const planKey=role==='learner'?'learner_plus':'teacher_plus';
+  if(!confirm(`Start your 2-day ${role} premium trial? No payment is required.`))return;
+  try{
+    const r=await fetch('/api/subscriptions/trial',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({planKey})});
+    const d=await r.json(); if(!r.ok)throw new Error(d.error||'Could not start the free trial.');
+    showToast?.('2-day premium trial started.','success'); loadDashboardPremiumTrial(role); if(typeof loadMembership==='function')loadMembership();
+  }catch(e){showToast?.(e.message,'error');}
+}
+
 async function loadMembership(){
   const plansBox=document.getElementById('membershipPlans'),statusBox=document.getElementById('membershipStatus'); if(!plansBox)return;
   try{
@@ -888,4 +919,4 @@ async function deleteSchoolClass(id){if(!confirm('Remove this class?'))return;tr
 async function inviteSchoolMember(){const body={schoolId:selectedSchoolId,email:document.getElementById('schoolInviteEmail').value.trim(),memberRole:document.getElementById('schoolInviteRole').value,classId:document.getElementById('schoolInviteClass').value||null};if(!body.email)return showToast?.('Enter an email address.','error');try{const r=await fetch('/api/schools/invites',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(body)});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not add member.');showToast?.(d.message||'Member invitation recorded.','success');document.getElementById('schoolInviteEmail').value='';loadSelectedSchool()}catch(e){showToast?.(e.message,'error')}}
 async function suspendSchoolMember(email){if(!confirm('Suspend this school member?'))return;try{const r=await fetch('/api/schools/members/'+email,{method:'DELETE',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({schoolId:selectedSchoolId})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not suspend member.');loadSelectedSchool()}catch(e){showToast?.(e.message,'error')}}
 
-(async()=>{await loadServerMaterials();if(getSessionRole()==='learner'){await loadServerPurchases();await loadLearnerActivity()}populateMaterialFilters();populateMaterialFilters();renderMaterials();renderTeacher();renderAdmin();refreshProgress();checkAIStatus();if(getSessionRole()==='learner'){loadMarketplace();loadMembership();loadLearnerAssignments();loadLearnerGradebook()} if(getSessionRole()==='teacher'){loadMembership();loadSchoolManagement()} if(getSessionRole()==='admin'){loadAdminMemberships();loadSchoolManagement()} if(getSessionRole()==='parent'){loadParentChildren()}})();
+(async()=>{await loadServerMaterials();if(getSessionRole()==='learner'){await loadServerPurchases();await loadLearnerActivity()}populateMaterialFilters();populateMaterialFilters();renderMaterials();renderTeacher();renderAdmin();refreshProgress();checkAIStatus();if(getSessionRole()==='learner'){loadMarketplace();loadMembership();loadDashboardPremiumTrial('learner');loadLearnerAssignments();loadLearnerGradebook()} if(getSessionRole()==='teacher'){loadMembership();loadDashboardPremiumTrial('teacher');loadSchoolManagement()} if(getSessionRole()==='admin'){loadAdminMemberships();loadSchoolManagement()} if(getSessionRole()==='parent'){loadParentChildren()}})();

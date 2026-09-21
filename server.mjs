@@ -420,6 +420,12 @@ async function initDatabase() {
     );
     CREATE INDEX IF NOT EXISTS idx_subscriptions_user ON subscriptions(user_email, status);
     CREATE INDEX IF NOT EXISTS idx_subscriptions_school ON subscriptions(school_id, status);
+    ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS trial_started_at TIMESTAMPTZ;
+    ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS trial_ends_at TIMESTAMPTZ;
+    ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS trial_used_at TIMESTAMPTZ;
+    ALTER TABLE subscriptions DROP CONSTRAINT IF EXISTS subscriptions_status_check;
+    ALTER TABLE subscriptions ADD CONSTRAINT subscriptions_status_check CHECK (status IN ('requested','pending_payment','active','trial','expired','cancelled','rejected','payment_failed'));
+
     CREATE TABLE IF NOT EXISTS subscription_payments (
       payment_id TEXT PRIMARY KEY,
       subscription_id TEXT NOT NULL REFERENCES subscriptions(subscription_id) ON DELETE CASCADE,
@@ -1930,12 +1936,33 @@ app.get('/api/plans', requireAuth, async (_req,res)=>{
 });
 
 app.get('/api/my/subscription', requireAuth, async (req,res)=>{
-  if(!databaseReady) return res.json({ok:true,subscriptions:[],schools:[]});
+  if(!databaseReady) return res.json({ok:true,subscriptions:[],schools:[],trialAvailable:false});
   try{
-    const s=await db.query(`SELECT s.subscription_id AS "subscriptionId",s.plan_key AS "planKey",p.name,p.audience,s.status,s.billing_cycle AS "billingCycle",s.amount,s.starts_at AS "startsAt",s.ends_at AS "endsAt",s.requested_at AS "requestedAt" FROM subscriptions s JOIN subscription_plans p ON p.plan_key=s.plan_key WHERE s.user_email=$1 ORDER BY s.requested_at DESC LIMIT 10`,[req.user.email]);
+    await db.query(`UPDATE subscriptions SET status='expired',updated_at=NOW() WHERE user_email=$1 AND status='trial' AND trial_ends_at IS NOT NULL AND trial_ends_at<=NOW()`,[req.user.email]);
+    const s=await db.query(`SELECT s.subscription_id AS "subscriptionId",s.plan_key AS "planKey",p.name,p.audience,s.status,s.billing_cycle AS "billingCycle",s.amount,s.starts_at AS "startsAt",s.ends_at AS "endsAt",s.trial_started_at AS "trialStartedAt",s.trial_ends_at AS "trialEndsAt",s.trial_used_at AS "trialUsedAt",s.requested_at AS "requestedAt" FROM subscriptions s JOIN subscription_plans p ON p.plan_key=s.plan_key WHERE s.user_email=$1 ORDER BY s.requested_at DESC LIMIT 10`,[req.user.email]);
     const schools=await db.query(`SELECT sc.school_id AS "schoolId",sc.school_name AS "schoolName",sm.member_role AS "memberRole",sc.status FROM school_memberships sm JOIN schools sc ON sc.school_id=sm.school_id WHERE sm.user_email=$1 AND sm.status='active' ORDER BY sc.school_name`,[req.user.email]);
-    res.json({ok:true,subscriptions:s.rows,schools:schools.rows});
+    const trial=await db.query(`SELECT EXISTS(SELECT 1 FROM subscriptions WHERE user_email=$1 AND trial_used_at IS NOT NULL) AS "used", EXISTS(SELECT 1 FROM subscriptions WHERE user_email=$1 AND status IN ('active','trial') AND COALESCE(ends_at,NOW())>NOW() AND amount>0) AS "paidActive"`,[req.user.email]);
+    res.json({ok:true,subscriptions:s.rows,schools:schools.rows,trialAvailable:!trial.rows[0]?.used&&!trial.rows[0]?.paidActive});
   }catch(e){console.error(e);res.status(500).json({error:'Could not load membership status.'})}
+});
+
+app.post('/api/subscriptions/trial', requireAuth, async (req,res)=>{
+  if(!databaseReady) return res.status(503).json({error:'Premium trials require PostgreSQL.'});
+  try{
+    const role=req.user.role;
+    if(!['learner','teacher'].includes(role)) return res.status(403).json({error:'The free premium trial is available to learners and teachers.'});
+    const plan=String(req.body?.planKey||'').trim();
+    const r=await db.query(`SELECT * FROM subscription_plans WHERE plan_key=$1 AND active=true AND audience=$2`,[plan,role]);
+    if(!r.rowCount)return res.status(404).json({error:'Matching premium plan not found.'});
+    const used=await db.query(`SELECT 1 FROM subscriptions WHERE user_email=$1 AND trial_used_at IS NOT NULL LIMIT 1`,[req.user.email]);
+    if(used.rowCount)return res.status(409).json({error:'Your 2-day premium trial has already been used.'});
+    const paid=await db.query(`SELECT 1 FROM subscriptions WHERE user_email=$1 AND status='active' AND COALESCE(ends_at,NOW())>NOW() AND amount>0 LIMIT 1`,[req.user.email]);
+    if(paid.rowCount)return res.status(409).json({error:'You already have an active paid membership.'});
+    const id='TRIAL-'+Date.now().toString(36).toUpperCase()+'-'+Math.random().toString(36).slice(2,7).toUpperCase();
+    await db.query(`UPDATE subscriptions SET status='cancelled',updated_at=NOW() WHERE user_email=$1 AND status IN ('requested','pending_payment','trial')`,[req.user.email]);
+    await db.query(`INSERT INTO subscriptions(subscription_id,user_email,plan_key,status,billing_cycle,amount,starts_at,ends_at,trial_started_at,trial_ends_at,trial_used_at) VALUES($1,$2,$3,'trial','monthly',0,NOW(),NOW()+INTERVAL '2 days',NOW(),NOW()+INTERVAL '2 days',NOW())`,[id,req.user.email,plan]);
+    res.json({ok:true,subscriptionId:id,trialDays:2,message:'Your 2-day premium trial is active. No payment is required to start the trial.'});
+  }catch(e){console.error(e);res.status(500).json({error:e.message||'Could not start premium trial.'});}
 });
 
 app.post('/api/subscriptions/pay', requireAuth, async (req,res)=>{

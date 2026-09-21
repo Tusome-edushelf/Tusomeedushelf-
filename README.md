@@ -1,26 +1,24 @@
-Tusome EduShelf V54 — Home Navigation & Role-Specific Plus Placement
+# Tusome EduShelf V57 — Implemented 2-Day Premium Trial
 
-This build upgrades the public home screen to closely follow the supplied reference layout while preserving existing functionality.
+This build implements the 2-day premium trial in the actual application, using V55 as the base so the secure material payment gate and back navigation remain intact.
 
-Home structure:
-- White, clean navigation header
-- Full-width learner hero with Learn / Practice / Achieve messaging
-- Three large audience cards: For Teachers, For Learners, Learning Materials
-- Quick Access row: Subjects, Past Papers, Videos, Exercises, Resources
-- Home AI help panel
-- Curriculum verification notice and dark footer
-- Responsive/mobile layout
+## Trial behavior
+- Learner Plus shows a **2-Day Free Trial** card directly on the Learner Dashboard.
+- Teacher Plus shows a **2-Day Free Trial** card directly on the Teacher Dashboard.
+- Starting the trial requires no payment.
+- Trial is stored server-side in PostgreSQL for 48 hours.
+- Each account can use the free trial only once.
+- An active paid membership blocks starting another trial.
+- Expired trials are automatically marked `expired` when membership status is checked.
+- Trial access does not automatically charge the user.
+- The membership page also shows trial availability/status.
 
-Role-specific premium placement:
-- Learner Plus is presented on the Learner Dashboard.
-- Teacher Plus is presented in the Teacher Dashboard quick actions.
-- The generic membership page remains available for subscription processing.
-
-No physical-school or physical-book features were added.
-
-## v55 Payment Gate + Navigation
-- Added history-aware Back navigation to deeper learner pages including Digital Library, Payments and Material Reader.
-- Digital Library paid materials now display Buy until the learner has a confirmed purchase.
-- Successful payment unlocks the material and opens it automatically.
-- Server-side material-file access now independently verifies a learner's confirmed paid transaction for priced materials, preventing direct URL access from bypassing the paywall.
+## Preserved V55 behavior
+- Back navigation improvements.
+- Server-side purchase entitlement checks for paid digital materials.
 - Previously purchased materials open directly.
+- Free materials remain directly accessible.
+
+## Verification
+- `server.mjs` passes `node --check`.
+- All inline JavaScript blocks in `index.html` pass `node --check`.

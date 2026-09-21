@@ -1,21 +1,20 @@
-# Tusome EduShelf v48 — Timetable & Lesson Scheduling
+# Tusome EduShelf V49 — Staff & HR Management
 
-V48 adds a school timetable module to the V47 digital-first platform.
+V49 adds school-scoped Staff & HR Management while preserving V48 Timetable & Lesson Scheduling and earlier features.
 
-## Features
-- School timetable periods with day, period number, label, time and type.
-- Lesson scheduling by class, subject and teacher.
-- Room allocation.
-- Live conflict prevention for class, teacher and room clashes.
-- Draft vs published timetable state.
-- Timetable views by class, teacher, room and master list.
-- Learner and teacher timetable access through their school membership.
-- Parent timetable access for schools linked to their learner.
-- School-admin timetable builder and publish controls.
-- Responsive timetable grid and lesson table.
+## Included
+- Staff profiles for teaching, non-teaching, support and administration staff
+- Employee IDs, departments, designations, qualifications and employment status
+- Optional link to an existing Tusome EduShelf user account
+- School administrator staff directory
+- Staff leave requests and administrator approval/rejection
+- Staff attendance records: Present, Absent, Late, Excused, On Leave
+- Optional check-in/check-out times and notes
+- HR dashboard counters
+- Role-based access: school administrators can manage HR; linked staff can view their own HR records
+- No biometric fingerprint capture or storage
+- No payroll calculation in V49; payroll remains a separate future module
+- PostgreSQL persistence and school-scoped access
 
-No physical-book or physical-library functionality is added.
-
-## Verification
-- server.mjs passes `node --check`.
-- Inline JavaScript blocks in index.html pass `node --check`.
+## Safety/privacy
+HR data is restricted to the relevant school workspace. Linked staff members only receive their own HR records. Schools should enter only information they are authorised to maintain.

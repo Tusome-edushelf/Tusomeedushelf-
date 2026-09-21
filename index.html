@@ -92,6 +92,10 @@ body.a11y-reduced-motion *,body.a11y-reduced-motion *::before,body.a11y-reduced-
 /* v47 Digital Library & Resource Centre */
 .digital-library-shell{max-width:1150px;margin:0 auto;padding:20px}.digital-library-hero{background:linear-gradient(135deg,#173f8a,#2563eb);color:#fff;border-radius:22px;padding:24px;box-shadow:0 14px 32px #173f8a22}.digital-library-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:16px 0}.digital-library-kpi{background:#fff;border:1px solid #dbe5f0;border-radius:14px;padding:14px;box-shadow:0 6px 18px #173f8a0d}.digital-library-kpi b{display:block;font-size:24px;color:#173f8a}.digital-library-toolbar{display:grid;grid-template-columns:2fr repeat(4,1fr);gap:10px;margin:14px 0}.digital-library-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}.digital-resource-card{background:#fff;border:1px solid #dbe5f0;border-radius:16px;padding:16px;box-shadow:0 8px 24px #173f8a10;display:flex;flex-direction:column;gap:8px}.digital-resource-card h3{margin:0;color:#173f8a;font-size:17px}.digital-resource-meta{display:flex;gap:6px;flex-wrap:wrap}.digital-resource-meta .tag{margin:0}.digital-resource-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:auto;padding-top:8px}.digital-library-note{background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:12px;margin:14px 0}.digital-resource-admin{margin-top:18px}.digital-admin-row{display:grid;grid-template-columns:1.5fr 1fr auto auto;gap:8px;align-items:center;padding:10px 0;border-bottom:1px solid #e5e7eb}.digital-admin-row:last-child{border-bottom:0}@media(max-width:900px){.digital-library-toolbar{grid-template-columns:1fr 1fr}.digital-admin-row{grid-template-columns:1fr 1fr}}@media(max-width:560px){.digital-library-toolbar{grid-template-columns:1fr}.digital-admin-row{grid-template-columns:1fr}}
 
+
+/* v49 Staff & HR */
+.hr-shell{max-width:1200px;margin:0 auto}.hr-hero{padding:22px;border-radius:18px;background:linear-gradient(135deg,#eef6ff,#f8f7ff);border:1px solid #dbe6f4}.hr-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.hr-stat{padding:16px;border-radius:14px;background:var(--card,#fff);border:1px solid var(--border,#e5e7eb)}.hr-stat b{display:block;font-size:1.4rem}.hr-table-wrap{overflow:auto}.hr-table-wrap table{min-width:820px}.hr-tabs{display:flex;gap:8px;flex-wrap:wrap}.hr-panel{margin-top:14px}.hr-form{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.hr-form label{display:flex;flex-direction:column;gap:5px}.hr-form .wide{grid-column:1/-1}.hr-badge{display:inline-flex;padding:4px 8px;border-radius:999px;background:#eef2ff;font-size:.8rem}.hr-muted{color:#667085;font-size:.9rem}@media(max-width:800px){.hr-grid,.hr-form{grid-template-columns:1fr}.hr-hero{padding:16px}}
+
 /* v48 Timetable & Lesson Scheduling */
 .timetable-shell{max-width:1200px;margin:0 auto;padding:20px}.timetable-hero{background:linear-gradient(135deg,#0f766e,#2563eb);color:#fff;border-radius:22px;padding:24px;box-shadow:0 14px 32px #0f766e22}.timetable-grid{display:grid;grid-template-columns:repeat(7,minmax(150px,1fr));gap:8px;overflow:auto;margin-top:16px}.tt-day{min-width:150px}.tt-day h4{margin:0 0 8px;text-align:center;padding:10px;border-radius:10px;background:#eef6ff}.tt-slot{min-height:92px;border:1px solid #dbe5f0;border-radius:12px;padding:8px;background:#fff;margin-bottom:8px}.tt-slot.break{background:#f8fafc}.tt-slot b{display:block;color:#173f8a}.tt-form-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.tt-admin-grid{display:grid;grid-template-columns:1fr 1.6fr;gap:16px}.tt-table-wrap{overflow:auto}.tt-table-wrap table{min-width:760px}@media(max-width:900px){.tt-form-grid{grid-template-columns:1fr 1fr}.tt-admin-grid{grid-template-columns:1fr}}@media(max-width:560px){.tt-form-grid{grid-template-columns:1fr}}
 </style>
@@ -617,7 +621,7 @@ body.a11y-reduced-motion *,body.a11y-reduced-motion *::before,body.a11y-reduced-
     <button class="teacher-quick-card" onclick="document.getElementById('teacherUploadsSection')?.scrollIntoView({behavior:'smooth',block:'start'})"><span>📚</span><b>My Materials</b><small>Open your recent uploads.</small></button>
     <button class="teacher-quick-card" onclick="setTeacherFocusGoal()"><span>🎯</span><b>Teaching Goal</b><small id="teacherGoalQuick">Set your focus for this period.</small></button>
     <button class="teacher-quick-card" onclick="show('membership')"><span>👑</span><b>Membership</b><small>Premium tools and school plans.</small></button>
-    <button class="teacher-quick-card" onclick="show('schoolManagement')"><span>🏫</span><b>School Management</b><small>Classes, members and shared resources.</small></button><button class="teacher-quick-card" onclick="show('fees')"><span>💰</span><b>School Fees</b><small>Fee charges, balances and payment records.</small></button>
+    <button class="teacher-quick-card" onclick="show('schoolManagement')"><span>🏫</span><b>School Management</b><small>Classes, members and shared resources.</small></button><button class="teacher-quick-card" onclick="show('hr')"><span>🧑‍💼</span><b>My HR</b><small>View your staff profile and leave records.</small></button><button class="teacher-quick-card" onclick="show('fees')"><span>💰</span><b>School Fees</b><small>Fee charges, balances and payment records.</small></button>
     <button class="teacher-quick-card" onclick="show('attendance')"><span>✅</span><b>Attendance</b><small>Mark today's class attendance.</small></button>
     <button class="teacher-quick-card" onclick="show('digitalLibrary')"><span>📚</span><b>Digital Library</b><small>Curate useful digital resources.</small></button><button class="teacher-quick-card" onclick="show('timetable')"><span>🗓️</span><b>Timetable</b><small>View your school teaching schedule.</small></button>
   </div>
@@ -690,6 +694,35 @@ body.a11y-reduced-motion *,body.a11y-reduced-motion *::before,body.a11y-reduced-
     <div id="ttSummary" class="school-stat-grid" style="margin-top:16px"></div>
     <div id="ttGrid" class="timetable-grid" aria-live="polite"></div>
     <div class="card" style="margin-top:16px"><h3>📋 Timetable Lessons</h3><div class="tt-table-wrap"><table><thead><tr><th>Day</th><th>Period</th><th>Class</th><th>Subject</th><th>Teacher</th><th>Room</th><th>Status</th><th>Action</th></tr></thead><tbody id="ttRows"><tr><td colspan="8">Loading…</td></tr></tbody></table></div></div>
+  </div>
+</section>
+
+
+<section id="hr" class="page">
+  <div class="hr-shell">
+    <div class="hr-hero"><div class="topline"><div><h2>🧑‍💼 Staff & HR Management</h2><p>School-scoped staff records, leave workflows and attendance. Payroll is intentionally separate.</p></div><button class="btn" onclick="loadHR()">↻ Refresh</button></div></div>
+    <div id="hrAccessNotice" class="notice" style="margin-top:14px">Loading your school HR access…</div>
+    <div id="hrStats" class="hr-grid" style="margin-top:14px"></div>
+    <div id="hrAdminPanel" class="card hr-panel" style="display:none">
+      <h3>➕ Add Staff Profile</h3>
+      <div class="hr-form">
+        <label>Full name<input id="hrFullName" maxlength="160" placeholder="Staff member name"></label>
+        <label>Employee ID<input id="hrEmployeeId" maxlength="80" placeholder="EMP-001"></label>
+        <label>Linked account email<input id="hrEmail" type="email" maxlength="160" placeholder="teacher@example.com"></label>
+        <label>Staff type<select id="hrStaffType"><option value="teaching">Teaching</option><option value="non-teaching">Non-teaching</option><option value="support">Support</option><option value="administration">Administration</option></select></label>
+        <label>Department<input id="hrDepartment" maxlength="100" placeholder="Mathematics"></label>
+        <label>Designation<input id="hrDesignation" maxlength="120" placeholder="Teacher / Head of Department"></label>
+        <label>Phone<input id="hrPhone" maxlength="40" placeholder="Optional"></label>
+        <label>Qualification<input id="hrQualification" maxlength="300" placeholder="Optional qualification summary"></label>
+        <label>Joined on<input id="hrJoinedOn" type="date"></label>
+        <label class="wide">Notes<textarea id="hrNotes" rows="2" maxlength="1000" placeholder="Optional HR notes"></textarea></label>
+      </div>
+      <button class="btn primary" style="margin-top:10px" onclick="createHRStaff()">Add Staff</button>
+    </div>
+    <div class="card hr-panel"><div class="topline"><div><h3>👥 Staff Directory</h3><p class="hr-muted">Store operational staff information and access status. Sensitive HR information should only be entered by authorised school staff.</p></div></div><div class="hr-table-wrap"><table><thead><tr><th>Name</th><th>Employee ID</th><th>Type</th><th>Department</th><th>Designation</th><th>Status</th><th>Account</th></tr></thead><tbody id="hrStaffRows"><tr><td colspan="7">Loading…</td></tr></tbody></table></div></div>
+    <div class="card hr-panel"><div class="topline"><div><h3>🏖️ Leave Management</h3><p class="hr-muted">Staff can submit requests; school administrators review them.</p></div></div><div id="hrLeaveForm" style="display:none"><div class="hr-form"><label>Staff<select id="hrLeaveStaff"></select></label><label>Leave type<select id="hrLeaveType"><option>Annual</option><option>Sick</option><option>Study</option><option>Family</option><option>Other</option></select></label><label>Starts<input id="hrLeaveStart" type="date"></label><label>Ends<input id="hrLeaveEnd" type="date"></label><label class="wide">Reason<textarea id="hrLeaveReason" rows="2" maxlength="1000"></textarea></label></div><button class="btn primary" style="margin-top:10px" onclick="submitHRLeave()">Submit Leave Request</button></div><div class="hr-table-wrap" style="margin-top:12px"><table><thead><tr><th>Staff</th><th>Type</th><th>Dates</th><th>Reason</th><th>Status</th><th>Action</th></tr></thead><tbody id="hrLeaveRows"><tr><td colspan="6">Loading…</td></tr></tbody></table></div></div>
+    <div class="card hr-panel"><div class="topline"><div><h3>🕘 Staff Attendance</h3><p class="hr-muted">Record Present, Absent, Late, Excused or On Leave. No biometric data is stored by this module.</p></div></div><div id="hrAttendanceForm" style="display:none"><div class="hr-form"><label>Staff<select id="hrAttendanceStaff"></select></label><label>Date<input id="hrAttendanceDate" type="date"></label><label>Status<select id="hrAttendanceStatus"><option value="present">Present</option><option value="late">Late</option><option value="absent">Absent</option><option value="excused">Excused</option><option value="on_leave">On Leave</option></select></label><label>Check in<input id="hrCheckIn" type="time"></label><label>Check out<input id="hrCheckOut" type="time"></label><label>Note<input id="hrAttendanceNote" maxlength="500" placeholder="Optional"></label></div><button class="btn primary" style="margin-top:10px" onclick="saveHRAttendance()">Save Attendance</button></div><div class="hr-table-wrap" style="margin-top:12px"><table><thead><tr><th>Date</th><th>Staff</th><th>Status</th><th>Check in</th><th>Check out</th><th>Note</th></tr></thead><tbody id="hrAttendanceRows"><tr><td colspan="6">Loading…</td></tr></tbody></table></div></div>
+    <div class="notice hr-panel"><b>HR privacy:</b> Keep staff contact details, qualifications and leave information limited to authorised school personnel. Tusome EduShelf does not collect biometric fingerprints through this module.</div>
   </div>
 </section>
 
@@ -897,7 +930,7 @@ body.a11y-reduced-motion *,body.a11y-reduced-motion *::before,body.a11y-reduced-
 <section id="admin" class="page">
   <div class="topline"><div><h2>🛡️ Administrator Control Center</h2><p>Central control for approvals, users, AI-generated notes, pricing, reports, transactions and platform revenue.</p></div><button class="btn primary" onclick="adminRefreshAll()">Refresh</button></div>
   <div class="admin-command">
-    <div class="command-hero"><h3>👋 Admin Command Centre</h3><p>One place to see what needs attention, jump to common tasks and monitor the platform. Use the detailed tabs below when you need deeper records.</p><div class="admin-action-row" style="margin-top:12px"><button class="btn light" onclick="adminTab('analytics')">Open Full Analytics</button><button class="btn light" onclick="openAIAssistant('admin')">Ask Admin AI</button></div></div>
+    <div class="command-hero"><h3>👋 Admin Command Centre</h3><p>One place to see what needs attention, jump to common tasks and monitor the platform. Use the detailed tabs below when you need deeper records.</p><div class="admin-action-row" style="margin-top:12px"><button class="btn light" onclick="adminTab('analytics')">Open Full Analytics</button><button class="btn light" onclick="openAIAssistant('admin')">Ask Admin AI</button><button class="btn light" onclick="show('hr')">Staff & HR</button></div></div>
     <div class="command-kpis">
       <div class="command-kpi">📚 Materials<b id="commandMaterials">0</b></div>
       <div class="command-kpi">⏳ Pending Review<b id="commandPending">0</b></div>
@@ -1540,7 +1573,7 @@ async function generateReportsV44(){try{const r=await fetch('/api/schools/report
 async function loadLearnerResultsV44(){try{const r=await fetch('/api/learner/exams',{credentials:'include'}),d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load results.');document.getElementById('learnerResultsRows').innerHTML=(d.rows||[]).map(x=>`<tr><td>${escHtml(x.title)}</td><td>${escHtml(x.subjectName||'—')}</td><td>${escHtml(x.examDate||'—')}</td><td>${escHtml(x.marks??'—')} / ${escHtml(x.maxMarks)}</td><td>${escHtml(x.grade||'—')}</td><td>${escHtml(x.comment||'')}</td></tr>`).join('')||'<tr><td colspan="6">No published results yet.</td></tr>';const rr=await fetch('/api/learner/report-cards',{credentials:'include'}),rd=await rr.json();document.getElementById('learnerReportsList').innerHTML=(rd.rows||[]).map(x=>`<div class="card" style="margin-top:8px"><b>Report Card</b><p>Overall average: ${escHtml(x.overallAverage??'—')}% · Published: ${escHtml(x.publishedAt||'—')}</p><p>${escHtml(x.teacherComment||'')}</p><button class="btn" onclick="window.print()">🖨️ Print</button></div>`).join('')||'<p class="small">No published report cards yet.</p>'}catch(e){document.getElementById('learnerResultsRows').innerHTML=`<tr><td colspan="6">${escHtml(e.message)}</td></tr>`}}
 
 function show(id){
-  const protectedRoles={learner:'learner',teacher:'teacher',admin:'admin',communication:'user',account:'user',reader:'learner',practice:'learner',discussions:'learner',membership:'user',schoolManagement:'user',attendance:'user',exams:'user',fees:'user',timetable:'user',parent:'parent',digitalLibrary:'user'};
+  const protectedRoles={learner:'learner',teacher:'teacher',admin:'admin',communication:'user',account:'user',reader:'learner',practice:'learner',discussions:'learner',membership:'user',schoolManagement:'user',attendance:'user',exams:'user',fees:'user',timetable:'user',parent:'parent',digitalLibrary:'user',hr:'user'};
   if(protectedRoles[id]){
     const role=getSessionRole();
     if(!role){show('login');return}
@@ -1556,7 +1589,7 @@ function show(id){
   const el=document.getElementById(id);if(el)el.classList.add('active');
   if(id==='teacher'){loadServerMaterials().then(renderTeacher);loadTeacherEarnings();loadTeacherAnalytics()}
   if(id==='membership'){loadMembership()} if(id==='digitalLibrary'){loadDigitalLibrary()}
-  if(id==='schoolManagement'){loadSchoolManagement()} if(id==='timetable'){loadTimetable()} if(id==='attendance'){loadAttendance()} if(id==='exams'){loadExamsPage()} if(id==='fees'){loadFeesPage()}
+  if(id==='schoolManagement'){loadSchoolManagement()} if(id==='hr'){loadHR()} if(id==='timetable'){loadTimetable()} if(id==='attendance'){loadAttendance()} if(id==='exams'){loadExamsPage()} if(id==='fees'){loadFeesPage()}
   if(id==='learner'){loadLearnerAssignments();loadLearnerGradebook()}
   if(id==='admin'){adminRefreshAll();loadAdminAnalytics()}
   if(id==='communication'){renderMyFeedback();renderAdminFeedback();loadCommunicationHub()}
@@ -2090,5 +2123,36 @@ async function addTimetablePeriod(){const schoolId=document.getElementById('ttSc
 async function addTimetableEntry(){const schoolId=document.getElementById('ttSchoolSelect').value;const body={schoolId,classId:ttClass.value,subjectId:ttSubject.value,teacherEmail:ttTeacher.value,dayOfWeek:Number(ttEntryDay.value),periodNo:Number(ttEntryNo.value),room:ttRoom.value,title:ttEntryTitle.value};try{const r=await fetch('/api/schools/timetable/entries',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(body)}),d=await r.json();if(!r.ok)throw new Error(d.error||'Could not add lesson.');showToast?.('Lesson added to draft timetable.','success');await loadTimetable()}catch(e){showToast?.(e.message,'error')}}
 async function deleteTimetableEntry(id){const schoolId=document.getElementById('ttSchoolSelect').value;try{const r=await fetch('/api/schools/timetable/entries/'+encodeURIComponent(id),{method:'DELETE',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({schoolId})}),d=await r.json();if(!r.ok)throw new Error(d.error||'Could not delete lesson.');await loadTimetable();showToast?.('Lesson deleted.','success')}catch(e){showToast?.(e.message,'error')}}
 async function publishTimetable(status){const schoolId=document.getElementById('ttSchoolSelect').value;try{const r=await fetch('/api/schools/timetable/publish',{method:'PATCH',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({schoolId,status})}),d=await r.json();if(!r.ok)throw new Error(d.error||'Could not update timetable status.');showToast?.(status==='published'?'Timetable published.':'Timetable returned to draft.','success');await loadTimetable()}catch(e){showToast?.(e.message,'error')}}
+
+
+let hrSchools=[]; let hrSelectedSchoolId=''; let hrCache={staff:[],leave:[],attendance:[]};
+async function loadHR(){
+  const notice=document.getElementById('hrAccessNotice'); if(!notice)return;
+  try{
+    const mine=await fetch('/api/schools/mine',{credentials:'include'}), md=await mine.json(); if(!mine.ok)throw new Error(md.error||'Could not load school access.');
+    hrSchools=md.schools||[]; if(!hrSchools.length){notice.textContent='No active school workspace is available.';return;}
+    hrSelectedSchoolId=hrSelectedSchoolId&&hrSchools.some(x=>x.schoolId===hrSelectedSchoolId)?hrSelectedSchoolId:hrSchools[0].schoolId;
+    const r=await fetch('/api/schools/hr?schoolId='+encodeURIComponent(hrSelectedSchoolId),{credentials:'include'}),d=await r.json(); if(!r.ok)throw new Error(d.error||'Could not load HR records.');
+    hrCache=d; const isAdmin=hrSchools.find(x=>x.schoolId===hrSelectedSchoolId)?.memberRole==='admin';
+    notice.innerHTML='<b>'+escapeHtml(hrSchools.find(x=>x.schoolId===hrSelectedSchoolId)?.schoolName||'School')+'</b> — '+(isAdmin?'HR administrator access':'staff view');
+    document.getElementById('hrAdminPanel').style.display=isAdmin?'block':'none';document.getElementById('hrLeaveForm').style.display=isAdmin?'block':'none';document.getElementById('hrAttendanceForm').style.display=isAdmin?'block':'none';
+    renderHR();
+  }catch(e){notice.textContent=e.message;showToast?.(e.message,'error')}
+}
+function renderHR(){
+  const staff=hrCache.staff||[],leave=hrCache.leave||[],attendance=hrCache.attendance||[];
+  const stats=document.getElementById('hrStats'); if(stats)stats.innerHTML=`<div class="hr-stat"><span>👥 Staff</span><b>${staff.length}</b></div><div class="hr-stat"><span>🏖️ Pending leave</span><b>${leave.filter(x=>x.status==='pending').length}</b></div><div class="hr-stat"><span>🕘 Attendance records</span><b>${attendance.length}</b></div>`;
+  const rows=document.getElementById('hrStaffRows'); if(rows)rows.innerHTML=staff.length?staff.map(x=>`<tr><td><b>${escapeHtml(x.fullName)}</b></td><td>${escapeHtml(x.employeeId||'—')}</td><td><span class="hr-badge">${escapeHtml(x.staffType)}</span></td><td>${escapeHtml(x.department||'—')}</td><td>${escapeHtml(x.designation||'—')}</td><td>${escapeHtml(x.employmentStatus)}</td><td>${escapeHtml(x.userEmail||'No linked account')}</td></tr>`).join(''):'<tr><td colspan="7">No staff profiles yet.</td></tr>';
+  ['hrLeaveStaff','hrAttendanceStaff'].forEach(id=>{const e=document.getElementById(id);if(e)e.innerHTML=staff.map(x=>`<option value="${escapeHtml(x.staffId)}">${escapeHtml(x.fullName)}</option>`).join('')||'<option value="">No staff</option>'});
+  const lr=document.getElementById('hrLeaveRows'); if(lr)lr.innerHTML=leave.length?leave.map(x=>`<tr><td>${escapeHtml(x.fullName)}</td><td>${escapeHtml(x.leaveType)}</td><td>${escapeHtml(x.startsOn)} → ${escapeHtml(x.endsOn)}</td><td>${escapeHtml(x.reason||'—')}</td><td><span class="hr-badge">${escapeHtml(x.status)}</span></td><td>${x.status==='pending'&&isHRAdmin()?`<button class="btn" onclick="reviewHRLeave('${escapeHtml(x.leaveId)}','approved')">Approve</button> <button class="btn" onclick="reviewHRLeave('${escapeHtml(x.leaveId)}','rejected')">Reject</button>`:'—'}</td></tr>`).join(''):'<tr><td colspan="6">No leave requests yet.</td></tr>';
+  const ar=document.getElementById('hrAttendanceRows'); if(ar)ar.innerHTML=attendance.length?attendance.slice(0,120).map(x=>`<tr><td>${escapeHtml(x.attendanceDate||'')}</td><td>${escapeHtml(x.fullName)}</td><td><span class="hr-badge">${escapeHtml(x.status)}</span></td><td>${escapeHtml(x.checkIn||'—')}</td><td>${escapeHtml(x.checkOut||'—')}</td><td>${escapeHtml(x.note||'—')}</td></tr>`).join(''):'<tr><td colspan="6">No attendance records yet.</td></tr>';
+}
+function isHRAdmin(){return hrSchools.find(x=>x.schoolId===hrSelectedSchoolId)?.memberRole==='admin'}
+async function hrPost(url,body){const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({...body,schoolId:hrSelectedSchoolId})}),d=await r.json();if(!r.ok)throw new Error(d.error||'Request failed.');return d}
+async function createHRStaff(){try{await hrPost('/api/schools/hr/staff',{fullName:hrFullName.value,employeeId:hrEmployeeId.value,userEmail:hrEmail.value,staffType:hrStaffType.value,department:hrDepartment.value,designation:hrDesignation.value,phone:hrPhone.value,qualification:hrQualification.value,joinedOn:hrJoinedOn.value,notes:hrNotes.value});showToast?.('Staff profile added.','success');['hrFullName','hrEmployeeId','hrEmail','hrDepartment','hrDesignation','hrPhone','hrQualification','hrJoinedOn','hrNotes'].forEach(id=>{const e=document.getElementById(id);if(e)e.value=''});await loadHR()}catch(e){showToast?.(e.message,'error')}}
+async function submitHRLeave(){try{await hrPost('/api/schools/hr/leave',{staffId:hrLeaveStaff.value,leaveType:hrLeaveType.value,startsOn:hrLeaveStart.value,endsOn:hrLeaveEnd.value,reason:hrLeaveReason.value});showToast?.('Leave request submitted.','success');await loadHR()}catch(e){showToast?.(e.message,'error')}}
+async function reviewHRLeave(id,status){try{const r=await fetch('/api/schools/hr/leave/'+encodeURIComponent(id),{method:'PATCH',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({schoolId:hrSelectedSchoolId,status})}),d=await r.json();if(!r.ok)throw new Error(d.error||'Could not update leave.');showToast?.('Leave '+status+'.','success');await loadHR()}catch(e){showToast?.(e.message,'error')}}
+async function saveHRAttendance(){try{await hrPost('/api/schools/hr/attendance',{staffId:hrAttendanceStaff.value,attendanceDate:hrAttendanceDate.value,status:hrAttendanceStatus.value,checkIn:hrCheckIn.value,checkOut:hrCheckOut.value,note:hrAttendanceNote.value});showToast?.('Attendance saved.','success');await loadHR()}catch(e){showToast?.(e.message,'error')}}
+
 </script>\n</body>
 </html>

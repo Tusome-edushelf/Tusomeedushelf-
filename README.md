@@ -1,15 +1,19 @@
-# Tusome EduShelf — Home Navigation Upgrade
+Tusome EduShelf V54 — Home Navigation & Role-Specific Plus Placement
 
-This upgrade refreshes the public home screen for faster navigation and a cleaner visual hierarchy inspired by the supplied reference image.
+This build upgrades the public home screen to closely follow the supplied reference layout while preserving existing functionality.
 
-## Home changes
-- Sticky, clearer header navigation with Home, Materials, Help, Account, Sign In and Sign Up.
-- Large full-width learner hero image with concise call-to-action buttons.
-- Three primary navigation cards: Learning Materials, For Teachers, For Learners.
-- Quick navigation shortcuts for Materials, Help, Account creation and Sign In.
-- Existing public Home AI onboarding remains available lower on the page.
-- Curriculum verification reminder retained.
-- Responsive layout for mobile and desktop.
+Home structure:
+- White, clean navigation header
+- Full-width learner hero with Learn / Practice / Achieve messaging
+- Three large audience cards: For Teachers, For Learners, Learning Materials
+- Quick Access row: Subjects, Past Papers, Videos, Exercises, Resources
+- Home AI help panel
+- Curriculum verification notice and dark footer
+- Responsive/mobile layout
 
-## Scope
-This is a UI/navigation upgrade only. Existing server APIs, authentication, learning features and role dashboards are preserved.
+Role-specific premium placement:
+- Learner Plus is presented on the Learner Dashboard.
+- Teacher Plus is presented in the Teacher Dashboard quick actions.
+- The generic membership page remains available for subscription processing.
+
+No physical-school or physical-book features were added.

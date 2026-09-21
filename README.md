@@ -1,21 +1,18 @@
-# Tusome EduShelf v46 — School Fees & Financial Management
+# Tusome EduShelf v47 — Digital Library & Resource Centre
 
-Adds a school-scoped fee management foundation while preserving v45 communication and all earlier features.
+This version adds a digital-only resource centre. It does **not** manage physical books, borrowing, returns, shelves, or stock.
 
 ## Included
-- School fee charges by learner
-- Due dates and fee names
-- Learner fee balances
-- Confirmed payment recording with method/reference
-- School finance tables for charges and payments
-- Parent read-only fee dashboard for linked learners
-- Learner read-only fee dashboard
-- Notifications when a fee charge or payment is recorded
-- Server-side school membership checks
-- M-PESA PINs are never collected or stored
+- Unified digital library for approved Tusome EduShelf materials and curated online resource links.
+- Search by title, subject, grade, topic, strand, description, and resource type.
+- Filters for subject, grade, type, and sorting.
+- Learner save/bookmark support for uploaded materials.
+- Teacher submission of useful online resources for administrator review.
+- Administrator resource moderation: approve/reject submitted links.
+- Optional school-scoped resource links: active school members can see approved school resources in addition to global resources.
+- HTTP/HTTPS validation for external links.
+- Resource-quality and permissions reminder.
+- Existing marketplace, school, assignment, gradebook, parent, attendance, exams, fees, discussions, AI and other features are preserved from v46.
 
-## Payment note
-This version records confirmed payments entered by an authorised school administrator. It does not claim an external M-PESA payment was completed unless the school has verified and recorded it. A dedicated Daraja school-fee STK/callback flow can be added as a separate production payment integration.
-
-## Privacy
-Fee information is school-scoped and parent access is limited to learners linked by the school. Production deployment should apply appropriate Kenyan data-protection, retention and access-control requirements.
+## Important
+The digital library only surfaces approved platform materials and approved resource links. Contributors should only submit material they are allowed to share. Curriculum-related content should be verified by teachers/administrators before publishing.

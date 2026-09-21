@@ -214,6 +214,26 @@ async function initDatabase() {
     );
     CREATE INDEX IF NOT EXISTS idx_material_reviews_material ON material_reviews(material_id);
 
+    CREATE TABLE IF NOT EXISTS digital_resources (
+      resource_id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      resource_type TEXT NOT NULL DEFAULT 'Link',
+      url TEXT NOT NULL,
+      description TEXT,
+      subject TEXT,
+      grade TEXT,
+      strand TEXT,
+      topic TEXT,
+      school_id TEXT REFERENCES schools(school_id) ON DELETE CASCADE,
+      created_by TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_digital_resources_status ON digital_resources(status);
+    CREATE INDEX IF NOT EXISTS idx_digital_resources_school ON digital_resources(school_id);
+    CREATE INDEX IF NOT EXISTS idx_digital_resources_subject_grade ON digital_resources(subject,grade);
+
 
     CREATE TABLE IF NOT EXISTS material_files (
       file_id TEXT PRIMARY KEY,
@@ -2389,6 +2409,62 @@ app.post('/api/schools/communication/messages', schoolCommunicationAccess, async
 
 app.patch('/api/schools/communication/messages/:id/read', schoolCommunicationAccess, async (req,res)=>{
   try{const r=await db.query(`UPDATE school_messages SET read_at=NOW() WHERE message_id=$1 AND school_id=$2 AND recipient_email=$3 RETURNING message_id`,[req.params.id,req.school.schoolId,req.user.email]);if(!r.rowCount)return res.status(404).json({error:'Message not found.'});res.json({ok:true})}catch(e){res.status(500).json({error:'Could not update message.'})}
+});
+
+
+
+// v47 — Digital Library & Resource Centre (digital-only; no physical-book inventory)
+app.get('/api/digital-library', requireAuth, async (req,res)=>{
+  if(!databaseReady) return res.status(503).json({error:'Database is not ready.'});
+  try{
+    let schoolIds=[];
+    if(req.user.role!=='admin'){
+      const sm=await db.query(`SELECT school_id FROM school_memberships WHERE user_email=$1 AND status='active'`,[req.user.email]);
+      schoolIds=sm.rows.map(r=>r.school_id);
+    }
+    const params=[];
+    let where=`r.status='approved' AND (r.school_id IS NULL`;
+    if(schoolIds.length){ params.push(schoolIds); where+=` OR r.school_id = ANY($1)`; }
+    where+=`)`;
+    const links=await db.query(`SELECT r.resource_id AS "resourceId",r.title,r.resource_type AS "resourceType",r.url,r.description,r.subject,r.grade,r.strand,r.topic,r.school_id AS "schoolId",r.created_at AS "createdAt" FROM digital_resources r WHERE ${where} ORDER BY r.created_at DESC`,params);
+    const materials=await db.query(`SELECT id,title,subject,grade,strand,competency,topic,file_name AS file,"file_type" AS "fileType",file_size AS "fileSize",price,description,teacher_email AS "teacherEmail",created_at AS "createdAt" FROM materials WHERE approval_status='approved' AND deleted_at IS NULL ORDER BY created_at DESC`);
+    const featured=materials.rows.slice(0,8).map(x=>({...x,kind:'material',resourceType:'Uploaded material',resourceId:x.id,url:null}));
+    const rows=[...links.rows.map(x=>({...x,kind:'link'})),...featured];
+    res.json({ok:true,resources:rows,counts:{total:rows.length,links:links.rowCount,uploaded:materials.rowCount}});
+  }catch(e){console.error('Digital library error:',e);res.status(500).json({error:'Could not load the digital library.'})}
+});
+
+app.post('/api/digital-library/resources', requireRole('teacher','admin'), async (req,res)=>{
+  if(!databaseReady) return res.status(503).json({error:'Database is not ready.'});
+  try{
+    const title=String(req.body?.title||'').trim();
+    const url=String(req.body?.url||'').trim();
+    const resourceType=String(req.body?.resourceType||'Link').trim().slice(0,60)||'Link';
+    if(!title||!url) return res.status(400).json({error:'Title and URL are required.'});
+    let parsed; try{parsed=new URL(url)}catch{ return res.status(400).json({error:'Please enter a valid URL.'}) }
+    if(!['http:','https:'].includes(parsed.protocol)) return res.status(400).json({error:'Only HTTP and HTTPS links are allowed.'});
+    const schoolId=String(req.body?.schoolId||'').trim()||null;
+    if(schoolId){
+      const sm=await db.query(`SELECT member_role FROM school_memberships WHERE school_id=$1 AND user_email=$2 AND status='active'`,[schoolId,req.user.email]);
+      if(!sm.rowCount || (req.user.role!=='admin' && sm.rows[0].member_role!=='admin')) return res.status(403).json({error:'You need school administrator access to add a school resource.'});
+    }
+    const id='RES-'+Date.now()+'-'+crypto.randomBytes(4).toString('hex');
+    const status=req.user.role==='admin'?'approved':'pending';
+    await db.query(`INSERT INTO digital_resources(resource_id,title,resource_type,url,description,subject,grade,strand,topic,school_id,created_by,status) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,[id,title,resourceType,url,String(req.body?.description||'').trim()||null,req.body?.subject||null,req.body?.grade||null,req.body?.strand||null,req.body?.topic||null,schoolId,req.user.email,status]);
+    res.status(201).json({ok:true,resourceId:id,status});
+  }catch(e){console.error('Digital resource create error:',e);res.status(500).json({error:'Could not save the digital resource.'})}
+});
+
+app.get('/api/admin/digital-library/resources', requireRole('admin'), async (_req,res)=>{
+  if(!databaseReady) return res.status(503).json({error:'Database is not ready.'});
+  try{const r=await db.query(`SELECT resource_id AS "resourceId",title,resource_type AS "resourceType",url,description,subject,grade,strand,topic,school_id AS "schoolId",created_by AS "createdBy",status,created_at AS "createdAt" FROM digital_resources ORDER BY created_at DESC`);res.json({ok:true,resources:r.rows})}catch(e){res.status(500).json({error:'Could not load resource submissions.'})}
+});
+
+app.patch('/api/admin/digital-library/resources/:id/status', requireRole('admin'), async (req,res)=>{
+  if(!databaseReady) return res.status(503).json({error:'Database is not ready.'});
+  const status=['approved','rejected'].includes(req.body?.status)?req.body.status:null;
+  if(!status) return res.status(400).json({error:'Status must be approved or rejected.'});
+  try{const r=await db.query(`UPDATE digital_resources SET status=$1,updated_at=NOW() WHERE resource_id=$2 RETURNING resource_id AS "resourceId",status`,[status,req.params.id]);if(!r.rowCount)return res.status(404).json({error:'Resource not found.'});res.json({ok:true,...r.rows[0]})}catch(e){res.status(500).json({error:'Could not update resource status.'})}
 });
 
 app.use(express.static(__dirname));

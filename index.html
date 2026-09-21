@@ -555,7 +555,7 @@ body.a11y-reduced-motion *,body.a11y-reduced-motion *::before,body.a11y-reduced-
 </section>
 
 <section id="parent" class="page">
-  <div class="topline"><div><h2>👪 Parent / Guardian Dashboard</h2><p>View only the learners that an authorised school has linked to your account.</p></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" onclick="show('attendance')">📅 Attendance</button><button class="btn primary" onclick="loadParentChildren()">↻ Refresh</button></div></div>
+  <div class="topline"><div><h2>👪 Parent / Guardian Dashboard</h2><p>View only the learners that an authorised school has linked to your account.</p></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" onclick="show('attendance')">📅 Attendance</button><button class="btn" onclick="show('fees')">💰 Fees</button><button class="btn primary" onclick="loadParentChildren()">↻ Refresh</button></div></div>
   <div class="parent-safety"><b>Privacy:</b> This portal is read-only. It shows academic information for linked learners only. Do not share your login with other people.</div>
   <div class="card parent-child-picker"><label>Linked learner<select id="parentChildSelect" onchange="loadParentDashboard()"><option value="">Loading linked learners…</option></select></label><span id="parentChildStatus" class="small"></span></div>
   <div id="parentDashboardContent" style="display:none">
@@ -610,7 +610,7 @@ body.a11y-reduced-motion *,body.a11y-reduced-motion *::before,body.a11y-reduced-
     <button class="teacher-quick-card" onclick="document.getElementById('teacherUploadsSection')?.scrollIntoView({behavior:'smooth',block:'start'})"><span>📚</span><b>My Materials</b><small>Open your recent uploads.</small></button>
     <button class="teacher-quick-card" onclick="setTeacherFocusGoal()"><span>🎯</span><b>Teaching Goal</b><small id="teacherGoalQuick">Set your focus for this period.</small></button>
     <button class="teacher-quick-card" onclick="show('membership')"><span>👑</span><b>Membership</b><small>Premium tools and school plans.</small></button>
-    <button class="teacher-quick-card" onclick="show('schoolManagement')"><span>🏫</span><b>School Management</b><small>Classes, members and shared resources.</small></button>
+    <button class="teacher-quick-card" onclick="show('schoolManagement')"><span>🏫</span><b>School Management</b><small>Classes, members and shared resources.</small></button><button class="teacher-quick-card" onclick="show('fees')"><span>💰</span><b>School Fees</b><small>Fee charges, balances and payment records.</small></button>
     <button class="teacher-quick-card" onclick="show('attendance')"><span>✅</span><b>Attendance</b><small>Mark today's class attendance.</small></button>
   </div>
   <div class="cards teacher-stats">
@@ -656,6 +656,47 @@ body.a11y-reduced-motion *,body.a11y-reduced-motion *::before,body.a11y-reduced-
   </div>
 </section>
 
+
+<section id="fees" class="page">
+  <div class="topline"><div><h2>💰 School Fees & Financial Management</h2><p>Manage school fee charges, payment records and balances.</p></div><button class="btn" onclick="loadFeesPage()">↻ Refresh</button></div>
+  <div class="notice"><b>Payment safety:</b> Tusome EduShelf never asks for or stores an M-PESA PIN. A fee payment is shown as confirmed only when an authorised school administrator records the confirmed payment.
+  </div>
+  <div id="feesAdminPanel" class="card" style="margin-top:14px;display:none">
+    <h3>🏫 School Fee Management</h3>
+    <div class="school-grid">
+      <label>School workspace<select id="feesSchoolSelect"></select></label>
+      <label>Learner email<input id="feeLearnerEmail" type="email" maxlength="160" placeholder="learner@example.com"></label>
+      <label>Fee name<input id="feeName" maxlength="120" placeholder="Term 1 tuition"></label>
+      <label>Amount (KES)<input id="feeAmount" type="number" min="0" step="0.01" placeholder="5000"></label>
+      <label>Due date<input id="feeDueDate" type="date"></label>
+      <label>Class ID (optional)<input id="feeClassId" maxlength="100" placeholder="Class ID"></label>
+    </div>
+    <button class="btn primary" style="margin-top:10px" onclick="createFeeChargeV46()">＋ Create Fee Charge</button>
+    <hr>
+    <h4>Record Confirmed Payment</h4>
+    <div class="school-grid">
+      <label>Learner email<input id="feePaymentLearner" type="email" maxlength="160" placeholder="learner@example.com"></label>
+      <label>Amount (KES)<input id="feePaymentAmount" type="number" min="0.01" step="0.01" placeholder="2000"></label>
+      <label>Payment method<select id="feePaymentMethod"><option>M-PESA</option><option>Bank</option><option>Cash</option><option>Other</option></select></label>
+      <label>Reference<input id="feePaymentReference" maxlength="100" placeholder="Receipt/reference"></label>
+    </div>
+    <button class="btn primary" style="margin-top:10px" onclick="recordFeePaymentV46()">✓ Record Payment</button>
+    <div class="table-like" style="margin-top:16px;overflow:auto"><table><thead><tr><th>Learner</th><th>Charges</th><th>Paid</th><th>Balance</th></tr></thead><tbody id="feeAccountsRows"><tr><td colspan="4">Loading…</td></tr></tbody></table></div>
+    <div class="table-like" style="margin-top:16px;overflow:auto"><table><thead><tr><th>Learner</th><th>Fee</th><th>Amount</th><th>Due</th><th>Status</th></tr></thead><tbody id="feeChargesRows"><tr><td colspan="5">Loading…</td></tr></tbody></table></div>
+    <div class="table-like" style="margin-top:16px;overflow:auto"><table><thead><tr><th>Learner</th><th>Amount</th><th>Method</th><th>Reference</th><th>Date</th></tr></thead><tbody id="feePaymentsRows"><tr><td colspan="5">Loading…</td></tr></tbody></table></div>
+  </div>
+  <div id="feesParentPanel" class="card" style="margin-top:14px;display:none">
+    <h3>👪 Learner Fee Account</h3>
+    <label>Linked learner<select id="parentFeeChild" onchange="loadParentFeesV46()"></select></label>
+    <div class="school-stat-grid" style="margin-top:14px"><div class="card"><h4>Billed</h4><p><b id="parentFeeBilled">KES 0</b></p></div><div class="card"><h4>Paid</h4><p><b id="parentFeePaid">KES 0</b></p></div><div class="card"><h4>Balance</h4><p><b id="parentFeeBalance">KES 0</b></p></div></div>
+    <div class="table-like" style="margin-top:16px;overflow:auto"><table><thead><tr><th>Fee</th><th>Amount</th><th>Due</th><th>Status</th></tr></thead><tbody id="parentFeeChargesRows"><tr><td colspan="4">Loading…</td></tr></tbody></table></div>
+    <div class="table-like" style="margin-top:16px;overflow:auto"><table><thead><tr><th>Amount</th><th>Method</th><th>Reference</th><th>Date</th></tr></thead><tbody id="parentFeePaymentsRows"><tr><td colspan="4">Loading…</td></tr></tbody></table></div>
+  </div>
+  <div id="feesLearnerPanel" class="card" style="margin-top:14px;display:none">
+    <h3>🎓 My School Fees</h3><div class="school-stat-grid"><div class="card"><h4>Billed</h4><p><b id="learnerFeeBilled">KES 0</b></p></div><div class="card"><h4>Paid</h4><p><b id="learnerFeePaid">KES 0</b></p></div><div class="card"><h4>Balance</h4><p><b id="learnerFeeBalance">KES 0</b></p></div></div>
+    <div class="table-like" style="margin-top:16px;overflow:auto"><table><thead><tr><th>Fee</th><th>Amount</th><th>Due</th><th>Status</th></tr></thead><tbody id="learnerFeeChargesRows"><tr><td colspan="4">Loading…</td></tr></tbody></table></div>
+  </div>
+</section>
 
 <section id="attendance" class="page">
   <div class="topline"><div><h2>📅 Attendance & School Calendar</h2><p>Track learner attendance and keep important school dates in one place.</p></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" onclick="loadAttendance()">↻ Refresh</button><button class="btn" onclick="show(getSessionRole()==='parent'?'parent':getSessionRole()==='learner'?'learner':'schoolManagement')">Back</button></div></div>
@@ -1421,7 +1462,7 @@ async function generateReportsV44(){try{const r=await fetch('/api/schools/report
 async function loadLearnerResultsV44(){try{const r=await fetch('/api/learner/exams',{credentials:'include'}),d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load results.');document.getElementById('learnerResultsRows').innerHTML=(d.rows||[]).map(x=>`<tr><td>${escHtml(x.title)}</td><td>${escHtml(x.subjectName||'—')}</td><td>${escHtml(x.examDate||'—')}</td><td>${escHtml(x.marks??'—')} / ${escHtml(x.maxMarks)}</td><td>${escHtml(x.grade||'—')}</td><td>${escHtml(x.comment||'')}</td></tr>`).join('')||'<tr><td colspan="6">No published results yet.</td></tr>';const rr=await fetch('/api/learner/report-cards',{credentials:'include'}),rd=await rr.json();document.getElementById('learnerReportsList').innerHTML=(rd.rows||[]).map(x=>`<div class="card" style="margin-top:8px"><b>Report Card</b><p>Overall average: ${escHtml(x.overallAverage??'—')}% · Published: ${escHtml(x.publishedAt||'—')}</p><p>${escHtml(x.teacherComment||'')}</p><button class="btn" onclick="window.print()">🖨️ Print</button></div>`).join('')||'<p class="small">No published report cards yet.</p>'}catch(e){document.getElementById('learnerResultsRows').innerHTML=`<tr><td colspan="6">${escHtml(e.message)}</td></tr>`}}
 
 function show(id){
-  const protectedRoles={learner:'learner',teacher:'teacher',admin:'admin',communication:'user',account:'user',reader:'learner',practice:'learner',discussions:'learner',membership:'user',schoolManagement:'user',attendance:'user',exams:'user',parent:'parent'};
+  const protectedRoles={learner:'learner',teacher:'teacher',admin:'admin',communication:'user',account:'user',reader:'learner',practice:'learner',discussions:'learner',membership:'user',schoolManagement:'user',attendance:'user',exams:'user',fees:'user',parent:'parent'};
   if(protectedRoles[id]){
     const role=getSessionRole();
     if(!role){show('login');return}
@@ -1437,7 +1478,7 @@ function show(id){
   const el=document.getElementById(id);if(el)el.classList.add('active');
   if(id==='teacher'){loadServerMaterials().then(renderTeacher);loadTeacherEarnings();loadTeacherAnalytics()}
   if(id==='membership'){loadMembership()}
-  if(id==='schoolManagement'){loadSchoolManagement()} if(id==='attendance'){loadAttendance()} if(id==='exams'){loadExamsPage()}
+  if(id==='schoolManagement'){loadSchoolManagement()} if(id==='attendance'){loadAttendance()} if(id==='exams'){loadExamsPage()} if(id==='fees'){loadFeesPage()}
   if(id==='learner'){loadLearnerAssignments();loadLearnerGradebook()}
   if(id==='admin'){adminRefreshAll();loadAdminAnalytics()}
   if(id==='communication'){renderMyFeedback();renderAdminFeedback();loadCommunicationHub()}
@@ -1872,6 +1913,21 @@ async function loadParentAttendance(){const learner=document.getElementById('att
 async function loadSchoolCalendar(){const box=document.getElementById('schoolCalendarRows');if(!box)return;try{const r=await fetch('/api/schools/calendar',{credentials:'include'}),d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load school calendar.');box.innerHTML=(d.events||[]).length?d.events.map(x=>`<tr><td>${escHtml(x.eventDate)}${x.endDate&&x.endDate!==x.eventDate?' → '+escHtml(x.endDate):''}</td><td><b>${escHtml(x.title)}</b></td><td>${escHtml(x.eventType)}</td><td>${escHtml(x.description||'')}</td><td>${getSessionRole()==='admin'?`<button class="btn" onclick="deleteSchoolCalendarEvent('${escHtml(x.eventId)}')">Delete</button>`:'—'}</td></tr>`).join(''):'<tr><td colspan="5">No calendar events yet.</td></tr>'}catch(e){box.innerHTML=`<tr><td colspan="5">${escHtml(e.message)}</td></tr>`}}
 async function createSchoolCalendarEvent(){const payload={title:document.getElementById('calendarTitle')?.value||'',description:document.getElementById('calendarDescription')?.value||'',eventDate:document.getElementById('calendarStart')?.value||'',endDate:document.getElementById('calendarEnd')?.value||'',eventType:document.getElementById('calendarType')?.value||'school'};try{const r=await fetch('/api/schools/calendar',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(payload)}),d=await r.json();if(!r.ok)throw new Error(d.error||'Could not create event.');document.getElementById('calendarTitle').value='';document.getElementById('calendarDescription').value='';showToast?.('Calendar event added.','success');loadSchoolCalendar()}catch(e){showToast?.(e.message,'error')}}
 async function deleteSchoolCalendarEvent(id){if(!confirm('Delete this calendar event?'))return;try{const r=await fetch('/api/schools/calendar/'+encodeURIComponent(id),{method:'DELETE',credentials:'include'}),d=await r.json();if(!r.ok)throw new Error(d.error||'Could not delete event.');loadSchoolCalendar()}catch(e){showToast?.(e.message,'error')}}
+</script>
+<script>
+async function loadFeesPage(){
+ const role=getSessionRole(); const a=document.getElementById('feesAdminPanel'),p=document.getElementById('feesParentPanel'),l=document.getElementById('feesLearnerPanel'); if(!a)return; [a,p,l].forEach(x=>x.style.display='none');
+ if(role==='admin'||role==='teacher'){a.style.display='block'; await loadFeeSchoolSelectV46(); await loadSchoolFeesV46();}
+ if(role==='parent'){p.style.display='block'; await loadParentFeeChildrenV46();}
+ if(role==='learner'){l.style.display='block'; await loadLearnerFeesV46();}
+}
+async function loadFeeSchoolSelectV46(){const sel=document.getElementById('feesSchoolSelect');if(!sel)return;try{const r=await fetch('/api/schools/mine',{credentials:'include'}),d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load school access.');const schools=d.schools||[];sel.innerHTML=schools.map(x=>`<option value="${escHtml(x.schoolId)}">${escHtml(x.schoolName)}</option>`).join('')||'<option value="">No school workspace</option>';sel.onchange=loadSchoolFeesV46}catch(e){sel.innerHTML='<option value="">Could not load school</option>';showToast?.(e.message,'error')}}
+async function loadSchoolFeesV46(){const sid=document.getElementById('feesSchoolSelect')?.value;if(!sid)return;try{const r=await fetch('/api/schools/fees?schoolId='+encodeURIComponent(sid),{credentials:'include'}),d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load fees.');document.getElementById('feeAccountsRows').innerHTML=(d.accounts||[]).map(x=>`<tr><td>${escHtml(x.learnerEmail)}</td><td>KES ${Number(x.charges||0).toLocaleString()}</td><td>KES ${Number(x.paid||0).toLocaleString()}</td><td><b>KES ${Number(x.balance||0).toLocaleString()}</b></td></tr>`).join('')||'<tr><td colspan="4">No fee accounts yet.</td></tr>';document.getElementById('feeChargesRows').innerHTML=(d.charges||[]).map(x=>`<tr><td>${escHtml(x.learnerEmail)}</td><td>${escHtml(x.feeName)}</td><td>KES ${Number(x.amount||0).toLocaleString()}</td><td>${escHtml(x.dueDate||'—')}</td><td>${escHtml(x.status)}</td></tr>`).join('')||'<tr><td colspan="5">No charges yet.</td></tr>';document.getElementById('feePaymentsRows').innerHTML=(d.payments||[]).map(x=>`<tr><td>${escHtml(x.learnerEmail)}</td><td>KES ${Number(x.amount||0).toLocaleString()}</td><td>${escHtml(x.method)}</td><td>${escHtml(x.reference||'—')}</td><td>${escHtml(x.paidAt||'—')}</td></tr>`).join('')||'<tr><td colspan="5">No payments recorded.</td></tr>'}catch(e){showToast?.(e.message,'error')}}
+async function createFeeChargeV46(){const sid=document.getElementById('feesSchoolSelect')?.value,payload={schoolId:sid,learnerEmail:document.getElementById('feeLearnerEmail')?.value,feeName:document.getElementById('feeName')?.value,amount:Number(document.getElementById('feeAmount')?.value),dueDate:document.getElementById('feeDueDate')?.value,classId:document.getElementById('feeClassId')?.value};try{const r=await fetch('/api/schools/fees/charges',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(payload)}),d=await r.json();if(!r.ok)throw new Error(d.error||'Could not create fee charge.');showToast?.('Fee charge created.','success');loadSchoolFeesV46()}catch(e){showToast?.(e.message,'error')}}
+async function recordFeePaymentV46(){const sid=document.getElementById('feesSchoolSelect')?.value,payload={schoolId:sid,learnerEmail:document.getElementById('feePaymentLearner')?.value,amount:Number(document.getElementById('feePaymentAmount')?.value),method:document.getElementById('feePaymentMethod')?.value,reference:document.getElementById('feePaymentReference')?.value};try{const r=await fetch('/api/schools/fees/payments',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(payload)}),d=await r.json();if(!r.ok)throw new Error(d.error||'Could not record payment.');showToast?.('Payment recorded.','success');loadSchoolFeesV46()}catch(e){showToast?.(e.message,'error')}}
+async function loadParentFeeChildrenV46(){const sel=document.getElementById('parentFeeChild');try{const r=await fetch('/api/parent/children',{credentials:'include'}),d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load linked learners.');sel.innerHTML=(d.children||[]).map(x=>`<option value="${escHtml(x.learnerEmail)}">${escHtml(x.learnerEmail)}${x.className?' — '+escHtml(x.className):''}</option>`).join('')||'<option value="">No linked learners</option>';await loadParentFeesV46()}catch(e){sel.innerHTML='<option value="">Could not load learners</option>';showToast?.(e.message,'error')}}
+async function loadParentFeesV46(){const learner=document.getElementById('parentFeeChild')?.value;if(!learner)return;try{const r=await fetch('/api/parent/fees?learnerEmail='+encodeURIComponent(learner),{credentials:'include'}),d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load fee account.');document.getElementById('parentFeeBilled').textContent='KES '+Number(d.summary?.billed||0).toLocaleString();document.getElementById('parentFeePaid').textContent='KES '+Number(d.summary?.paid||0).toLocaleString();document.getElementById('parentFeeBalance').textContent='KES '+Number(d.summary?.balance||0).toLocaleString();document.getElementById('parentFeeChargesRows').innerHTML=(d.charges||[]).map(x=>`<tr><td>${escHtml(x.feeName)}</td><td>KES ${Number(x.amount||0).toLocaleString()}</td><td>${escHtml(x.dueDate||'—')}</td><td>${escHtml(x.status)}</td></tr>`).join('')||'<tr><td colspan="4">No fee charges.</td></tr>';document.getElementById('parentFeePaymentsRows').innerHTML=(d.payments||[]).map(x=>`<tr><td>KES ${Number(x.amount||0).toLocaleString()}</td><td>${escHtml(x.method)}</td><td>${escHtml(x.reference||'—')}</td><td>${escHtml(x.paidAt||'—')}</td></tr>`).join('')||'<tr><td colspan="4">No payments recorded.</td></tr>'}catch(e){showToast?.(e.message,'error')}}
+async function loadLearnerFeesV46(){try{const r=await fetch('/api/learner/fees',{credentials:'include'}),d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load fee account.');document.getElementById('learnerFeeBilled').textContent='KES '+Number(d.summary?.billed||0).toLocaleString();document.getElementById('learnerFeePaid').textContent='KES '+Number(d.summary?.paid||0).toLocaleString();document.getElementById('learnerFeeBalance').textContent='KES '+Number(d.summary?.balance||0).toLocaleString();document.getElementById('learnerFeeChargesRows').innerHTML=(d.charges||[]).map(x=>`<tr><td>${escHtml(x.feeName)}</td><td>KES ${Number(x.amount||0).toLocaleString()}</td><td>${escHtml(x.dueDate||'—')}</td><td>${escHtml(x.status)}</td></tr>`).join('')||'<tr><td colspan="4">No fee charges.</td></tr>'}catch(e){showToast?.(e.message,'error')}}
 </script>
 </body>
 </html>

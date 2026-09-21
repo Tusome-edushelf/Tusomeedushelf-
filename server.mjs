@@ -537,6 +537,19 @@ async function initDatabase() {
       report_id TEXT PRIMARY KEY, school_id TEXT NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE, learner_email TEXT NOT NULL, class_id TEXT NOT NULL REFERENCES school_classes(class_id) ON DELETE CASCADE,
       term_id TEXT REFERENCES school_terms(term_id) ON DELETE SET NULL, status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','published')), overall_average NUMERIC, teacher_comment TEXT, created_by TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), published_at TIMESTAMPTZ
     );
+    CREATE TABLE IF NOT EXISTS school_fee_charges (
+      charge_id TEXT PRIMARY KEY, school_id TEXT NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
+      learner_email TEXT NOT NULL, class_id TEXT REFERENCES school_classes(class_id) ON DELETE SET NULL, term_id TEXT REFERENCES school_terms(term_id) ON DELETE SET NULL,
+      fee_name TEXT NOT NULL, amount NUMERIC NOT NULL CHECK(amount >= 0), due_date DATE, status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','waived','cancelled')),
+      created_by TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_school_fee_charges_learner ON school_fee_charges(school_id,learner_email,created_at DESC);
+    CREATE TABLE IF NOT EXISTS school_fee_payments (
+      payment_id TEXT PRIMARY KEY, school_id TEXT NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE, learner_email TEXT NOT NULL,
+      charge_id TEXT REFERENCES school_fee_charges(charge_id) ON DELETE SET NULL, amount NUMERIC NOT NULL CHECK(amount > 0), method TEXT NOT NULL DEFAULT 'M-PESA',
+      reference TEXT, status TEXT NOT NULL DEFAULT 'confirmed' CHECK(status IN ('pending','confirmed','reversed')), paid_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), recorded_by TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_school_fee_payments_learner ON school_fee_payments(school_id,learner_email,paid_at DESC);
     CREATE INDEX IF NOT EXISTS idx_school_exams_class ON school_exams(school_id,class_id,exam_date DESC);
     CREATE INDEX IF NOT EXISTS idx_school_exam_marks_learner ON school_exam_marks(school_id,learner_email);
     CREATE INDEX IF NOT EXISTS idx_school_report_cards_learner ON school_report_cards(school_id,learner_email,created_at DESC);
@@ -2044,6 +2057,50 @@ app.post('/api/schools/assignments', requireAuth, async (req,res)=>{
     if(req.user.role==='teacher'){const a=await db.query(`SELECT 1 FROM school_teacher_subjects WHERE school_id=$1 AND class_id=$2 AND subject_id=$3 AND teacher_email=$4`,[req.school.schoolId,classId,subjectId,teacher]);if(!a.rowCount)return res.status(403).json({error:'You can only create assignments for your assigned class and subject.'})}
     const id='ASN-'+Date.now().toString(36).toUpperCase()+'-'+Math.random().toString(36).slice(2,6).toUpperCase(); await db.query(`INSERT INTO school_assignments(assignment_id,school_id,class_id,subject_id,teacher_email,title,instructions,due_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,[id,req.school.schoolId,classId,subjectId,teacher,title,instructions||null,req.body?.dueAt||null]); res.status(201).json({ok:true,assignmentId:id});
   }catch(e){console.error(e);res.status(500).json({error:'Could not create assignment.'})}})
+});
+
+// v46 School Fees & Financial Management.
+app.get('/api/schools/fees', requireSchoolMembership, async (req,res)=>{
+  try{
+    const [charges,payments]=await Promise.all([
+      db.query(`SELECT f.charge_id AS "chargeId",f.learner_email AS "learnerEmail",f.class_id AS "classId",c.class_name AS "className",f.term_id AS "termId",f.fee_name AS "feeName",f.amount,f.due_date AS "dueDate",f.status,f.created_at AS "createdAt" FROM school_fee_charges f LEFT JOIN school_classes c ON c.class_id=f.class_id WHERE f.school_id=$1 ORDER BY f.created_at DESC LIMIT 500`,[req.school.schoolId]),
+      db.query(`SELECT p.payment_id AS "paymentId",p.learner_email AS "learnerEmail",p.charge_id AS "chargeId",p.amount,p.method,p.reference,p.status,p.paid_at AS "paidAt" FROM school_fee_payments p WHERE p.school_id=$1 ORDER BY p.paid_at DESC LIMIT 500`,[req.school.schoolId])
+    ]);
+    const byLearner={};
+    for(const c of charges.rows){const k=c.learnerEmail;(byLearner[k] ||= {learnerEmail:k,charges:0,paid:0,balance:0}); if(c.status==='open')byLearner[k].charges+=Number(c.amount||0)}
+    for(const p of payments.rows){if(p.status==='confirmed'){const k=p.learnerEmail;(byLearner[k] ||= {learnerEmail:k,charges:0,paid:0,balance:0});byLearner[k].paid+=Number(p.amount||0)}}
+    Object.values(byLearner).forEach(x=>x.balance=Math.max(0,Math.round((x.charges-x.paid)*100)/100));
+    res.json({ok:true,charges:charges.rows,payments:payments.rows,accounts:Object.values(byLearner)});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not load school fees.'})}
+});
+app.post('/api/schools/fees/charges', requireAuth, async (req,res)=>{
+  req.query={schoolId:req.body?.schoolId}; return requireSchoolMembership(req,res,async()=>{try{
+    if(req.school.memberRole!=='admin'&&req.user.role!=='admin')return res.status(403).json({error:'School admin access is required.'});
+    const learner=String(req.body?.learnerEmail||'').trim().toLowerCase(), name=String(req.body?.feeName||'').trim().slice(0,120), amount=Number(req.body?.amount), classId=String(req.body?.classId||'').trim()||null;
+    if(!learner||!learner.includes('@')||!name||!Number.isFinite(amount)||amount<0)return res.status(400).json({error:'Learner, fee name and a valid amount are required.'});
+    const lm=await db.query(`SELECT 1 FROM school_memberships WHERE school_id=$1 AND user_email=$2 AND member_role='learner' AND status='active'`,[req.school.schoolId,learner]);if(!lm.rowCount)return res.status(400).json({error:'Learner must be an active member of this school.'});
+    const id='FEE-'+Date.now().toString(36).toUpperCase()+'-'+Math.random().toString(36).slice(2,6).toUpperCase();
+    await db.query(`INSERT INTO school_fee_charges(charge_id,school_id,learner_email,class_id,term_id,fee_name,amount,due_date,status,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,'open',$9)`,[id,req.school.schoolId,learner,classId,req.body?.termId||null,name,amount,req.body?.dueDate||null,req.user.email]);
+    await createNotification(learner,'New school fee charge',`${name}: KES ${amount.toLocaleString()}. Please check your school fee account.`,'warning');
+    res.status(201).json({ok:true,chargeId:id});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not create fee charge.'})}})
+});
+app.post('/api/schools/fees/payments', requireAuth, async (req,res)=>{
+  req.query={schoolId:req.body?.schoolId}; return requireSchoolMembership(req,res,async()=>{try{
+    if(req.school.memberRole!=='admin'&&req.user.role!=='admin')return res.status(403).json({error:'School admin access is required.'});
+    const learner=String(req.body?.learnerEmail||'').trim().toLowerCase(), amount=Number(req.body?.amount), method=String(req.body?.method||'M-PESA').slice(0,30), reference=String(req.body?.reference||'').trim().slice(0,100);
+    if(!learner||!Number.isFinite(amount)||amount<=0)return res.status(400).json({error:'Learner and a positive payment amount are required.'});
+    const id='PAY-'+Date.now().toString(36).toUpperCase()+'-'+Math.random().toString(36).slice(2,6).toUpperCase();
+    await db.query(`INSERT INTO school_fee_payments(payment_id,school_id,learner_email,charge_id,amount,method,reference,status,recorded_by) VALUES($1,$2,$3,$4,$5,$6,$7,'confirmed',$8)`,[id,req.school.schoolId,learner,req.body?.chargeId||null,amount,method,reference||null,req.user.email]);
+    await createNotification(learner,'School fee payment recorded',`KES ${amount.toLocaleString()} has been recorded on your school fee account${reference?` (${reference})`:''}.`,'success');
+    res.status(201).json({ok:true,paymentId:id});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not record fee payment.'})}})
+});
+app.get('/api/parent/fees', requireRole('parent'), async (req,res)=>{
+  try{const learner=String(req.query?.learnerEmail||'').trim().toLowerCase();const link=await db.query(`SELECT school_id AS "schoolId" FROM parent_guardian_links WHERE parent_email=$1 AND learner_email=$2 LIMIT 1`,[req.user.email,learner]);if(!link.rowCount)return res.status(403).json({error:'That learner is not linked to this parent account.'});const sid=link.rows[0].schoolId;const [charges,payments]=await Promise.all([db.query(`SELECT charge_id AS "chargeId",fee_name AS "feeName",amount,due_date AS "dueDate",status FROM school_fee_charges WHERE school_id=$1 AND learner_email=$2 ORDER BY created_at DESC`,[sid,learner]),db.query(`SELECT payment_id AS "paymentId",amount,method,reference,status,paid_at AS "paidAt" FROM school_fee_payments WHERE school_id=$1 AND learner_email=$2 ORDER BY paid_at DESC`,[sid,learner])]);const billed=charges.rows.filter(x=>x.status==='open').reduce((n,x)=>n+Number(x.amount||0),0),paid=payments.rows.filter(x=>x.status==='confirmed').reduce((n,x)=>n+Number(x.amount||0),0);res.json({ok:true,charges:charges.rows,payments:payments.rows,summary:{billed,paid,balance:Math.max(0,Math.round((billed-paid)*100)/100)}})}catch(e){console.error(e);res.status(500).json({error:'Could not load fee information.'})}
+});
+app.get('/api/learner/fees', requireRole('learner'), async (req,res)=>{
+  try{const r=await db.query(`SELECT school_id AS "schoolId" FROM school_memberships WHERE user_email=$1 AND member_role='learner' AND status='active' LIMIT 1`,[req.user.email]);if(!r.rowCount)return res.json({ok:true,charges:[],payments:[],summary:{billed:0,paid:0,balance:0}});const sid=r.rows[0].schoolId;const [charges,payments]=await Promise.all([db.query(`SELECT charge_id AS "chargeId",fee_name AS "feeName",amount,due_date AS "dueDate",status FROM school_fee_charges WHERE school_id=$1 AND learner_email=$2 ORDER BY created_at DESC`,[sid,req.user.email]),db.query(`SELECT payment_id AS "paymentId",amount,method,reference,status,paid_at AS "paidAt" FROM school_fee_payments WHERE school_id=$1 AND learner_email=$2 ORDER BY paid_at DESC`,[sid,req.user.email])]);const billed=charges.rows.filter(x=>x.status==='open').reduce((n,x)=>n+Number(x.amount||0),0),paid=payments.rows.filter(x=>x.status==='confirmed').reduce((n,x)=>n+Number(x.amount||0),0);res.json({ok:true,charges:charges.rows,payments:payments.rows,summary:{billed,paid,balance:Math.max(0,Math.round((billed-paid)*100)/100)}})}catch(e){console.error(e);res.status(500).json({error:'Could not load fee information.'})}
 });
 
 // v40 Assignment submissions, grading and feedback.

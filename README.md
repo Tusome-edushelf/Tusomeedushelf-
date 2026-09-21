@@ -1,25 +1,21 @@
-# Tusome EduShelf v45 — Communication & Notifications Hub
+# Tusome EduShelf v46 — School Fees & Financial Management
 
-Built on v44 (Exams, Report Cards & Academic Reports).
+Adds a school-scoped fee management foundation while preserving v45 communication and all earlier features.
 
-## Communication features
-- School announcements stored in PostgreSQL.
-- Target announcements to the whole school, a specific class, or a role (learner, teacher, parent/guardian).
-- School administrators can publish school-wide announcements.
-- Teachers can publish to assigned classes or teacher audiences.
-- In-app notifications are created for announcement recipients.
-- Parent accounts can see announcements for schools where their linked learners are enrolled.
-- Authorized in-school direct messages between school members and linked guardians.
-- Inbox with unread state and mark-as-read.
-- Existing feedback/complaint/suggestion centre preserved.
-- Communication Hub is behind login and school access controls; it is not a public home-screen feature.
-- Existing marketplace, premium memberships, M-PESA, school management, academics, assignments, gradebook, parent portal, attendance, calendar, exams, discussions, large video and screen sharing remain preserved.
+## Included
+- School fee charges by learner
+- Due dates and fee names
+- Learner fee balances
+- Confirmed payment recording with method/reference
+- School finance tables for charges and payments
+- Parent read-only fee dashboard for linked learners
+- Learner read-only fee dashboard
+- Notifications when a fee charge or payment is recorded
+- Server-side school membership checks
+- M-PESA PINs are never collected or stored
 
-## Safety
-- Do not share passwords, M-PESA PINs, private photos, home addresses, or other sensitive information in school messages.
-- Role and school membership checks are enforced server-side.
-- Teachers cannot publish school-wide announcements unless they have school-admin access.
-- Parent access is limited to linked school/learner relationships.
+## Payment note
+This version records confirmed payments entered by an authorised school administrator. It does not claim an external M-PESA payment was completed unless the school has verified and recorded it. A dedicated Daraja school-fee STK/callback flow can be added as a separate production payment integration.
 
-## Important production note
-The communication hub currently provides in-app messaging and notification delivery. SMS, email, WhatsApp or other external delivery channels are not enabled by this build. Those channels should be connected later only with the appropriate authorized school/provider accounts and privacy controls.
+## Privacy
+Fee information is school-scoped and parent access is limited to learners linked by the school. Production deployment should apply appropriate Kenyan data-protection, retention and access-control requirements.

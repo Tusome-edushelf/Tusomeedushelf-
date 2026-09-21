@@ -313,6 +313,15 @@ async function initDatabase() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS learner_learning_preferences (
+      learner_email TEXT PRIMARY KEY,
+      preferred_subject TEXT,
+      preferred_grade TEXT,
+      focus_topics TEXT,
+      daily_minutes INTEGER NOT NULL DEFAULT 30 CHECK(daily_minutes BETWEEN 10 AND 180),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
     CREATE TABLE IF NOT EXISTS learner_material_activity (
       learner_email TEXT NOT NULL,
       material_id TEXT NOT NULL REFERENCES materials(id) ON DELETE CASCADE,
@@ -2656,6 +2665,24 @@ async function awardLearnerPoints(email, points, reason, sourceKey=null){
   if(!db) return;
   try{await db.query(`INSERT INTO learner_gamification_points(learner_email,points,reason,source_key) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING`,[email,points,reason,sourceKey]);}catch(e){console.warn('points award failed',e.message)}
 }
+
+app.get('/api/learner/personalized', requireRole('learner'), async (req,res)=>{
+  try{
+    const email=req.user.email;
+    const pref=(await db.query(`SELECT preferred_subject AS "preferredSubject",preferred_grade AS "preferredGrade",focus_topics AS "focusTopics",daily_minutes AS "dailyMinutes" FROM learner_learning_preferences WHERE learner_email=$1`,[email])).rows[0]||{preferredSubject:'',preferredGrade:'',focusTopics:'',dailyMinutes:30};
+    const activity=await db.query(`SELECT m.id,m.title,m.subject,m.grade,m.topic,m.strand,m.competency,m.description,a.bookmarked,a.view_count AS "viewCount",a.last_viewed_at AS "lastViewedAt" FROM learner_material_activity a JOIN materials m ON m.id=a.material_id WHERE a.learner_email=$1 AND m.approval_status='approved' AND m.deleted_at IS NULL ORDER BY a.last_viewed_at DESC NULLS LAST LIMIT 30`,[email]);
+    const recent=activity.rows;
+    const subjects={}; recent.forEach(x=>{if(x.subject)subjects[x.subject]=(subjects[x.subject]||0)+Number(x.viewCount||0)});
+    const topSubject=Object.entries(subjects).sort((a,b)=>b[1]-a[1])[0]?.[0]||pref.preferredSubject||'';
+    const rec=await db.query(`SELECT id,title,subject,grade,topic,strand,competency,description,price FROM materials WHERE approval_status='approved' AND deleted_at IS NULL AND ($1='' OR subject ILIKE $1 OR topic ILIKE $1 OR strand ILIKE $1) AND ($2='' OR grade=$2) ORDER BY created_at DESC LIMIT 12`,[topSubject?`%${topSubject}%`:'',pref.preferredGrade||'']);
+    const fallback=rec.rows.length?rec.rows:(await db.query(`SELECT id,title,subject,grade,topic,strand,competency,description,price FROM materials WHERE approval_status='approved' AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 12`)).rows;
+    res.json({ok:true,preferences:pref,recent,recommendations:fallback,reason:topSubject?`Based mainly on your recent activity in ${topSubject}.`:'Choose your subject and grade to personalize recommendations.'});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not load personalized learning.'})}
+});
+
+app.patch('/api/learner/personalized/preferences', requireRole('learner'), async (req,res)=>{
+  try{const subject=String(req.body?.preferredSubject||'').trim().slice(0,100),grade=String(req.body?.preferredGrade||'').trim().slice(0,40),topics=String(req.body?.focusTopics||'').trim().slice(0,300);let minutes=Math.round(Number(req.body?.dailyMinutes||30));if(!Number.isFinite(minutes))minutes=30;minutes=Math.max(10,Math.min(180,minutes));await db.query(`INSERT INTO learner_learning_preferences(learner_email,preferred_subject,preferred_grade,focus_topics,daily_minutes) VALUES($1,$2,$3,$4,$5) ON CONFLICT(learner_email) DO UPDATE SET preferred_subject=EXCLUDED.preferred_subject,preferred_grade=EXCLUDED.preferred_grade,focus_topics=EXCLUDED.focus_topics,daily_minutes=EXCLUDED.daily_minutes,updated_at=NOW()`,[req.user.email,subject,grade,topics,minutes]);res.json({ok:true});}catch(e){res.status(500).json({error:'Could not save learning preferences.'})}
+});
 
 app.get('/api/learner/community', requireRole('learner'), async (req,res)=>{
   try{

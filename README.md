@@ -1,22 +1,14 @@
-# Tusome EduShelf v52 — Learning Community & Gamification
+# Tusome EduShelf v53 — Personalized Learning Engine
 
-V52 adds an online-only learner community and lightweight learning rewards layer.
+Online-only personalized learning layer built on v52.
 
-## Features
-- Learner community dashboard
-- Community discussion feed using the existing moderated discussion system
-- Study groups: create and join subject/topic-focused groups
-- Personal learning points and levels
-- Recent reward history
-- Rewards for selected learning/community actions
-- No public learner leaderboard by default
-- Learner-only access
-- Existing V51 achievement, portfolio and certificate features preserved
-- Online-only; no physical-school, transport, physical-library or inventory features
+- Learner-selected learning preferences
+- Preferred learning area and grade
+- Focus topics and daily study time
+- Personalized digital-resource recommendations based on preferences and recent activity
+- Recent learning activity view
+- Learner-controlled recommendations; no public ranking
+- Recommendations are suggestions, not grades or high-stakes decisions
+- Existing v52 Learning Community, V51 portfolio, digital library and other features preserved
 
-## Safety/design
-Points are framed as personal progress rather than learner ranking. Community use should remain focused on learning and follow the platform's existing privacy/safety guidance.
-
-## Validation
-- `server.mjs` passes `node --check`.
-- All inline JavaScript blocks in `index.html` pass `node --check`.
+AI/personalization design keeps learner agency and transparency central; recommendations should support learning rather than dictate it.

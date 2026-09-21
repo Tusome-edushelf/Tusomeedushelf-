@@ -557,6 +557,24 @@ async function initDatabase() {
       report_id TEXT PRIMARY KEY, school_id TEXT NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE, learner_email TEXT NOT NULL, class_id TEXT NOT NULL REFERENCES school_classes(class_id) ON DELETE CASCADE,
       term_id TEXT REFERENCES school_terms(term_id) ON DELETE SET NULL, status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','published')), overall_average NUMERIC, teacher_comment TEXT, created_by TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), published_at TIMESTAMPTZ
     );
+    CREATE TABLE IF NOT EXISTS school_timetable_periods (
+      period_id TEXT PRIMARY KEY, school_id TEXT NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
+      day_of_week INT NOT NULL CHECK(day_of_week BETWEEN 1 AND 7), period_no INT NOT NULL,
+      label TEXT NOT NULL, starts_at TIME, ends_at TIME, kind TEXT NOT NULL DEFAULT 'lesson' CHECK(kind IN ('lesson','break','assembly','activity','prep')),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), UNIQUE(school_id,day_of_week,period_no)
+    );
+    CREATE INDEX IF NOT EXISTS idx_school_timetable_periods_school ON school_timetable_periods(school_id,day_of_week,period_no);
+    CREATE TABLE IF NOT EXISTS school_timetable_entries (
+      entry_id TEXT PRIMARY KEY, school_id TEXT NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
+      class_id TEXT NOT NULL REFERENCES school_classes(class_id) ON DELETE CASCADE,
+      subject_id TEXT REFERENCES school_subjects(subject_id) ON DELETE SET NULL,
+      teacher_email TEXT, room TEXT, day_of_week INT NOT NULL CHECK(day_of_week BETWEEN 1 AND 7), period_no INT NOT NULL,
+      title TEXT, status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','published')),
+      created_by TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(school_id,class_id,day_of_week,period_no)
+    );
+    CREATE INDEX IF NOT EXISTS idx_school_timetable_entries_teacher ON school_timetable_entries(school_id,teacher_email,day_of_week,period_no);
+    CREATE INDEX IF NOT EXISTS idx_school_timetable_entries_room ON school_timetable_entries(school_id,room,day_of_week,period_no);
     CREATE TABLE IF NOT EXISTS school_fee_charges (
       charge_id TEXT PRIMARY KEY, school_id TEXT NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
       learner_email TEXT NOT NULL, class_id TEXT REFERENCES school_classes(class_id) ON DELETE SET NULL, term_id TEXT REFERENCES school_terms(term_id) ON DELETE SET NULL,
@@ -2078,6 +2096,52 @@ app.post('/api/schools/assignments', requireAuth, async (req,res)=>{
     const id='ASN-'+Date.now().toString(36).toUpperCase()+'-'+Math.random().toString(36).slice(2,6).toUpperCase(); await db.query(`INSERT INTO school_assignments(assignment_id,school_id,class_id,subject_id,teacher_email,title,instructions,due_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,[id,req.school.schoolId,classId,subjectId,teacher,title,instructions||null,req.body?.dueAt||null]); res.status(201).json({ok:true,assignmentId:id});
   }catch(e){console.error(e);res.status(500).json({error:'Could not create assignment.'})}})
 });
+
+// v48 Timetable & Lesson Scheduling.
+app.get('/api/schools/timetable', requireAuth, async (req,res)=>{
+  try{
+    const schoolId=String(req.query?.schoolId||'').trim(); if(!schoolId)return res.status(400).json({error:'School is required.'});
+    const role=req.user.role;
+    if(role==='parent'){
+      const linked=await db.query(`SELECT 1 FROM parent_guardian_links WHERE parent_email=$1 AND school_id=$2 LIMIT 1`,[req.user.email,schoolId]);
+      if(!linked.rowCount)return res.status(403).json({error:'You do not have access to this school timetable.'});
+    }else if(role!=='admin'){
+      const member=await db.query(`SELECT member_role FROM school_memberships WHERE school_id=$1 AND user_email=$2 AND status='active' LIMIT 1`,[schoolId,req.user.email]);
+      if(!member.rowCount)return res.status(403).json({error:'You are not an active member of this school.'});
+    }
+    const [school,periods,entries,classes,subjects,members]=await Promise.all([
+      db.query(`SELECT school_id AS "schoolId",school_name AS "schoolName" FROM schools WHERE school_id=$1`,[schoolId]),
+      db.query(`SELECT period_id AS "periodId",day_of_week AS "dayOfWeek",period_no AS "periodNo",label,starts_at AS "startsAt",ends_at AS "endsAt",kind FROM school_timetable_periods WHERE school_id=$1 ORDER BY day_of_week,period_no`,[schoolId]),
+      db.query(`SELECT e.entry_id AS "entryId",e.class_id AS "classId",c.class_name AS "className",c.grade,c.stream,e.subject_id AS "subjectId",s.subject_name AS "subjectName",e.teacher_email AS "teacherEmail",e.room,e.day_of_week AS "dayOfWeek",e.period_no AS "periodNo",e.title,e.status FROM school_timetable_entries e JOIN school_classes c ON c.class_id=e.class_id LEFT JOIN school_subjects s ON s.subject_id=e.subject_id WHERE e.school_id=$1 ORDER BY e.day_of_week,e.period_no,c.class_name`,[schoolId]),
+      db.query(`SELECT class_id AS "classId",class_name AS "className",grade,stream FROM school_classes WHERE school_id=$1 ORDER BY grade,class_name`,[schoolId]),
+      db.query(`SELECT subject_id AS "subjectId",subject_name AS "subjectName" FROM school_subjects WHERE school_id=$1 ORDER BY subject_name`,[schoolId]),
+      db.query(`SELECT user_email AS email,member_role AS "memberRole" FROM school_memberships WHERE school_id=$1 AND status='active' ORDER BY member_role,email`,[schoolId])
+    ]);
+    if(!school.rowCount)return res.status(404).json({error:'School not found.'});
+    res.json({ok:true,school:school.rows[0],periods:periods.rows,entries:entries.rows,classes:classes.rows,subjects:subjects.rows,teachers:members.rows.filter(x=>x.memberRole==='teacher')});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not load timetable.'})}
+});
+app.post('/api/schools/timetable/periods', requireAuth, async (req,res)=>{
+  req.query={schoolId:req.body?.schoolId}; return requireSchoolMembership(req,res,async()=>{try{
+    if(req.school.memberRole!=='admin'&&req.user.role!=='admin')return res.status(403).json({error:'School admin access is required.'});
+    const day=Number(req.body?.dayOfWeek), no=Number(req.body?.periodNo), label=String(req.body?.label||'').trim().slice(0,80); if(!day||day<1||day>7||!no||no<1||no>30||!label)return res.status(400).json({error:'Day, period number and label are required.'});
+    const id='PER-'+Date.now().toString(36).toUpperCase()+'-'+Math.random().toString(36).slice(2,6).toUpperCase();
+    await db.query(`INSERT INTO school_timetable_periods(period_id,school_id,day_of_week,period_no,label,starts_at,ends_at,kind) VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT(school_id,day_of_week,period_no) DO UPDATE SET label=EXCLUDED.label,starts_at=EXCLUDED.starts_at,ends_at=EXCLUDED.ends_at,kind=EXCLUDED.kind`,[id,req.school.schoolId,day,no,label,req.body?.startsAt||null,req.body?.endsAt||null,['lesson','break','assembly','activity','prep'].includes(req.body?.kind)?req.body.kind:'lesson']); res.status(201).json({ok:true,periodId:id});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not save timetable period.'})}})
+});
+app.post('/api/schools/timetable/entries', requireAuth, async (req,res)=>{
+  req.query={schoolId:req.body?.schoolId}; return requireSchoolMembership(req,res,async()=>{try{
+    if(req.school.memberRole!=='admin'&&req.user.role!=='admin')return res.status(403).json({error:'School admin access is required.'});
+    const classId=String(req.body?.classId||''), subjectId=String(req.body?.subjectId||'')||null, teacher=String(req.body?.teacherEmail||'').trim().toLowerCase()||null, room=String(req.body?.room||'').trim().slice(0,80)||null, day=Number(req.body?.dayOfWeek), no=Number(req.body?.periodNo), title=String(req.body?.title||'').trim().slice(0,120)||null;
+    if(!classId||!day||day<1||day>7||!no)return res.status(400).json({error:'Class, day and period are required.'});
+    const clashClass=await db.query(`SELECT 1 FROM school_timetable_entries WHERE school_id=$1 AND class_id=$2 AND day_of_week=$3 AND period_no=$4 LIMIT 1`,[req.school.schoolId,classId,day,no]); if(clashClass.rowCount)return res.status(409).json({error:'Class clash: this class already has a lesson in that period.'});
+    if(teacher){const clashTeacher=await db.query(`SELECT 1 FROM school_timetable_entries WHERE school_id=$1 AND teacher_email=$2 AND day_of_week=$3 AND period_no=$4 LIMIT 1`,[req.school.schoolId,teacher,day,no]);if(clashTeacher.rowCount)return res.status(409).json({error:'Teacher clash: this teacher is already scheduled in that period.'})}
+    if(room){const clashRoom=await db.query(`SELECT 1 FROM school_timetable_entries WHERE school_id=$1 AND lower(room)=lower($2) AND day_of_week=$3 AND period_no=$4 LIMIT 1`,[req.school.schoolId,room,day,no]);if(clashRoom.rowCount)return res.status(409).json({error:'Room clash: this room is already booked in that period.'})}
+    const id='TT-'+Date.now().toString(36).toUpperCase()+'-'+Math.random().toString(36).slice(2,6).toUpperCase(); await db.query(`INSERT INTO school_timetable_entries(entry_id,school_id,class_id,subject_id,teacher_email,room,day_of_week,period_no,title,status,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'draft',$10)`,[id,req.school.schoolId,classId,subjectId,teacher,room,day,no,title,req.user.email]); res.status(201).json({ok:true,entryId:id});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not add timetable lesson.'})}})
+});
+app.delete('/api/schools/timetable/entries/:id', requireAuth, async (req,res)=>{req.query={schoolId:req.body?.schoolId||req.query.schoolId};return requireSchoolMembership(req,res,async()=>{try{if(req.school.memberRole!=='admin'&&req.user.role!=='admin')return res.status(403).json({error:'School admin access is required.'});const r=await db.query(`DELETE FROM school_timetable_entries WHERE entry_id=$1 AND school_id=$2 RETURNING entry_id`,[req.params.id,req.school.schoolId]);if(!r.rowCount)return res.status(404).json({error:'Timetable lesson not found.'});res.json({ok:true})}catch(e){res.status(500).json({error:'Could not delete timetable lesson.'})}})});
+app.patch('/api/schools/timetable/publish', requireAuth, async (req,res)=>{req.query={schoolId:req.body?.schoolId};return requireSchoolMembership(req,res,async()=>{try{if(req.school.memberRole!=='admin'&&req.user.role!=='admin')return res.status(403).json({error:'School admin access is required.'});const status=req.body?.status==='published'?'published':'draft';await db.query(`UPDATE school_timetable_entries SET status=$1,updated_at=NOW() WHERE school_id=$2`,[status,req.school.schoolId]);res.json({ok:true,status})}catch(e){res.status(500).json({error:'Could not publish timetable.'})}})});
 
 // v46 School Fees & Financial Management.
 app.get('/api/schools/fees', requireSchoolMembership, async (req,res)=>{

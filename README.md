@@ -1,18 +1,21 @@
-# Tusome EduShelf v47 — Digital Library & Resource Centre
+# Tusome EduShelf v48 — Timetable & Lesson Scheduling
 
-This version adds a digital-only resource centre. It does **not** manage physical books, borrowing, returns, shelves, or stock.
+V48 adds a school timetable module to the V47 digital-first platform.
 
-## Included
-- Unified digital library for approved Tusome EduShelf materials and curated online resource links.
-- Search by title, subject, grade, topic, strand, description, and resource type.
-- Filters for subject, grade, type, and sorting.
-- Learner save/bookmark support for uploaded materials.
-- Teacher submission of useful online resources for administrator review.
-- Administrator resource moderation: approve/reject submitted links.
-- Optional school-scoped resource links: active school members can see approved school resources in addition to global resources.
-- HTTP/HTTPS validation for external links.
-- Resource-quality and permissions reminder.
-- Existing marketplace, school, assignment, gradebook, parent, attendance, exams, fees, discussions, AI and other features are preserved from v46.
+## Features
+- School timetable periods with day, period number, label, time and type.
+- Lesson scheduling by class, subject and teacher.
+- Room allocation.
+- Live conflict prevention for class, teacher and room clashes.
+- Draft vs published timetable state.
+- Timetable views by class, teacher, room and master list.
+- Learner and teacher timetable access through their school membership.
+- Parent timetable access for schools linked to their learner.
+- School-admin timetable builder and publish controls.
+- Responsive timetable grid and lesson table.
 
-## Important
-The digital library only surfaces approved platform materials and approved resource links. Contributors should only submit material they are allowed to share. Curriculum-related content should be verified by teachers/administrators before publishing.
+No physical-book or physical-library functionality is added.
+
+## Verification
+- server.mjs passes `node --check`.
+- Inline JavaScript blocks in index.html pass `node --check`.

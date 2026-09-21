@@ -338,6 +338,32 @@ async function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications(recipient_email, read_at);
     CREATE INDEX IF NOT EXISTS idx_learner_activity_email ON learner_material_activity(learner_email);
 
+    CREATE TABLE IF NOT EXISTS school_announcements (
+      announcement_id TEXT PRIMARY KEY,
+      school_id TEXT NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      message TEXT NOT NULL,
+      audience_type TEXT NOT NULL DEFAULT 'school' CHECK (audience_type IN ('school','class','role')),
+      audience_value TEXT,
+      created_by TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      pinned BOOLEAN NOT NULL DEFAULT FALSE
+    );
+    CREATE INDEX IF NOT EXISTS idx_school_announcements_school_created ON school_announcements(school_id,created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS school_messages (
+      message_id TEXT PRIMARY KEY,
+      school_id TEXT NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
+      sender_email TEXT NOT NULL,
+      recipient_email TEXT NOT NULL,
+      subject TEXT NOT NULL,
+      body TEXT NOT NULL,
+      read_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_school_messages_recipient ON school_messages(school_id,recipient_email,created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_school_messages_sender ON school_messages(school_id,sender_email,created_at DESC);
+
 
     CREATE TABLE IF NOT EXISTS subscription_plans (
       plan_key TEXT PRIMARY KEY,
@@ -2214,6 +2240,99 @@ app.get('/api/parent/exams', requireRole('parent'), async (req,res)=>{try{const 
 app.post('/api/schools/report-cards/generate', requireSchoolMembership, async (req,res)=>{try{if(req.school.role!=='admin')return res.status(403).json({error:'School administrator access is required.'});const classId=req.body?.classId;const termId=req.body?.termId||null;if(!classId)return res.status(400).json({error:'Class is required.'});const learners=await db.query(`SELECT user_email FROM school_memberships WHERE school_id=$1 AND class_id=$2 AND member_role='learner' AND status='active'`,[req.school.schoolId,classId]);let count=0;for(const l of learners.rows){const avg=await db.query(`SELECT AVG(m.marks/NULLIF(e.max_marks,0)*100) AS avg FROM school_exam_marks m JOIN school_exams e ON e.exam_id=m.exam_id WHERE m.school_id=$1 AND m.learner_email=$2 AND e.class_id=$3`,[req.school.schoolId,l.user_email,classId]);const id='report_'+Date.now()+'_'+Math.random().toString(36).slice(2,8);await db.query(`INSERT INTO school_report_cards(report_id,school_id,learner_email,class_id,term_id,status,overall_average,created_by) VALUES($1,$2,$3,$4,$5,'draft',$6,$7) ON CONFLICT DO NOTHING`,[id,req.school.schoolId,l.user_email,classId,termId,avg.rows[0]?.avg?Number(avg.rows[0].avg).toFixed(2):null,req.user.email]);count++}res.json({ok:true,count,message:'Draft report cards generated.'})}catch(e){console.error(e);res.status(500).json({error:'Could not generate report cards.'})}});
 app.get('/api/learner/report-cards', requireRole('learner'), async (req,res)=>{try{const r=await db.query(`SELECT report_id AS "reportId",class_id AS "classId",term_id AS "termId",status,overall_average AS "overallAverage",teacher_comment AS "teacherComment",created_at AS "createdAt",published_at AS "publishedAt" FROM school_report_cards WHERE learner_email=$1 AND status='published' ORDER BY created_at DESC`,[req.user.email]);res.json({ok:true,rows:r.rows})}catch(e){console.error(e);res.status(500).json({error:'Could not load report cards.'})}});
 app.get('/api/parent/report-cards', requireRole('parent'), async (req,res)=>{try{const learner=req.query.learnerEmail;const linked=await db.query(`SELECT 1 FROM parent_learner_links WHERE parent_email=$1 AND learner_email=$2 AND status='active' LIMIT 1`,[req.user.email,learner]);if(!linked.rows[0])return res.status(403).json({error:'Learner is not linked to this parent account.'});const r=await db.query(`SELECT report_id AS "reportId",class_id AS "classId",term_id AS "termId",overall_average AS "overallAverage",teacher_comment AS "teacherComment",published_at AS "publishedAt" FROM school_report_cards WHERE learner_email=$1 AND status='published' ORDER BY published_at DESC`,[learner]);res.json({ok:true,rows:r.rows})}catch(e){console.error(e);res.status(500).json({error:'Could not load report cards.'})}});
+
+// v45 Communication & Notifications Hub
+async function schoolCommunicationAccess(req,res,next){
+  const user=currentUser(req); if(!user)return res.status(401).json({error:'Please log in to continue.'});
+  const schoolId=String(req.query.schoolId||req.body?.schoolId||'').trim();
+  if(!schoolId)return res.status(400).json({error:'School ID is required.'});
+  if(!databaseReady)return res.status(503).json({error:'School database is not ready.'});
+  try{
+    const member=await db.query(`SELECT sm.school_id AS "schoolId",sm.member_role AS "memberRole",sm.status,sc.school_name AS "schoolName" FROM school_memberships sm JOIN schools sc ON sc.school_id=sm.school_id WHERE sm.school_id=$1 AND sm.user_email=$2`,[schoolId,user.email]);
+    if(member.rowCount && member.rows[0].status==='active'){req.user=user;req.school=member.rows[0];return next();}
+    if(user.role==='parent'){
+      const link=await db.query(`SELECT p.school_id AS "schoolId",sc.school_name AS "schoolName" FROM parent_guardian_links p JOIN schools sc ON sc.school_id=p.school_id WHERE p.school_id=$1 AND p.parent_email=$2 AND sc.status='active' LIMIT 1`,[schoolId,user.email]);
+      if(link.rowCount){req.user=user;req.school={schoolId,schoolName:link.rows[0].schoolName,memberRole:'parent',status:'active'};return next();}
+    }
+    return res.status(403).json({error:'You do not have active communication access to this school.'});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not verify school communication access.'})}
+}
+
+app.get('/api/schools/communication/announcements', schoolCommunicationAccess, async (req,res)=>{
+  try{
+    const role=req.school.memberRole, email=req.user.email;
+    let sql=`SELECT a.announcement_id AS "announcementId",a.title,a.message,a.audience_type AS "audienceType",a.audience_value AS "audienceValue",a.created_by AS "createdBy",a.created_at AS "createdAt",a.pinned FROM school_announcements a WHERE a.school_id=$1 AND (a.audience_type='school'`;
+    const params=[req.school.schoolId];
+    if(role==='teacher'||role==='learner'||role==='admin'){sql+=` OR (a.audience_type='role' AND a.audience_value=$2)`;params.push(role);}
+    if(role==='parent'){
+      sql+=` OR (a.audience_type='role' AND a.audience_value='parent')`;
+      sql+=` OR (a.audience_type='class' AND EXISTS (SELECT 1 FROM parent_guardian_links p JOIN school_memberships sm ON sm.school_id=p.school_id AND sm.user_email=p.learner_email AND sm.status='active' WHERE p.school_id=a.school_id AND p.parent_email=$2 AND sm.class_id=a.audience_value))`;
+    }else{
+      sql+=` OR (a.audience_type='class' AND EXISTS (SELECT 1 FROM school_memberships sm WHERE sm.school_id=a.school_id AND sm.user_email=$2 AND sm.status='active' AND sm.class_id=a.audience_value))`;
+    }
+    sql+=`) ORDER BY a.pinned DESC,a.created_at DESC LIMIT 100`;
+    const r=await db.query(sql,params);res.json({ok:true,announcements:r.rows});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not load announcements.'})}
+});
+
+app.post('/api/schools/communication/announcements', schoolCommunicationAccess, async (req,res)=>{
+  try{
+    if(!['admin','teacher'].includes(req.school.memberRole))return res.status(403).json({error:'Only school administrators and teachers can publish announcements.'});
+    const title=String(req.body?.title||'').trim().slice(0,160), message=String(req.body?.message||'').trim().slice(0,4000);
+    const audienceType=['school','class','role'].includes(req.body?.audienceType)?req.body.audienceType:'school';
+    const audienceValue=String(req.body?.audienceValue||'').trim().slice(0,120)||null;
+    const pinned=Boolean(req.body?.pinned);
+    if(!title||!message)return res.status(400).json({error:'Title and message are required.'});
+    if(audienceType==='class'&&!audienceValue)return res.status(400).json({error:'Choose a class for a class announcement.'});
+    if(audienceType==='role'&&!['teacher','learner','parent'].includes(audienceValue))return res.status(400).json({error:'Choose a valid audience role.'});
+    if(req.school.memberRole==='teacher'&&audienceType==='school')return res.status(403).json({error:'Teachers can publish to their assigned class or teacher audience; school-wide announcements are for school administrators.'});
+    if(audienceType==='class'){
+      const c=await db.query(`SELECT class_id FROM school_classes WHERE school_id=$1 AND class_id=$2`,[req.school.schoolId,audienceValue]); if(!c.rowCount)return res.status(404).json({error:'Class not found in this school.'});
+      if(req.school.memberRole==='teacher'){const ok=await db.query(`SELECT 1 FROM school_classes WHERE school_id=$1 AND class_id=$2 AND teacher_email=$3 UNION SELECT 1 FROM school_teacher_subjects WHERE school_id=$1 AND class_id=$2 AND teacher_email=$3 LIMIT 1`,[req.school.schoolId,audienceValue,req.user.email]);if(!ok.rowCount)return res.status(403).json({error:'You can only announce to classes you teach.'});}
+    }
+    const id='ANN_'+Date.now()+'_'+Math.random().toString(36).slice(2,8);
+    await db.query(`INSERT INTO school_announcements(announcement_id,school_id,title,message,audience_type,audience_value,created_by,pinned) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,[id,req.school.schoolId,title,message,audienceType,audienceValue,req.user.email,pinned]);
+    let recipients=[];
+    if(audienceType==='school') recipients=(await db.query(`SELECT user_email FROM school_memberships WHERE school_id=$1 AND status='active'`,[req.school.schoolId])).rows.map(x=>x.user_email);
+    else if(audienceType==='role') recipients=(await db.query(`SELECT user_email FROM school_memberships WHERE school_id=$1 AND member_role=$2 AND status='active'`,[req.school.schoolId,audienceValue])).rows.map(x=>x.user_email);
+    else recipients=(await db.query(`SELECT user_email FROM school_memberships WHERE school_id=$1 AND class_id=$2 AND status='active'`,[req.school.schoolId,audienceValue])).rows.map(x=>x.user_email);
+    if(audienceType==='school'||audienceType==='role'||audienceType==='class'){
+      const parents=(await db.query(`SELECT DISTINCT p.parent_email FROM parent_guardian_links p JOIN school_memberships sm ON sm.school_id=p.school_id AND sm.user_email=p.learner_email AND sm.status='active' WHERE p.school_id=$1 ${audienceType==='class'?'AND sm.class_id=$2':''}`,[req.school.schoolId,...(audienceType==='class'?[audienceValue]:[])] )).rows.map(x=>x.parent_email);
+      if(audienceType==='school') recipients.push(...parents);
+      if(audienceType==='role'&&audienceValue==='parent') recipients.push(...parents);
+      if(audienceType==='class') recipients.push(...parents);
+    }
+    recipients=[...new Set(recipients.filter(x=>x&&x!==req.user.email))];
+    for(const email of recipients) await db.query(`INSERT INTO notifications(recipient_email,title,message,type) VALUES($1,$2,$3,$4)`,[email,title,message,'announcement']);
+    void audit({user:req.user},'publish_announcement','school',req.school.schoolId,{announcementId:id,audienceType,audienceValue,recipientCount:recipients.length});
+    res.status(201).json({ok:true,announcementId:id,recipientCount:recipients.length});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not publish announcement.'})}
+});
+
+app.get('/api/schools/communication/messages', schoolCommunicationAccess, async (req,res)=>{
+  try{
+    const r=await db.query(`SELECT message_id AS "messageId",sender_email AS "senderEmail",recipient_email AS "recipientEmail",subject,body,read_at AS "readAt",created_at AS "createdAt" FROM school_messages WHERE school_id=$1 AND (sender_email=$2 OR recipient_email=$2) ORDER BY created_at DESC LIMIT 100`,[req.school.schoolId,req.user.email]);
+    res.json({ok:true,messages:r.rows,unread:r.rows.filter(x=>!x.readAt&&x.recipientEmail===req.user.email).length});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not load messages.'})}
+});
+
+app.post('/api/schools/communication/messages', schoolCommunicationAccess, async (req,res)=>{
+  try{
+    const recipient=String(req.body?.recipientEmail||'').trim().toLowerCase(),subject=String(req.body?.subject||'').trim().slice(0,160),body=String(req.body?.body||'').trim().slice(0,4000);
+    if(!recipient||!subject||!body)return res.status(400).json({error:'Recipient, subject and message are required.'});
+    const allowed=await db.query(`SELECT 1 FROM school_memberships WHERE school_id=$1 AND user_email=$2 AND status='active' UNION SELECT 1 FROM parent_guardian_links WHERE school_id=$1 AND parent_email=$2 LIMIT 1`,[req.school.schoolId,recipient]);
+    if(!allowed.rowCount)return res.status(404).json({error:'That user is not an active member/guardian for this school.'});
+    const id='MSG_'+Date.now()+'_'+Math.random().toString(36).slice(2,8);
+    await db.query(`INSERT INTO school_messages(message_id,school_id,sender_email,recipient_email,subject,body) VALUES($1,$2,$3,$4,$5,$6)`,[id,req.school.schoolId,req.user.email,recipient,subject,body]);
+    await db.query(`INSERT INTO notifications(recipient_email,title,message,type) VALUES($1,$2,$3,$4)`,[recipient,subject,`New school message from ${req.user.email}: ${body.slice(0,240)}`,'message']);
+    void audit({user:req.user},'send_school_message','school',req.school.schoolId,{messageId:id,recipient});
+    res.status(201).json({ok:true,messageId:id});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not send message.'})}
+});
+
+app.patch('/api/schools/communication/messages/:id/read', schoolCommunicationAccess, async (req,res)=>{
+  try{const r=await db.query(`UPDATE school_messages SET read_at=NOW() WHERE message_id=$1 AND school_id=$2 AND recipient_email=$3 RETURNING message_id`,[req.params.id,req.school.schoolId,req.user.email]);if(!r.rowCount)return res.status(404).json({error:'Message not found.'});res.json({ok:true})}catch(e){res.status(500).json({error:'Could not update message.'})}
+});
 
 app.use(express.static(__dirname));
 

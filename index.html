@@ -96,6 +96,10 @@ body.a11y-reduced-motion *,body.a11y-reduced-motion *::before,body.a11y-reduced-
 
 .parent-safety{background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:12px;margin:14px 0}.parent-child-picker{display:flex;gap:14px;align-items:end;flex-wrap:wrap}.parent-child-picker label{flex:1;min-width:260px}.parent-kpis{margin-top:16px}.parent-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}.parent-ai-summary{background:#f8fbff;border:1px solid #dbe5ef;border-radius:12px;padding:12px}@media(max-width:800px){.parent-grid{grid-template-columns:1fr}}
 </style>
+
+<style>
+.comm-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:16px;margin-top:16px}.comm-card{background:#fff;border:1px solid #dbe5ef;border-radius:16px;padding:18px;box-shadow:0 6px 20px #173f8a10}.comm-list{display:grid;gap:10px}.comm-item{border:1px solid #e2e8f0;border-radius:12px;padding:13px;background:#fbfdff}.comm-item.pinned{border-left:5px solid #2563eb}.comm-meta{font-size:12px;color:#64748b;margin-top:7px}.comm-badge{display:inline-block;font-size:11px;font-weight:800;padding:4px 8px;border-radius:999px;background:#eef5ff;color:#173f8a}.comm-toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:end}.comm-toolbar label{flex:1;min-width:180px}.comm-toolbar .btn{margin:0}.comm-message{border:1px solid #e2e8f0;border-radius:12px;padding:13px;background:#fff}.comm-message.unread{border-left:5px solid #2563eb;background:#f8fbff}.comm-empty{padding:22px;text-align:center;color:#64748b;border:1px dashed #cbd5e1;border-radius:12px}.comm-help{background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:12px;margin-top:12px;font-size:13px}@media(max-width:820px){.comm-grid{grid-template-columns:1fr}}
+</style>
 </head>
 <body>
 <div id="tusomeToastRegion" aria-live="polite" aria-atomic="false"></div>
@@ -716,20 +720,49 @@ body.a11y-reduced-motion *,body.a11y-reduced-motion *::before,body.a11y-reduced-
 </section>
 
 <section id="communication" class="page">
-  <div class="topline"><div><h2>💬 Communication Centre</h2><p>Share complaints, suggestions, questions and feedback with the EduShelf team.</p></div></div>
-  <div class="communication-grid">
-    <div class="communication-card">
-      <h3>Send Feedback</h3>
-      <div class="feedback-type" style="margin-bottom:12px">
-        <button id="feedbackComplaintBtn" class="active" onclick="setFeedbackType('Complaint')">⚠️ Complaint</button>
-        <button id="feedbackSuggestionBtn" onclick="setFeedbackType('Suggestion')">💡 Suggestion</button>
-      </div>
-      <input id="feedbackSubject" placeholder="Subject" maxlength="120">
-      <textarea id="feedbackMessage" rows="7" placeholder="Describe your complaint or suggestion clearly..." maxlength="2000"></textarea>
-      <button class="btn primary" onclick="submitFeedback()">Send to Communication Centre</button>
-      <p id="feedbackNotice" class="small"></p>
+  <div class="topline"><div><h2>💬 Communication Hub</h2><p>School announcements, authorized messages and your feedback in one place.</p></div><button class="btn" onclick="loadCommunicationHub()">↻ Refresh</button></div>
+  <div class="comm-toolbar">
+    <label>School workspace<select id="communicationSchoolSelect" onchange="selectedSchoolId=this.value;loadCommunicationHub()"><option value="">Choose school</option></select></label>
+    <button class="btn" onclick="loadCommunicationHub()">Load school communication</button>
+  </div>
+  <div class="comm-help"><b>Privacy:</b> Use the school hub for learning and school matters. Do not share passwords, M-PESA PINs, private photos, home addresses or other sensitive information.</div>
+  <div class="comm-grid">
+    <div class="comm-card">
+      <div class="topline"><h3>📢 Announcements</h3><button class="btn" onclick="loadSchoolAnnouncements()">Refresh</button></div>
+      <div id="schoolAnnouncements" class="comm-list"><div class="comm-empty">Choose a school to view announcements.</div></div>
     </div>
-    <div class="communication-card"><h3>My Messages</h3><div id="myFeedbackList"></div></div>
+    <div class="comm-card" id="announcementComposerCard">
+      <h3>📣 Publish Announcement</h3>
+      <p class="small">School administrators can publish school-wide notices. Teachers can publish to assigned classes or teacher audiences.</p>
+      <input id="commAnnouncementTitle" maxlength="160" placeholder="Announcement title">
+      <textarea id="commAnnouncementMessage" rows="6" maxlength="4000" placeholder="Write the announcement..."></textarea>
+      <label>Audience<select id="commAnnouncementAudience" onchange="updateCommunicationAudience()"><option value="school">Whole school</option><option value="class">Specific class</option><option value="role">Specific role</option></select></label>
+      <select id="commAnnouncementAudienceValue" style="display:none"></select>
+      <label><input id="commAnnouncementPinned" type="checkbox"> Pin this announcement</label>
+      <button class="btn primary" onclick="publishSchoolAnnouncement()">Publish</button>
+      <p id="commAnnouncementNotice" class="small"></p>
+    </div>
+  </div>
+  <div class="comm-grid">
+    <div class="comm-card">
+      <h3>✉️ Send Authorized Message</h3>
+      <p class="small">Message another authorized member or linked guardian in the same school.</p>
+      <input id="commRecipient" type="email" maxlength="160" placeholder="Recipient email">
+      <input id="commSubject" maxlength="160" placeholder="Subject">
+      <textarea id="commBody" rows="6" maxlength="4000" placeholder="Write your message..."></textarea>
+      <button class="btn primary" onclick="sendSchoolMessage()">Send Message</button>
+      <p id="commMessageNotice" class="small"></p>
+    </div>
+    <div class="comm-card">
+      <div class="topline"><h3>📥 Inbox</h3><button class="btn" onclick="loadSchoolMessages()">Refresh</button></div>
+      <div id="schoolMessageList" class="comm-list"><div class="comm-empty">Choose a school to view messages.</div></div>
+    </div>
+  </div>
+  <div class="comm-card" style="margin-top:16px">
+    <h3>💡 Feedback to Tusome EduShelf</h3>
+    <div class="feedback-type" style="margin-bottom:12px"><button id="feedbackComplaintBtn" class="active" onclick="setFeedbackType('Complaint')">⚠️ Complaint</button><button id="feedbackSuggestionBtn" onclick="setFeedbackType('Suggestion')">💡 Suggestion</button></div>
+    <input id="feedbackSubject" placeholder="Subject" maxlength="120"><textarea id="feedbackMessage" rows="5" placeholder="Describe your complaint or suggestion clearly..." maxlength="2000"></textarea>
+    <button class="btn primary" onclick="submitFeedback()">Send Feedback</button><p id="feedbackNotice" class="small"></p><div id="myFeedbackList"></div>
   </div>
 </section>
 <section id="account" class="page">
@@ -1067,6 +1100,34 @@ function renderAdminFeedback(){
 }
 function updateFeedbackStatus(id,status){const a=feedbackStore(),x=a.find(v=>v.id===id);if(!x)return;x.status=status;saveFeedbackStore(a);renderAdminFeedback();renderMyFeedback()}
 function replyToFeedback(id){const a=feedbackStore(),x=a.find(v=>v.id===id);if(!x)return;const r=(document.getElementById('reply_'+id)?.value||'').trim();if(!r)return;x.reply=r;x.status='Resolved';saveFeedbackStore(a);renderAdminFeedback();renderMyFeedback()}
+async function getCommunicationSchoolId(){
+  if(selectedSchoolId)return selectedSchoolId;
+  const role=getSessionRole();
+  if(role==='parent'){
+    try{const r=await fetch('/api/parent/children',{credentials:'include'}),d=await r.json();if(r.ok&&d.children?.length){selectedSchoolId=d.children[0].schoolId;return selectedSchoolId;}}catch(e){}
+  }
+  if(!schoolWorkspaces?.length){try{const r=await fetch('/api/schools/mine',{credentials:'include'}),d=await r.json();if(r.ok&&d.schools?.length){schoolWorkspaces=d.schools;selectedSchoolId=d.schools[0].schoolId;}}catch(e){}}
+  return selectedSchoolId;
+}
+async function loadCommunicationSchoolOptions(){
+  const sel=document.getElementById('communicationSchoolSelect');if(!sel)return;
+  const role=getSessionRole();let schools=[];
+  try{
+    if(role==='parent'){const r=await fetch('/api/parent/children',{credentials:'include'}),d=await r.json();schools=[...(d.children||[])].filter((x,i,a)=>a.findIndex(y=>y.schoolId===x.schoolId)===i).map(x=>({schoolId:x.schoolId,schoolName:x.schoolName}));}
+    else {const r=await fetch('/api/schools/mine',{credentials:'include'}),d=await r.json();schools=d.schools||[];schoolWorkspaces=schools;}
+  }catch(e){schools=[]}
+  sel.innerHTML=schools.length?schools.map(x=>`<option value="${escapeHtml(x.schoolId)}">${escapeHtml(x.schoolName)}</option>`).join(''):'<option value="">No school workspace</option>';
+  if(selectedSchoolId&&schools.some(x=>x.schoolId===selectedSchoolId))sel.value=selectedSchoolId;else if(schools[0]){selectedSchoolId=schools[0].schoolId;sel.value=selectedSchoolId;}
+  const roleNow=getSessionRole();const canPublish=['teacher','admin'].includes(roleNow);document.getElementById('announcementComposerCard').style.display=canPublish?'block':'none';
+}
+async function loadCommunicationHub(){await loadCommunicationSchoolOptions();await Promise.all([loadSchoolAnnouncements(),loadSchoolMessages()]);updateCommunicationAudience();}
+async function loadSchoolAnnouncements(){const box=document.getElementById('schoolAnnouncements');if(!box)return;const sid=await getCommunicationSchoolId();if(!sid){box.innerHTML='<div class="comm-empty">No school workspace is available.</div>';return}try{const r=await fetch('/api/schools/communication/announcements?schoolId='+encodeURIComponent(sid),{credentials:'include'}),d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load announcements.');box.innerHTML=d.announcements?.length?d.announcements.map(x=>`<article class="comm-item ${x.pinned?'pinned':''}"><span class="comm-badge">${x.pinned?'📌 Pinned':'📢 Announcement'}</span><h4>${escapeHtml(x.title)}</h4><p>${escapeHtml(x.message).replace(/\n/g,'<br>')}</p><div class="comm-meta">${new Date(x.createdAt).toLocaleString()} · ${escapeHtml(x.audienceType)} · ${escapeHtml(x.createdBy)}</div></article>`).join(''):'<div class="comm-empty">No announcements yet.</div>'}catch(e){box.innerHTML='<div class="comm-empty">'+escapeHtml(e.message)+'</div>'}}
+async function updateCommunicationAudience(){const type=document.getElementById('commAnnouncementAudience')?.value,sel=document.getElementById('commAnnouncementAudienceValue');if(!sel)return;sel.style.display=type==='school'?'none':'block';if(type==='role'){sel.innerHTML='<option value="learner">Learners</option><option value="teacher">Teachers</option><option value="parent">Parents/Guardians</option>';return}if(type==='class'){const sid=await getCommunicationSchoolId();if(!sid){sel.innerHTML='<option value="">No school selected</option>';return}try{const r=await fetch('/api/schools/dashboard?schoolId='+encodeURIComponent(sid),{credentials:'include'}),d=await r.json();const classes=d.classes||[];sel.innerHTML=classes.length?classes.map(x=>`<option value="${escapeHtml(x.classId)}">${escapeHtml(x.className)}</option>`).join(''):'<option value="">No classes found</option>'}catch(e){sel.innerHTML='<option value="">Unable to load classes</option>'}}}
+async function publishSchoolAnnouncement(){const sid=await getCommunicationSchoolId();if(!sid)return showToast?.('Choose a school first.','error');const type=document.getElementById('commAnnouncementAudience')?.value||'school',value=type==='school'?'':document.getElementById('commAnnouncementAudienceValue')?.value||'';const body={schoolId:sid,title:document.getElementById('commAnnouncementTitle')?.value.trim(),message:document.getElementById('commAnnouncementMessage')?.value.trim(),audienceType:type,audienceValue:value,pinned:document.getElementById('commAnnouncementPinned')?.checked};try{const r=await fetch('/api/schools/communication/announcements',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(body)}),d=await r.json();if(!r.ok)throw new Error(d.error||'Could not publish announcement.');showToast?.('Announcement published.','success');document.getElementById('commAnnouncementTitle').value='';document.getElementById('commAnnouncementMessage').value='';loadSchoolAnnouncements();renderNotifications()}catch(e){showToast?.(e.message,'error')}}
+async function loadSchoolMessages(){const box=document.getElementById('schoolMessageList');if(!box)return;const sid=await getCommunicationSchoolId();if(!sid){box.innerHTML='<div class="comm-empty">No school workspace is available.</div>';return}try{const r=await fetch('/api/schools/communication/messages?schoolId='+encodeURIComponent(sid),{credentials:'include'}),d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load messages.');box.innerHTML=d.messages?.length?d.messages.map(x=>`<article class="comm-message ${!x.readAt&&x.recipientEmail===getCurrentUserEmail()?'unread':''}"><b>${escapeHtml(x.subject)}</b><p>${escapeHtml(x.body).replace(/\n/g,'<br>')}</p><div class="comm-meta">${x.senderEmail===getCurrentUserEmail()?'To':'From'} ${escapeHtml(x.senderEmail===getCurrentUserEmail()?x.recipientEmail:x.senderEmail)} · ${new Date(x.createdAt).toLocaleString()}</div>${!x.readAt&&x.recipientEmail===getCurrentUserEmail()?`<button class="btn" onclick="markSchoolMessageRead('${escapeHtml(x.messageId)}')">Mark read</button>`:''}</article>`).join(''):'<div class="comm-empty">No messages yet.</div>'}catch(e){box.innerHTML='<div class="comm-empty">'+escapeHtml(e.message)+'</div>'}}
+function getCurrentUserEmail(){return String(localStorage.getItem('tusomeCurrentUser')||sessionStorage.getItem('tusomeCurrentUser')||'').toLowerCase()}
+async function sendSchoolMessage(){const sid=await getCommunicationSchoolId();if(!sid)return showToast?.('Choose a school first.','error');const body={schoolId:sid,recipientEmail:document.getElementById('commRecipient')?.value.trim(),subject:document.getElementById('commSubject')?.value.trim(),body:document.getElementById('commBody')?.value.trim()};try{const r=await fetch('/api/schools/communication/messages',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(body)}),d=await r.json();if(!r.ok)throw new Error(d.error||'Could not send message.');showToast?.('Message sent.','success');['commRecipient','commSubject','commBody'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=''});loadSchoolMessages();renderNotifications()}catch(e){showToast?.(e.message,'error')}}
+async function markSchoolMessageRead(id){const sid=await getCommunicationSchoolId();try{const r=await fetch('/api/schools/communication/messages/'+encodeURIComponent(id)+'/read?schoolId='+encodeURIComponent(sid),{method:'PATCH',credentials:'include'}),d=await r.json();if(!r.ok)throw new Error(d.error||'Could not update message.');loadSchoolMessages();refreshNotificationBadge()}catch(e){showToast?.(e.message,'error')}}
 function openCommunicationCentre(){show('communication')}
 function adminTab(tab){
   document.querySelectorAll('.admin-panel').forEach(x=>x.style.display='none');
@@ -1379,7 +1440,7 @@ function show(id){
   if(id==='schoolManagement'){loadSchoolManagement()} if(id==='attendance'){loadAttendance()} if(id==='exams'){loadExamsPage()}
   if(id==='learner'){loadLearnerAssignments();loadLearnerGradebook()}
   if(id==='admin'){adminRefreshAll();loadAdminAnalytics()}
-  if(id==='communication'){renderMyFeedback();renderAdminFeedback()}
+  if(id==='communication'){renderMyFeedback();renderAdminFeedback();loadCommunicationHub()}
   if(id==='notifications')renderNotifications(); else refreshNotificationBadge(); if(id==='account')loadAccountProfile();
   if(id==='progress')refreshProgress(); if(id==='parent')loadParentChildren();
   if(id==='payments')renderPayments();

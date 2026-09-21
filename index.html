@@ -106,6 +106,10 @@ body.a11y-reduced-motion *,body.a11y-reduced-motion *::before,body.a11y-reduced-
 <style>
 .comm-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:16px;margin-top:16px}.comm-card{background:#fff;border:1px solid #dbe5ef;border-radius:16px;padding:18px;box-shadow:0 6px 20px #173f8a10}.comm-list{display:grid;gap:10px}.comm-item{border:1px solid #e2e8f0;border-radius:12px;padding:13px;background:#fbfdff}.comm-item.pinned{border-left:5px solid #2563eb}.comm-meta{font-size:12px;color:#64748b;margin-top:7px}.comm-badge{display:inline-block;font-size:11px;font-weight:800;padding:4px 8px;border-radius:999px;background:#eef5ff;color:#173f8a}.comm-toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:end}.comm-toolbar label{flex:1;min-width:180px}.comm-toolbar .btn{margin:0}.comm-message{border:1px solid #e2e8f0;border-radius:12px;padding:13px;background:#fff}.comm-message.unread{border-left:5px solid #2563eb;background:#f8fbff}.comm-empty{padding:22px;text-align:center;color:#64748b;border:1px dashed #cbd5e1;border-radius:12px}.comm-help{background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:12px;margin-top:12px;font-size:13px}@media(max-width:820px){.comm-grid{grid-template-columns:1fr}}
 </style>
+
+<style>
+.community-shell{max-width:1150px;margin:0 auto;padding:20px}.community-hero{background:linear-gradient(135deg,#7c3aed,#2563eb);color:#fff;border-radius:22px;padding:24px;box-shadow:0 14px 32px #2563eb22}.community-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:16px 0}.community-kpi{background:#fff;border:1px solid #dbe5f0;border-radius:14px;padding:14px}.community-kpi b{display:block;font-size:24px;color:#173f8a}.community-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:16px}.community-card{background:#fff;border:1px solid #dbe5f0;border-radius:16px;padding:18px;box-shadow:0 8px 24px #173f8a10}.community-post{padding:12px 0;border-bottom:1px solid #e5e7eb}.community-post:last-child{border-bottom:0}.community-group{border:1px solid #dbe5f0;border-radius:12px;padding:12px;margin-top:10px}.community-actions{display:flex;gap:8px;flex-wrap:wrap}.reward-note{background:#f5f3ff;border:1px solid #ddd6fe;border-radius:12px;padding:12px}@media(max-width:800px){.community-grid{grid-template-columns:1fr}.community-kpis{grid-template-columns:1fr 1fr}}
+</style>
 </head>
 <body>
 <div id="tusomeToastRegion" aria-live="polite" aria-atomic="false"></div>
@@ -221,7 +225,7 @@ body.a11y-reduced-motion *,body.a11y-reduced-motion *::before,body.a11y-reduced-
     <button class="learner-quick-card" type="button" onclick="document.getElementById('search').focus();document.getElementById('search').scrollIntoView({behavior:'smooth',block:'center'})"><span>🔎</span><b>Search Materials</b><small>Find a topic quickly</small></button>
     <button class="learner-quick-card" type="button" onclick="show('practice')"><span>🧠</span><b>Practice Mode</b><small>Test yourself and learn</small></button><button class="learner-quick-card" type="button" onclick="show('discussions')"><span>💬</span><b>Discussions</b><small>Text, voice or video study rooms</small></button>
     <button class="learner-quick-card" type="button" onclick="show('attendance')"><span>📅</span><b>Attendance</b><small>View your attendance history</small></button>
-    <button class="learner-quick-card" type="button" onclick="show('digitalLibrary')"><span>📚</span><b>Digital Library</b><small>Discover digital learning resources</small></button><button class="learner-quick-card" type="button" onclick="show('portfolio')"><span>🏆</span><b>My Portfolio</b><small>Achievements, badges and certificates</small></button><button class="learner-quick-card" type="button" onclick="show('timetable')"><span>🗓️</span><b>My Timetable</b><small>View your school schedule</small></button>
+    <button class="learner-quick-card" type="button" onclick="show('digitalLibrary')"><span>📚</span><b>Digital Library</b><small>Discover digital learning resources</small></button><button class="learner-quick-card" type="button" onclick="show('portfolio')"><span>🏆</span><b>My Portfolio</b><small>Achievements, badges and certificates</small></button><button class="learner-quick-card" type="button" onclick="show('community')"><span>🌟</span><b>Learning Community</b><small>Groups, discussions and rewards</small></button><button class="learner-quick-card" type="button" onclick="show('timetable')"><span>🗓️</span><b>My Timetable</b><small>View your school schedule</small></button>
   </div>
 
 
@@ -315,6 +319,27 @@ body.a11y-reduced-motion *,body.a11y-reduced-motion *::before,body.a11y-reduced-
 
 
 
+<section id="community" class="page" aria-label="Learning community and gamification">
+  <div class="community-shell">
+    <div class="community-hero"><h2>🌟 Learning Community</h2><p>Study with others, join learning groups and collect points for meaningful learning activity.</p></div>
+    <div class="community-kpis">
+      <div class="community-kpi"><small>Learning Points</small><b id="communityPoints">0</b></div>
+      <div class="community-kpi"><small>Level</small><b id="communityLevel">1</b></div>
+      <div class="community-kpi"><small>Next Level</small><b id="communityNext">100</b></div>
+      <div class="community-kpi"><small>Groups Joined</small><b id="communityGroupsJoined">0</b></div>
+    </div>
+    <div class="reward-note"><b>🏅 How points work:</b> Points recognize useful learning actions such as completing practice, joining study groups and contributing constructively. Points are for personal progress—not a public ranking of learners.</div>
+    <div class="community-grid" style="margin-top:16px">
+      <div class="community-card"><div class="topline"><div><h3>💬 Community Discussions</h3><p class="small">Continue learning conversations in a moderated space.</p></div><button class="btn" onclick="loadCommunity()">↻ Refresh</button></div><div id="communityPosts"><div class="notice">Loading…</div></div></div>
+      <div class="community-card"><h3>🤝 Study Groups</h3><p class="small">Create or join a focused group around a subject or topic.</p>
+        <div class="cards" style="grid-template-columns:1fr 1fr;gap:8px"><label>Group name<input id="groupName" maxlength="100" placeholder="e.g. Grade 8 Maths"></label><label>Subject<input id="groupSubject" maxlength="100" placeholder="Mathematics"></label></div>
+        <label>Topic<input id="groupTopic" maxlength="120" placeholder="e.g. Algebra"></label><label>Description<textarea id="groupDescription" maxlength="500" placeholder="What will the group study?"></textarea></label>
+        <button class="btn primary" onclick="createStudyGroup()">Create Study Group</button><div id="communityGroups" style="margin-top:10px"><div class="notice">Loading…</div></div>
+      </div>
+    </div>
+    <div class="community-card" style="margin-top:16px"><h3>🏅 Recent Rewards</h3><div id="communityRewards" class="cards" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px"><div class="notice">Loading…</div></div></div>
+  </div>
+</section>
 <section id="discussions" class="page">
   <div class="discussion-shell">
     <div class="discussion-hero">
@@ -1558,7 +1583,7 @@ async function generateReportsV44(){try{const r=await fetch('/api/schools/report
 async function loadLearnerResultsV44(){try{const r=await fetch('/api/learner/exams',{credentials:'include'}),d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load results.');document.getElementById('learnerResultsRows').innerHTML=(d.rows||[]).map(x=>`<tr><td>${escHtml(x.title)}</td><td>${escHtml(x.subjectName||'—')}</td><td>${escHtml(x.examDate||'—')}</td><td>${escHtml(x.marks??'—')} / ${escHtml(x.maxMarks)}</td><td>${escHtml(x.grade||'—')}</td><td>${escHtml(x.comment||'')}</td></tr>`).join('')||'<tr><td colspan="6">No published results yet.</td></tr>';const rr=await fetch('/api/learner/report-cards',{credentials:'include'}),rd=await rr.json();document.getElementById('learnerReportsList').innerHTML=(rd.rows||[]).map(x=>`<div class="card" style="margin-top:8px"><b>Report Card</b><p>Overall average: ${escHtml(x.overallAverage??'—')}% · Published: ${escHtml(x.publishedAt||'—')}</p><p>${escHtml(x.teacherComment||'')}</p><button class="btn" onclick="window.print()">🖨️ Print</button></div>`).join('')||'<p class="small">No published report cards yet.</p>'}catch(e){document.getElementById('learnerResultsRows').innerHTML=`<tr><td colspan="6">${escHtml(e.message)}</td></tr>`}}
 
 function show(id){
-  const protectedRoles={learner:'learner',teacher:'teacher',admin:'admin',communication:'user',account:'user',reader:'learner',practice:'learner',discussions:'learner',portfolio:'learner',membership:'user',schoolManagement:'user',attendance:'user',exams:'user',fees:'user',timetable:'user',parent:'parent',digitalLibrary:'user'};
+  const protectedRoles={learner:'learner',teacher:'teacher',admin:'admin',communication:'user',account:'user',reader:'learner',practice:'learner',discussions:'learner',portfolio:'learner',community:'learner',membership:'user',schoolManagement:'user',attendance:'user',exams:'user',fees:'user',timetable:'user',parent:'parent',digitalLibrary:'user'};
   if(protectedRoles[id]){
     const role=getSessionRole();
     if(!role){show('login');return}
@@ -1567,6 +1592,7 @@ function show(id){
     if(id==='practice'&&role!=='learner'){alert('Practice Mode is for learners.');return}
     if(id==='discussions'&&role!=='learner'){alert('Discussions are currently available to learners.');return}
     if(id==='portfolio'&&role!=='learner'){alert('The digital portfolio is for learners.');return}
+    if(id==='community'&&role!=='learner'){alert('The Learning Community is for learners.');return}
     if(id==='teacher'&&role!=='teacher'){alert('This dashboard is for teachers.');return}
     if(id==='admin'&&role!=='admin'){alert('Administrator access is required.');return}
     if(id==='parent'&&role!=='parent'){alert('This dashboard is for authorised parents/guardians.');return}
@@ -1578,6 +1604,7 @@ function show(id){
   if(id==='schoolManagement'){loadSchoolManagement()} if(id==='timetable'){loadTimetable()} if(id==='attendance'){loadAttendance()} if(id==='exams'){loadExamsPage()} if(id==='fees'){loadFeesPage()}
   if(id==='learner'){loadLearnerAssignments();loadLearnerGradebook();loadLearnerPortfolio()}
   if(id==='portfolio')loadLearnerPortfolio();
+  if(id==='community')loadCommunity();
   if(id==='admin'){adminRefreshAll();loadAdminAnalytics()}
   if(id==='communication'){renderMyFeedback();renderAdminFeedback();loadCommunicationHub()}
   if(id==='notifications')renderNotifications(); else refreshNotificationBadge(); if(id==='account')loadAccountProfile();

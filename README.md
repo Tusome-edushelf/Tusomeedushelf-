@@ -1,5 +1,22 @@
-# Tusome EduShelf v51 — Learner Achievement & Digital Portfolio
+# Tusome EduShelf v52 — Learning Community & Gamification
 
-V51 adds an online learner achievement and digital portfolio layer. Learners can add portfolio evidence, see achievement badges and milestones, and view digital certificates with verification IDs. Portfolio evidence is stored as links; no physical-school or physical-book workflow is introduced. Teachers/admins can review portfolio submissions and admins can issue certificates through the existing server APIs. Learners remain in control of what they submit, and evidence links should only be shared when the learner has permission.
+V52 adds an online-only learner community and lightweight learning rewards layer.
 
-The feature is designed for digital learning portfolios, badges and certificates. Portfolio items can be pending, verified, or sent back for revision with reviewer feedback.
+## Features
+- Learner community dashboard
+- Community discussion feed using the existing moderated discussion system
+- Study groups: create and join subject/topic-focused groups
+- Personal learning points and levels
+- Recent reward history
+- Rewards for selected learning/community actions
+- No public learner leaderboard by default
+- Learner-only access
+- Existing V51 achievement, portfolio and certificate features preserved
+- Online-only; no physical-school, transport, physical-library or inventory features
+
+## Safety/design
+Points are framed as personal progress rather than learner ranking. Community use should remain focused on learning and follow the platform's existing privacy/safety guidance.
+
+## Validation
+- `server.mjs` passes `node --check`.
+- All inline JavaScript blocks in `index.html` pass `node --check`.

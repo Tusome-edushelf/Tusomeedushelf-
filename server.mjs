@@ -612,6 +612,34 @@ async function initDatabase() {
     );
     CREATE INDEX IF NOT EXISTS idx_certificates_learner ON learner_certificates(learner_email,issued_at DESC);
 
+    CREATE TABLE IF NOT EXISTS learner_gamification_points (
+      event_id BIGSERIAL PRIMARY KEY,
+      learner_email TEXT NOT NULL,
+      points INTEGER NOT NULL CHECK(points > 0),
+      reason TEXT NOT NULL,
+      source_key TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_gamification_points_learner ON learner_gamification_points(learner_email,created_at DESC);
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_gamification_source ON learner_gamification_points(learner_email,source_key) WHERE source_key IS NOT NULL;
+    CREATE TABLE IF NOT EXISTS study_groups (
+      group_id BIGSERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      subject TEXT,
+      topic TEXT,
+      description TEXT,
+      created_by TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      active BOOLEAN NOT NULL DEFAULT TRUE
+    );
+    CREATE TABLE IF NOT EXISTS study_group_members (
+      group_id BIGINT NOT NULL REFERENCES study_groups(group_id) ON DELETE CASCADE,
+      learner_email TEXT NOT NULL,
+      joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY(group_id,learner_email)
+    );
+    CREATE INDEX IF NOT EXISTS idx_study_groups_active ON study_groups(active,created_at DESC);
+
     CREATE TABLE IF NOT EXISTS school_fee_payments (
       payment_id TEXT PRIMARY KEY, school_id TEXT NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE, learner_email TEXT NOT NULL,
       charge_id TEXT REFERENCES school_fee_charges(charge_id) ON DELETE SET NULL, amount NUMERIC NOT NULL CHECK(amount > 0), method TEXT NOT NULL DEFAULT 'M-PESA',
@@ -2622,6 +2650,66 @@ app.get('/api/learner/achievements', requireRole('learner'), async (req,res)=>{
   }catch(e){console.error(e);res.status(500).json({error:'Could not load achievements.'})}
 });
 
+
+
+async function awardLearnerPoints(email, points, reason, sourceKey=null){
+  if(!db) return;
+  try{await db.query(`INSERT INTO learner_gamification_points(learner_email,points,reason,source_key) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING`,[email,points,reason,sourceKey]);}catch(e){console.warn('points award failed',e.message)}
+}
+
+app.get('/api/learner/community', requireRole('learner'), async (req,res)=>{
+  try{
+    const [posts,groups,score]=await Promise.all([
+      db.query(`SELECT id,author_role,grade,subject,topic,body,created_at AS "createdAt" FROM discussion_posts ORDER BY created_at DESC LIMIT 80`),
+      db.query(`SELECT g.group_id AS "groupId",g.name,g.subject,g.topic,g.description,g.created_at AS "createdAt",COUNT(m.learner_email)::int AS "memberCount",EXISTS(SELECT 1 FROM study_group_members me WHERE me.group_id=g.group_id AND me.learner_email=$1) AS "joined" FROM study_groups g LEFT JOIN study_group_members m ON m.group_id=g.group_id WHERE g.active=true GROUP BY g.group_id ORDER BY g.created_at DESC LIMIT 50`,[req.user.email]),
+      db.query(`SELECT COALESCE(SUM(points),0)::int AS points FROM learner_gamification_points WHERE learner_email=$1`,[req.user.email])
+    ]);
+    const points=Number(score.rows[0]?.points||0);
+    const level=Math.floor(points/100)+1;
+    res.json({ok:true,posts:posts.rows,groups:groups.rows,points,level,nextLevel:level*100});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not load learning community.'})}
+});
+
+app.get('/api/learner/gamification', requireRole('learner'), async (req,res)=>{
+  try{
+    const [score,badges]=await Promise.all([
+      db.query(`SELECT COALESCE(SUM(points),0)::int AS points,COUNT(*)::int AS events FROM learner_gamification_points WHERE learner_email=$1`,[req.user.email]),
+      db.query(`SELECT reason,points,created_at AS "createdAt" FROM learner_gamification_points WHERE learner_email=$1 ORDER BY created_at DESC LIMIT 20`,[req.user.email])
+    ]);
+    const points=Number(score.rows[0]?.points||0);res.json({ok:true,points,level:Math.floor(points/100)+1,nextLevel:(Math.floor(points/100)+1)*100,recent:badges.rows});
+  }catch(e){res.status(500).json({error:'Could not load your learning rewards.'})}
+});
+
+app.post('/api/learner/community/groups', requireRole('learner'), async (req,res)=>{
+  try{
+    const name=String(req.body?.name||'').trim().slice(0,100),subject=String(req.body?.subject||'').trim().slice(0,100),topic=String(req.body?.topic||'').trim().slice(0,120),description=String(req.body?.description||'').trim().slice(0,500);
+    if(!name)return res.status(400).json({error:'A study group name is required.'});
+    const r=await db.query(`INSERT INTO study_groups(name,subject,topic,description,created_by) VALUES($1,$2,$3,$4,$5) RETURNING group_id AS "groupId"`,[name,subject||null,topic||null,description||null,req.user.email]);
+    await db.query(`INSERT INTO study_group_members(group_id,learner_email) VALUES($1,$2) ON CONFLICT DO NOTHING`,[r.rows[0].groupId,req.user.email]);
+    await awardLearnerPoints(req.user.email,15,'Created a study group',`group:${r.rows[0].groupId}:create`);
+    res.json({ok:true,groupId:r.rows[0].groupId});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not create study group.'})}
+});
+
+app.post('/api/learner/community/groups/:id/join', requireRole('learner'), async (req,res)=>{
+  try{
+    const id=Number(req.params.id);const r=await db.query(`INSERT INTO study_group_members(group_id,learner_email) SELECT $1,$2 WHERE EXISTS(SELECT 1 FROM study_groups WHERE group_id=$1 AND active=true) ON CONFLICT DO NOTHING RETURNING group_id`,[id,req.user.email]);
+    if(!r.rowCount)return res.status(404).json({error:'Study group not found or you already joined it.'});
+    await awardLearnerPoints(req.user.email,10,'Joined a study group',`group:${id}:join`);
+    res.json({ok:true});
+  }catch(e){res.status(500).json({error:'Could not join study group.'})}
+});
+
+app.post('/api/learner/community/reward', requireRole('learner'), async (req,res)=>{
+  try{
+    const key=String(req.body?.sourceKey||'').trim().slice(0,160),reason=String(req.body?.reason||'Learning activity').trim().slice(0,160);
+    const allowed=['daily-practice','discussion-helpful','quiz-complete'];
+    if(!allowed.includes(String(req.body?.type)))return res.status(400).json({error:'Unsupported reward activity.'});
+    const points=req.body.type==='daily-practice'?5:req.body.type==='discussion-helpful'?3:8;
+    if(!key)return res.status(400).json({error:'Reward source is required.'});
+    await awardLearnerPoints(req.user.email,points,reason,key);res.json({ok:true,points});
+  }catch(e){res.status(500).json({error:'Could not record reward.'})}
+});
 
 app.get('/api/teacher/portfolio/review', requireRole('teacher'), async (req,res)=>{
   try{

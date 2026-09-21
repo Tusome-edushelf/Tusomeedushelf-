@@ -472,56 +472,6 @@ async function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_school_invites_email ON school_invites(email,status);
     ALTER TABLE school_memberships ADD COLUMN IF NOT EXISTS class_id TEXT REFERENCES school_classes(class_id) ON DELETE SET NULL;
     CREATE INDEX IF NOT EXISTS idx_school_memberships_class ON school_memberships(school_id,class_id,status);
-
-    CREATE TABLE IF NOT EXISTS school_staff_profiles (
-      staff_id TEXT PRIMARY KEY,
-      school_id TEXT NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
-      user_email TEXT,
-      full_name TEXT NOT NULL,
-      employee_id TEXT,
-      staff_type TEXT NOT NULL DEFAULT 'teaching' CHECK (staff_type IN ('teaching','non-teaching','support','administration')),
-      department TEXT,
-      designation TEXT,
-      phone TEXT,
-      qualification TEXT,
-      employment_status TEXT NOT NULL DEFAULT 'active' CHECK (employment_status IN ('active','inactive','on_leave','ended')),
-      joined_on DATE,
-      notes TEXT,
-      created_by TEXT NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-    CREATE INDEX IF NOT EXISTS idx_school_staff_school ON school_staff_profiles(school_id, employment_status);
-    CREATE INDEX IF NOT EXISTS idx_school_staff_email ON school_staff_profiles(school_id, user_email);
-    CREATE TABLE IF NOT EXISTS school_staff_leave_requests (
-      leave_id TEXT PRIMARY KEY,
-      school_id TEXT NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
-      staff_id TEXT NOT NULL REFERENCES school_staff_profiles(staff_id) ON DELETE CASCADE,
-      leave_type TEXT NOT NULL,
-      starts_on DATE NOT NULL,
-      ends_on DATE NOT NULL,
-      reason TEXT,
-      status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected','cancelled')),
-      requested_by TEXT NOT NULL,
-      reviewed_by TEXT,
-      reviewed_at TIMESTAMPTZ,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-    CREATE INDEX IF NOT EXISTS idx_school_staff_leave_school ON school_staff_leave_requests(school_id, status, starts_on);
-    CREATE TABLE IF NOT EXISTS school_staff_attendance (
-      attendance_id TEXT PRIMARY KEY,
-      school_id TEXT NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
-      staff_id TEXT NOT NULL REFERENCES school_staff_profiles(staff_id) ON DELETE CASCADE,
-      attendance_date DATE NOT NULL,
-      status TEXT NOT NULL CHECK (status IN ('present','absent','late','excused','on_leave')),
-      check_in TIME,
-      check_out TIME,
-      note TEXT,
-      recorded_by TEXT NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      UNIQUE(school_id, staff_id, attendance_date)
-    );
-    CREATE INDEX IF NOT EXISTS idx_school_staff_attendance_school ON school_staff_attendance(school_id, attendance_date DESC);
     CREATE TABLE IF NOT EXISTS school_subjects (
       subject_id TEXT PRIMARY KEY, school_id TEXT NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
       subject_name TEXT NOT NULL, learning_area TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -632,6 +582,36 @@ async function initDatabase() {
       created_by TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
     CREATE INDEX IF NOT EXISTS idx_school_fee_charges_learner ON school_fee_charges(school_id,learner_email,created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS learner_portfolio_items (
+      portfolio_id BIGSERIAL PRIMARY KEY,
+      learner_email TEXT NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT,
+      category TEXT NOT NULL DEFAULT 'Project',
+      evidence_url TEXT,
+      status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','verified','needs_revision')),
+      reviewer_email TEXT,
+      reviewer_feedback TEXT,
+      reviewed_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_portfolio_learner ON learner_portfolio_items(learner_email,created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS learner_certificates (
+      certificate_id BIGSERIAL PRIMARY KEY,
+      learner_email TEXT NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT,
+      issuer_name TEXT NOT NULL DEFAULT 'Tusome EduShelf',
+      issued_by TEXT NOT NULL,
+      verification_code TEXT NOT NULL UNIQUE,
+      issued_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      revoked_at TIMESTAMPTZ
+    );
+    CREATE INDEX IF NOT EXISTS idx_certificates_learner ON learner_certificates(learner_email,issued_at DESC);
+
     CREATE TABLE IF NOT EXISTS school_fee_payments (
       payment_id TEXT PRIMARY KEY, school_id TEXT NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE, learner_email TEXT NOT NULL,
       charge_id TEXT REFERENCES school_fee_charges(charge_id) ON DELETE SET NULL, amount NUMERIC NOT NULL CHECK(amount > 0), method TEXT NOT NULL DEFAULT 'M-PESA',
@@ -2583,74 +2563,122 @@ app.patch('/api/admin/digital-library/resources/:id/status', requireRole('admin'
 
 
 
-// v49 — Staff & HR Management (school-scoped)
-async function schoolHRAccess(req,res,next){
-  await requireSchoolMembership(req,res,()=>{
-    if(req.school.memberRole!=='admin' && req.method!=='GET' && req.method!=='HEAD') return res.status(403).json({error:'School administrator access is required for this HR action.'});
-    next();
-  });
-}
+// V51 — Learner Achievement & Digital Portfolio
+const portfolioCategories = new Set(['Project','Assignment','Reflection','Creative Work','Certificate Evidence','Other']);
+function normalizePortfolioCategory(v){ const x=String(v||'Project').trim(); return portfolioCategories.has(x)?x:'Project'; }
 
-app.get('/api/schools/hr', schoolHRAccess, async (req,res)=>{
+app.get('/api/learner/portfolio', requireRole('learner'), async (req,res)=>{
   try{
-    const schoolId=req.school.schoolId;
-    const admin=req.school.memberRole==='admin';
-    const staff=await db.query(`SELECT staff_id AS "staffId",user_email AS "userEmail",full_name AS "fullName",employee_id AS "employeeId",staff_type AS "staffType",department,designation,phone,qualification,employment_status AS "employmentStatus",joined_on AS "joinedOn",notes,created_at AS "createdAt" FROM school_staff_profiles WHERE school_id=$1 ${admin?'':'AND user_email=$2'} ORDER BY full_name`,admin?[schoolId]:[schoolId,req.user.email]);
-    const leave=await db.query(`SELECT l.leave_id AS "leaveId",l.staff_id AS "staffId",s.full_name AS "fullName",l.leave_type AS "leaveType",l.starts_on AS "startsOn",l.ends_on AS "endsOn",l.reason,l.status,l.requested_by AS "requestedBy",l.reviewed_by AS "reviewedBy",l.reviewed_at AS "reviewedAt",l.created_at AS "createdAt" FROM school_staff_leave_requests l JOIN school_staff_profiles s ON s.staff_id=l.staff_id WHERE l.school_id=$1 ${admin?'':'AND s.user_email=$2'} ORDER BY l.created_at DESC LIMIT 200`,admin?[schoolId]:[schoolId,req.user.email]);
-    const attendance=await db.query(`SELECT a.attendance_id AS "attendanceId",a.staff_id AS "staffId",s.full_name AS "fullName",a.attendance_date AS "attendanceDate",a.status,a.check_in AS "checkIn",a.check_out AS "checkOut",a.note FROM school_staff_attendance a JOIN school_staff_profiles s ON s.staff_id=a.staff_id WHERE a.school_id=$1 ${admin?'':'AND s.user_email=$2'} ORDER BY a.attendance_date DESC,s.full_name LIMIT 300`,admin?[schoolId]:[schoolId,req.user.email]);
-    res.json({ok:true,staff:staff.rows,leave:leave.rows,attendance:attendance.rows,counts:{staff:staff.rowCount,pendingLeave:leave.rows.filter(x=>x.status==='pending').length}});
-  }catch(e){console.error('HR load error:',e);res.status(500).json({error:'Could not load staff and HR records.'})}
+    const [items, certs] = await Promise.all([
+      db.query(`SELECT portfolio_id AS "portfolioId",title,description,category,evidence_url AS "evidenceUrl",status,reviewer_feedback AS "reviewerFeedback",reviewed_at AS "reviewedAt",created_at AS "createdAt" FROM learner_portfolio_items WHERE learner_email=$1 ORDER BY created_at DESC`,[req.user.email]),
+      db.query(`SELECT certificate_id AS "certificateId",title,description,issuer_name AS "issuerName",verification_code AS "verificationCode",issued_at AS "issuedAt",revoked_at AS "revokedAt" FROM learner_certificates WHERE learner_email=$1 ORDER BY issued_at DESC`,[req.user.email])
+    ]);
+    res.json({ok:true,items:items.rows,certificates:certs.rows});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not load your portfolio.'})}
 });
 
-app.post('/api/schools/hr/staff', schoolHRAccess, async (req,res)=>{
-  if(req.school.memberRole!=='admin') return res.status(403).json({error:'School administrator access is required.'});
+app.post('/api/learner/portfolio', requireRole('learner'), async (req,res)=>{
   try{
-    const fullName=String(req.body?.fullName||'').trim().slice(0,160);
-    if(!fullName)return res.status(400).json({error:'Full name is required.'});
-    const email=String(req.body?.userEmail||'').trim().toLowerCase().slice(0,160)||null;
-    const id='STAFF-'+Date.now().toString(36).toUpperCase()+'-'+Math.random().toString(36).slice(2,7).toUpperCase();
-    await db.query(`INSERT INTO school_staff_profiles(staff_id,school_id,user_email,full_name,employee_id,staff_type,department,designation,phone,qualification,employment_status,joined_on,notes,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,[id,req.school.schoolId,email,fullName,String(req.body?.employeeId||'').trim().slice(0,80)||null,['teaching','non-teaching','support','administration'].includes(req.body?.staffType)?req.body.staffType:'teaching',String(req.body?.department||'').trim().slice(0,100)||null,String(req.body?.designation||'').trim().slice(0,120)||null,String(req.body?.phone||'').trim().slice(0,40)||null,String(req.body?.qualification||'').trim().slice(0,300)||null,['active','inactive','on_leave','ended'].includes(req.body?.employmentStatus)?req.body.employmentStatus:'active',req.body?.joinedOn||null,String(req.body?.notes||'').trim().slice(0,1000)||null,req.user.email]);
-    res.status(201).json({ok:true,staffId:id});
-  }catch(e){console.error('HR staff create error:',e);res.status(500).json({error:'Could not create staff profile.'})}
+    const title=String(req.body?.title||'').trim().slice(0,160);
+    const description=String(req.body?.description||'').trim().slice(0,1200);
+    const category=normalizePortfolioCategory(req.body?.category);
+    const evidenceUrl=String(req.body?.evidenceUrl||'').trim().slice(0,500);
+    if(!title) return res.status(400).json({error:'A portfolio title is required.'});
+    if(evidenceUrl && !/^https?:\/\//i.test(evidenceUrl)) return res.status(400).json({error:'Evidence link must start with http:// or https://.'});
+    const r=await db.query(`INSERT INTO learner_portfolio_items(learner_email,title,description,category,evidence_url) VALUES($1,$2,$3,$4,$5) RETURNING portfolio_id AS "portfolioId"`,[req.user.email,title,description||null,category,evidenceUrl||null]);
+    res.json({ok:true,portfolioId:r.rows[0].portfolioId,message:'Portfolio item saved for review.'});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not save portfolio item.'})}
 });
 
-app.patch('/api/schools/hr/staff/:id', schoolHRAccess, async (req,res)=>{
-  if(req.school.memberRole!=='admin') return res.status(403).json({error:'School administrator access is required.'});
-  try{
-    const allowedType=['teaching','non-teaching','support','administration'], allowedStatus=['active','inactive','on_leave','ended'];
-    const r=await db.query(`UPDATE school_staff_profiles SET full_name=COALESCE(NULLIF($1,''),full_name),employee_id=NULLIF($2,''),staff_type=$3,department=NULLIF($4,''),designation=NULLIF($5,''),phone=NULLIF($6,''),qualification=NULLIF($7,''),employment_status=$8,joined_on=$9,notes=NULLIF($10,''),updated_at=NOW() WHERE staff_id=$11 AND school_id=$12 RETURNING staff_id AS "staffId"`,[String(req.body?.fullName||'').trim().slice(0,160),String(req.body?.employeeId||'').trim().slice(0,80),allowedType.includes(req.body?.staffType)?req.body.staffType:'teaching',String(req.body?.department||'').trim().slice(0,100),String(req.body?.designation||'').trim().slice(0,120),String(req.body?.phone||'').trim().slice(0,40),String(req.body?.qualification||'').trim().slice(0,300),allowedStatus.includes(req.body?.employmentStatus)?req.body.employmentStatus:'active',req.body?.joinedOn||null,String(req.body?.notes||'').trim().slice(0,1000),req.params.id,req.school.schoolId]);
-    if(!r.rowCount)return res.status(404).json({error:'Staff profile not found.'});res.json({ok:true,staffId:r.rows[0].staffId});
-  }catch(e){console.error('HR staff update error:',e);res.status(500).json({error:'Could not update staff profile.'})}
+app.delete('/api/learner/portfolio/:id', requireRole('learner'), async (req,res)=>{
+  try{const r=await db.query(`DELETE FROM learner_portfolio_items WHERE portfolio_id=$1 AND learner_email=$2 RETURNING portfolio_id`,[req.params.id,req.user.email]);if(!r.rowCount)return res.status(404).json({error:'Portfolio item not found.'});res.json({ok:true})}
+  catch(e){res.status(500).json({error:'Could not delete portfolio item.'})}
 });
 
-app.post('/api/schools/hr/leave', schoolHRAccess, async (req,res)=>{
+app.get('/api/learner/achievements', requireRole('learner'), async (req,res)=>{
   try{
-    const staffId=String(req.body?.staffId||'').trim(), type=String(req.body?.leaveType||'').trim().slice(0,80), start=req.body?.startsOn, end=req.body?.endsOn;
-    if(!staffId||!type||!start||!end)return res.status(400).json({error:'Staff, leave type, start date and end date are required.'});
-    const staff=(await db.query(`SELECT staff_id,user_email FROM school_staff_profiles WHERE staff_id=$1 AND school_id=$2`,[staffId,req.school.schoolId])).rows[0]; if(!staff)return res.status(404).json({error:'Staff profile not found.'});
-    if(new Date(end)<new Date(start))return res.status(400).json({error:'End date cannot be before start date.'});
-    const id='LEAVE-'+Date.now().toString(36).toUpperCase()+'-'+Math.random().toString(36).slice(2,7).toUpperCase();
-    await db.query(`INSERT INTO school_staff_leave_requests(leave_id,school_id,staff_id,leave_type,starts_on,ends_on,reason,status,requested_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`,[id,req.school.schoolId,staffId,type,start,end,String(req.body?.reason||'').trim().slice(0,1000)||null,'pending',req.user.email]);
-    res.status(201).json({ok:true,leaveId:id});
-  }catch(e){console.error('HR leave error:',e);res.status(500).json({error:'Could not submit leave request.'})}
+    const email=req.user.email;
+    const [views,bookmarks,subs,posts,verified,certs]=await Promise.all([
+      db.query(`SELECT COUNT(*)::int AS n FROM learner_material_activity WHERE learner_email=$1 AND view_count>0`,[email]),
+      db.query(`SELECT COUNT(*)::int AS n FROM learner_material_activity WHERE learner_email=$1 AND bookmarked=true`,[email]),
+      db.query(`SELECT COUNT(*)::int AS n FROM school_assignment_submissions WHERE learner_email=$1`,[email]),
+      db.query(`SELECT COUNT(*)::int AS n FROM discussion_posts WHERE author_email=$1`,[email]),
+      db.query(`SELECT COUNT(*)::int AS n FROM learner_portfolio_items WHERE learner_email=$1 AND status='verified'`,[email]),
+      db.query(`SELECT COUNT(*)::int AS n FROM learner_certificates WHERE learner_email=$1 AND revoked_at IS NULL`,[email])
+    ]);
+    const n=x=>Number(x.rows[0]?.n||0);
+    const stats={materialsViewed:n(views),bookmarks:n(bookmarks),assignmentsSubmitted:n(subs),discussions:n(posts),verifiedPortfolio:n(verified),certificates:n(certs)};
+    const defs=[
+      ['first-explorer','🔎','First Explorer','Open your first learning material.',stats.materialsViewed>=1],
+      ['first-bookmark','🔖','First Bookmark','Save your first learning resource.',stats.bookmarks>=1],
+      ['five-bookmarks','⭐','Resource Collector','Save 5 learning resources.',stats.bookmarks>=5],
+      ['first-assignment','📝','Assignment Starter','Submit your first assignment.',stats.assignmentsSubmitted>=1],
+      ['five-assignments','🏆','Consistent Learner','Submit 5 assignments.',stats.assignmentsSubmitted>=5],
+      ['first-discussion','💬','Learning Contributor','Take part in your first learning discussion.',stats.discussions>=1],
+      ['portfolio-builder','📁','Portfolio Builder','Have your first portfolio item verified.',stats.verifiedPortfolio>=1],
+      ['certificate-holder','🎓','Certificate Holder','Receive a digital certificate.',stats.certificates>=1]
+    ].map(x=>({id:x[0],icon:x[1],name:x[2],description:x[3],earned:x[4]}));
+    res.json({ok:true,stats,badges:defs});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not load achievements.'})}
 });
 
-app.patch('/api/schools/hr/leave/:id', schoolHRAccess, async (req,res)=>{
-  if(req.school.memberRole!=='admin') return res.status(403).json({error:'School administrator access is required.'});
-  const status=['approved','rejected','cancelled'].includes(req.body?.status)?req.body.status:null;if(!status)return res.status(400).json({error:'Invalid leave status.'});
-  try{const r=await db.query(`UPDATE school_staff_leave_requests SET status=$1,reviewed_by=$2,reviewed_at=NOW() WHERE leave_id=$3 AND school_id=$4 RETURNING leave_id AS "leaveId"`,[status,req.user.email,req.params.id,req.school.schoolId]);if(!r.rowCount)return res.status(404).json({error:'Leave request not found.'});res.json({ok:true,leaveId:r.rows[0].leaveId,status})}catch(e){res.status(500).json({error:'Could not update leave request.'})}
+
+app.get('/api/teacher/portfolio/review', requireRole('teacher'), async (req,res)=>{
+  try{
+    const r=await db.query(`SELECT p.portfolio_id AS "portfolioId",p.learner_email AS "learnerEmail",COALESCE(u.display_name,p.learner_email) AS "learnerName",p.title,p.description,p.category,p.evidence_url AS "evidenceUrl",p.status,p.reviewer_feedback AS "reviewerFeedback",p.created_at AS "createdAt"
+      FROM learner_portfolio_items p LEFT JOIN users u ON u.email=p.learner_email
+      WHERE EXISTS (SELECT 1 FROM school_memberships tm JOIN school_memberships lm ON lm.school_id=tm.school_id WHERE tm.user_email=$1 AND tm.member_role='teacher' AND tm.status='active' AND lm.user_email=p.learner_email AND lm.member_role='learner' AND lm.status='active')
+      ORDER BY CASE p.status WHEN 'pending' THEN 0 WHEN 'needs_revision' THEN 1 ELSE 2 END,p.created_at DESC LIMIT 200`,[req.user.email]);
+    res.json({ok:true,items:r.rows});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not load learner portfolios.'})}
 });
 
-app.post('/api/schools/hr/attendance', schoolHRAccess, async (req,res)=>{
-  if(req.school.memberRole!=='admin') return res.status(403).json({error:'School administrator access is required.'});
+app.patch('/api/teacher/portfolio/:id/review', requireRole('teacher'), async (req,res)=>{
   try{
-    const staffId=String(req.body?.staffId||'').trim(), date=req.body?.attendanceDate, status=String(req.body?.status||'').trim();
-    if(!staffId||!date||!['present','absent','late','excused','on_leave'].includes(status))return res.status(400).json({error:'Staff, date and valid attendance status are required.'});
-    const staff=(await db.query(`SELECT 1 FROM school_staff_profiles WHERE staff_id=$1 AND school_id=$2`,[staffId,req.school.schoolId])).rowCount;if(!staff)return res.status(404).json({error:'Staff profile not found.'});
-    const id='ATT-'+Date.now().toString(36).toUpperCase()+'-'+Math.random().toString(36).slice(2,7).toUpperCase();
-    await db.query(`INSERT INTO school_staff_attendance(attendance_id,school_id,staff_id,attendance_date,status,check_in,check_out,note,recorded_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(school_id,staff_id,attendance_date) DO UPDATE SET status=EXCLUDED.status,check_in=EXCLUDED.check_in,check_out=EXCLUDED.check_out,note=EXCLUDED.note,recorded_by=EXCLUDED.recorded_by`,[id,req.school.schoolId,staffId,date,status,req.body?.checkIn||null,req.body?.checkOut||null,String(req.body?.note||'').trim().slice(0,500)||null,req.user.email]);
-    res.status(201).json({ok:true,attendanceId:id});
-  }catch(e){console.error('HR attendance error:',e);res.status(500).json({error:'Could not save staff attendance.'})}
+    const status=['verified','needs_revision','pending'].includes(req.body?.status)?req.body.status:'pending';
+    const feedback=String(req.body?.feedback||'').trim().slice(0,1200);
+    const r=await db.query(`UPDATE learner_portfolio_items p SET status=$1,reviewer_email=$2,reviewer_feedback=$3,reviewed_at=NOW(),updated_at=NOW()
+      WHERE p.portfolio_id=$4 AND EXISTS (SELECT 1 FROM school_memberships tm JOIN school_memberships lm ON lm.school_id=tm.school_id WHERE tm.user_email=$2 AND tm.member_role='teacher' AND tm.status='active' AND lm.user_email=p.learner_email AND lm.member_role='learner' AND lm.status='active')
+      RETURNING p.learner_email`,[status,req.user.email,feedback||null,req.params.id]);
+    if(!r.rowCount)return res.status(404).json({error:'Portfolio item not found or you are not authorised to review it.'});
+    res.json({ok:true,learnerEmail:r.rows[0].learner_email});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not update portfolio review.'})}
+});
+
+app.get('/api/admin/portfolio/review', requireRole('admin'), async (req,res)=>{
+  try{
+    const r=await db.query(`SELECT p.portfolio_id AS "portfolioId",p.learner_email AS "learnerEmail",COALESCE(u.display_name,p.learner_email) AS "learnerName",p.title,p.description,p.category,p.evidence_url AS "evidenceUrl",p.status,p.reviewer_feedback AS "reviewerFeedback",p.created_at AS "createdAt" FROM learner_portfolio_items p LEFT JOIN users u ON u.email=p.learner_email ORDER BY CASE p.status WHEN 'pending' THEN 0 WHEN 'needs_revision' THEN 1 ELSE 2 END,p.created_at DESC LIMIT 300`);
+    res.json({ok:true,items:r.rows});
+  }catch(e){res.status(500).json({error:'Could not load portfolio review queue.'})}
+});
+
+app.patch('/api/admin/portfolio/:id/review', requireRole('admin'), async (req,res)=>{
+  try{
+    const status=['verified','needs_revision','pending'].includes(req.body?.status)?req.body.status:'pending';
+    const feedback=String(req.body?.feedback||'').trim().slice(0,1200);
+    const r=await db.query(`UPDATE learner_portfolio_items SET status=$1,reviewer_email=$2,reviewer_feedback=$3,reviewed_at=NOW(),updated_at=NOW() WHERE portfolio_id=$4 RETURNING learner_email`,[status,req.user.email,feedback||null,req.params.id]);
+    if(!r.rowCount)return res.status(404).json({error:'Portfolio item not found.'});
+    res.json({ok:true,learnerEmail:r.rows[0].learner_email});
+  }catch(e){res.status(500).json({error:'Could not update portfolio review.'})}
+});
+
+app.post('/api/admin/certificates', requireRole('admin'), async (req,res)=>{
+  try{
+    const learnerEmail=String(req.body?.learnerEmail||'').trim().toLowerCase();
+    const title=String(req.body?.title||'').trim().slice(0,160);
+    const description=String(req.body?.description||'').trim().slice(0,800);
+    const issuerName=String(req.body?.issuerName||'Tusome EduShelf').trim().slice(0,160)||'Tusome EduShelf';
+    if(!learnerEmail||!title)return res.status(400).json({error:'Learner email and certificate title are required.'});
+    const learner=await db.query(`SELECT email FROM users WHERE email=$1 AND role='learner' LIMIT 1`,[learnerEmail]);
+    if(!learner.rowCount)return res.status(404).json({error:'Learner account not found.'});
+    const verificationCode='TSE-'+crypto.randomBytes(8).toString('hex').toUpperCase();
+    const r=await db.query(`INSERT INTO learner_certificates(learner_email,title,description,issuer_name,issued_by,verification_code) VALUES($1,$2,$3,$4,$5,$6) RETURNING certificate_id AS "certificateId",verification_code AS "verificationCode"`,[learnerEmail,title,description||null,issuerName,req.user.email,verificationCode]);
+    res.json({ok:true,...r.rows[0]});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not issue certificate.'})}
+});
+
+app.get('/api/certificates/verify/:code', async (req,res)=>{
+  try{const r=await db.query(`SELECT c.title,c.description,c.issuer_name AS "issuerName",c.verification_code AS "verificationCode",c.issued_at AS "issuedAt",c.revoked_at AS "revokedAt",COALESCE(u.display_name,u.email) AS "learnerName" FROM learner_certificates c JOIN users u ON u.email=c.learner_email WHERE c.verification_code=$1 LIMIT 1`,[String(req.params.code||'').trim().toUpperCase()]);if(!r.rowCount)return res.status(404).json({valid:false,error:'Certificate not found.'});const x=r.rows[0];res.json({valid:!x.revokedAt,...x})}catch(e){res.status(500).json({error:'Could not verify certificate.'})}
 });
 
 app.use(express.static(__dirname));

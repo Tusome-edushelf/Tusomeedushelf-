@@ -1,20 +1,5 @@
-# Tusome EduShelf V49 — Staff & HR Management
+# Tusome EduShelf v51 — Learner Achievement & Digital Portfolio
 
-V49 adds school-scoped Staff & HR Management while preserving V48 Timetable & Lesson Scheduling and earlier features.
+V51 adds an online learner achievement and digital portfolio layer. Learners can add portfolio evidence, see achievement badges and milestones, and view digital certificates with verification IDs. Portfolio evidence is stored as links; no physical-school or physical-book workflow is introduced. Teachers/admins can review portfolio submissions and admins can issue certificates through the existing server APIs. Learners remain in control of what they submit, and evidence links should only be shared when the learner has permission.
 
-## Included
-- Staff profiles for teaching, non-teaching, support and administration staff
-- Employee IDs, departments, designations, qualifications and employment status
-- Optional link to an existing Tusome EduShelf user account
-- School administrator staff directory
-- Staff leave requests and administrator approval/rejection
-- Staff attendance records: Present, Absent, Late, Excused, On Leave
-- Optional check-in/check-out times and notes
-- HR dashboard counters
-- Role-based access: school administrators can manage HR; linked staff can view their own HR records
-- No biometric fingerprint capture or storage
-- No payroll calculation in V49; payroll remains a separate future module
-- PostgreSQL persistence and school-scoped access
-
-## Safety/privacy
-HR data is restricted to the relevant school workspace. Linked staff members only receive their own HR records. Schools should enter only information they are authorised to maintain.
+The feature is designed for digital learning portfolios, badges and certificates. Portfolio items can be pending, verified, or sent back for revision with reviewer feedback.

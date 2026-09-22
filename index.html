@@ -168,6 +168,7 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
 
     <div class="home-feature-wrap">
       <div class="home-feature-grid">
+        <div class="home-feature school"><div class="icon">🏫</div><h3>For Schools</h3><p>Manage your school, teachers, learners, classes, resources and school operations.</p><button class="btn" onclick="show('schoolLogin')">School Sign In →</button></div>
         <div class="home-feature teacher"><div class="icon">👩🏽‍🏫</div><h3>For Teachers</h3><p>Create lesson plans, find resources, manage classes and support learner progress.</p><button class="btn" onclick="show('teacher')">Teacher Dashboard →</button></div>
         <div class="home-feature learner"><div class="icon">🎓</div><h3>For Learners</h3><p>Access learning materials, complete activities, track progress and build achievements.</p><button class="btn" onclick="show('learner')">Learner Dashboard →</button></div>
         <div class="home-feature materials"><div class="icon">📖</div><h3>Learning Materials</h3><p>Access notes, exercises, past papers, videos and other approved digital resources.</p><button class="btn" onclick="show('digitalLibrary')">Explore Materials →</button></div>
@@ -181,6 +182,7 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
         <button class="home-quick-card" onclick="show('digitalLibrary')"><span class="qicon">📄</span><span><b>Past Papers</b><small>Practice & improve</small></span></button>
         <button class="home-quick-card" onclick="show('digitalLibrary')"><span class="qicon">▶️</span><span><b>Videos</b><small>Learn with visuals</small></span></button>
         <button class="home-quick-card" onclick="show('practice')"><span class="qicon">✅</span><span><b>Exercises</b><small>Test your knowledge</small></span></button>
+        <button class="home-quick-card" onclick="show('schoolLogin')"><span class="qicon">🏫</span><span><b>School Portal</b><small>School sign in</small></span></button>
         <button class="home-quick-card" onclick="show('digitalLibrary')"><span class="qicon">⬇️</span><span><b>Resources</b><small>Extra learning files</small></span></button>
       </div>
     </div>
@@ -210,6 +212,31 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
     <select id="role"><option value="learner">Learner</option><option value="teacher">Teacher</option><option value="parent">Parent / Guardian</option><option value="admin">Administrator</option></select>
     <button class="btn primary" type="submit">Sign In</button>
     <p class="auth-switch">New to Tusome EduShelf? <button type="button" onclick="show('signup')">Create an account</button></p>
+  </form>
+</section>
+
+<section id="schoolLogin" class="page">
+  <form onsubmit="schoolLogin(event)">
+    <h2>🏫 School Portal Sign In</h2>
+    <p>This is the separate sign-in for the School Plan Dashboard. It is not the Teacher Dashboard.</p>
+    <label>School email</label><input type="email" required autocomplete="email" placeholder="school@example.com">
+    <label>Password</label><input type="password" required autocomplete="current-password" placeholder="School account password">
+    <button class="btn primary" type="submit">School Sign In</button>
+    <p class="auth-switch">New school? <button type="button" onclick="show('schoolSignup')">Create School Plan Account</button></p>
+    <p class="auth-switch"><button type="button" onclick="show('home')">← Back to Home</button></p>
+  </form>
+</section>
+<section id="schoolSignup" class="page">
+  <form onsubmit="schoolRegister(event)">
+    <h2>🏫 Create School Plan Account</h2>
+    <p>Create a dedicated school account with its own School Plan Dashboard.</p>
+    <label>School name</label><input id="schoolSignupName" required maxlength="160" placeholder="School name">
+    <label>School email</label><input type="email" required autocomplete="email" placeholder="school@example.com">
+    <label>Contact phone</label><input id="schoolSignupPhone" maxlength="40" inputmode="tel" placeholder="07XXXXXXXX">
+    <label>Password</label><input type="password" required minlength="8" autocomplete="new-password" placeholder="At least 8 characters">
+    <label>School plan<select id="schoolSignupPlan"><option value="school_starter">School Starter</option><option value="school_growth">School Growth</option></select></label>
+    <button class="btn primary" type="submit">Create School Account</button>
+    <p class="auth-switch">Already have a school account? <button type="button" onclick="show('schoolLogin')">School Sign In</button></p>
   </form>
 </section>
 
@@ -1539,6 +1566,34 @@ async function registerUser(e){
   }catch(err){alert(err.message)}
   finally{button.disabled=false;button.textContent='Sign Up'}
 }
+async function schoolLogin(e){
+  e.preventDefault();
+  const form=e.target,button=form.querySelector('button[type="submit"]');
+  const email=form.querySelector('input[type="email"]').value.trim();
+  const password=form.querySelector('input[type="password"]').value;
+  button.disabled=true;button.textContent='Signing in...';
+  try{
+    const res=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({email,password,role:'school'})});
+    const data=await res.json();if(!res.ok)throw new Error(data.error||'School sign in failed.');
+    setSessionRole('school',email);appPageHistory=[];form.reset();show('schoolDashboard',true);
+  }catch(err){showToast?.(err.message,'error')}finally{button.disabled=false;button.textContent='School Sign In'}
+}
+async function schoolRegister(e){
+  e.preventDefault();
+  const form=e.target,button=form.querySelector('button[type="submit"]');
+  const email=form.querySelector('input[type="email"]').value.trim();
+  const password=form.querySelector('input[type="password"]').value;
+  const schoolName=document.getElementById('schoolSignupName').value.trim();
+  const contactPhone=document.getElementById('schoolSignupPhone').value.trim();
+  const planKey=document.getElementById('schoolSignupPlan').value;
+  button.disabled=true;button.textContent='Creating school...';
+  try{
+    const res=await fetch('/api/auth/school-register',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({email,password,schoolName,contactPhone,planKey})});
+    const data=await res.json();if(!res.ok)throw new Error(data.error||'Could not create school account.');
+    setSessionRole('school',email);appPageHistory=[];form.reset();showToast?.('School account created. Welcome to your School Plan Dashboard.','success');show('schoolDashboard',true);
+  }catch(err){showToast?.(err.message,'error')}finally{button.disabled=false;button.textContent='Create School Account'}
+}
+
 async function login(e){
   e.preventDefault();
   const form=e.target, button=form.querySelector('button[type="submit"]');
@@ -1554,7 +1609,7 @@ async function login(e){
     if(!res.ok)throw new Error(data.error||'Login failed.');
     setSessionRole(data.user.role,data.user.email);
     appPageHistory=[];
-    show(data.user.role==='admin'?'admin':data.user.role==='teacher'?'teacher':'learner',true);
+    show(data.user.role==='admin'?'admin':data.user.role==='teacher'?'teacher':data.user.role==='school'?'schoolDashboard':data.user.role==='parent'?'parent':'learner',true);
     form.reset();
   }catch(err){alert(err.message)}
   finally{button.disabled=false;button.textContent='Sign In'}
@@ -1649,7 +1704,7 @@ function show(id,skipHistory=false){
     appPageHistory.push(current);
     if(appPageHistory.length>12)appPageHistory.shift();
   }
-  const protectedRoles={learner:'learner',teacher:'teacher',admin:'admin',communication:'user',account:'user',reader:'learner',practice:'learner',discussions:'learner',portfolio:'learner',community:'learner',membership:'user',schoolDashboard:'schoolAdmin',attendance:'user',exams:'user',fees:'user',timetable:'user',parent:'parent',digitalLibrary:'user'};
+  const protectedRoles={learner:'learner',teacher:'teacher',admin:'admin',communication:'user',account:'user',reader:'learner',practice:'learner',discussions:'learner',portfolio:'learner',community:'learner',membership:'user',schoolDashboard:'school',attendance:'user',exams:'user',fees:'user',timetable:'user',parent:'parent',digitalLibrary:'user'};
   if(protectedRoles[id]){
     const role=getSessionRole();
     if(!role){show('login');return}
@@ -2005,7 +2060,8 @@ configureAIAssistant(getSessionRole()||'learner');
 let schoolWorkspaces=[]; let selectedSchoolId='';
 async function openSchoolDashboard(skipHistory=false){
   const role=getSessionRole();
-  if(!role){show('login');return}
+  if(!role){show('schoolLogin');return}
+  if(role==='school'){showPageDirect('schoolDashboard',skipHistory);loadSchoolManagement();return}
   if(role==='admin'){showPageDirect('schoolDashboard',skipHistory);loadSchoolManagement();return}
   try{
     const r=await fetch('/api/schools/mine',{credentials:'include'}),d=await r.json();
@@ -2030,7 +2086,7 @@ async function updateSchoolDashboardNav(){
   btn.style.display='none';
   const role=getSessionRole();
   if(!role)return;
-  if(role==='admin'){btn.style.display='inline-block';return}
+  if(role==='admin'||role==='school'){btn.style.display='inline-block';return}
   try{const r=await fetch('/api/schools/mine',{credentials:'include'});if(!r.ok)return;const d=await r.json();if((d.schools||[]).some(x=>x.memberRole==='admin'))btn.style.display='inline-block';}catch(_e){}
 }
 

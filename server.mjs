@@ -142,7 +142,7 @@ async function initDatabase() {
     CREATE TABLE IF NOT EXISTS users (
       id BIGSERIAL PRIMARY KEY,
       email TEXT NOT NULL UNIQUE,
-      role TEXT NOT NULL CHECK (role IN ('learner','teacher','admin','parent')),
+      role TEXT NOT NULL CHECK (role IN ('learner','teacher','admin','parent','school')),
       password_hash TEXT NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -154,6 +154,8 @@ async function initDatabase() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS notification_preferences JSONB NOT NULL DEFAULT '{"email":true,"platform":true}'::jsonb;
+    ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
+    ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('learner','teacher','admin','parent','school'));
 
     CREATE TABLE IF NOT EXISTS materials (
       id TEXT PRIMARY KEY,
@@ -1223,11 +1225,40 @@ app.post('/api/auth/register', async (req, res) => {
   res.status(201).json({ ok: true, user });
 });
 
+
+app.post('/api/auth/school-register', async (req,res)=>{
+  const email=String(req.body?.email||'').trim().toLowerCase();
+  const password=String(req.body?.password||'');
+  const schoolName=String(req.body?.schoolName||'').trim().slice(0,160);
+  const contactPhone=String(req.body?.contactPhone||'').trim().slice(0,40);
+  const planKey=['school_starter','school_growth'].includes(String(req.body?.planKey||''))?String(req.body.planKey):'school_starter';
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return res.status(400).json({error:'Please enter a valid school email address.'});
+  if(password.length<8)return res.status(400).json({error:'Password must be at least 8 characters long.'});
+  if(!schoolName)return res.status(400).json({error:'School name is required.'});
+  const existing=await findUser(email); if(existing)return res.status(409).json({error:'A school account with that email already exists.'});
+  const hash=hashPassword(password), schoolId='SCH-'+Date.now().toString(36).toUpperCase()+'-'+crypto.randomBytes(4).toString('hex').toUpperCase();
+  if(db && databaseReady){
+    const client=await db.connect();
+    try{
+      await client.query('BEGIN');
+      await client.query('INSERT INTO users(email,role,password_hash,display_name) VALUES($1,\'school\',$2,$3)',[email,hash,schoolName]);
+      await client.query('INSERT INTO schools(school_id,school_name,contact_email,contact_phone,status,created_by) VALUES($1,$2,$3,$4,\'active\',$3)',[schoolId,schoolName,email,contactPhone||null]);
+      await client.query('INSERT INTO school_memberships(school_id,user_email,member_role,status) VALUES($1,$2,\'admin\',\'active\')',[schoolId,email]);
+      await client.query('INSERT INTO subscriptions(subscription_id,user_email,school_id,plan_key,status,billing_cycle,amount,starts_at) VALUES($1,NULL,$2,$3,\'requested\',\'monthly\',0,NULL)',['SCHREQ-'+Date.now().toString(36).toUpperCase(),schoolId,planKey]);
+      await client.query('COMMIT');
+    }catch(e){await client.query('ROLLBACK');throw e}finally{client.release()}
+  }else{
+    return res.status(503).json({error:'School registration requires PostgreSQL to be ready.'});
+  }
+  const user={email,role:'school'}; setSessionCookie(res,user); void audit({user},'school_register','school',schoolId,{schoolName,planKey});
+  res.status(201).json({ok:true,user,school:{schoolId,schoolName,planKey},message:'School account created. Your School Dashboard is ready.'});
+});
+
 app.post('/api/auth/login', async (req, res) => {
   const { email, password, role } = req.body || {};
   const user = await findUser(email);
   if (!user || !verifyPassword(password, user.passwordHash)) return res.status(401).json({ error: 'Invalid email or password.' });
-  if (!['learner', 'teacher', 'admin', 'parent'].includes(String(role)) || user.role !== role) return res.status(403).json({ error: 'The selected account type does not match this account.' });
+  if (!['learner', 'teacher', 'admin', 'parent', 'school'].includes(String(role)) || user.role !== role) return res.status(403).json({ error: 'The selected account type does not match this account.' });
   setSessionCookie(res, user);
   void audit({user}, 'login', 'user', user.email);
   res.json({ ok: true, user: { email: user.email, role: user.role } });

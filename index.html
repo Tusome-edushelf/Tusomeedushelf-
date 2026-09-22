@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Tusome EduShelf - School Plan Dashboard</title>
+<title>Tusome EduShelf - School Plan Dashboard v66</title>
 <style>
 *{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f5f7fb;color:#18212f}
 header{background:#173f8a;color:white;padding:16px 7%;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:5}
@@ -97,7 +97,7 @@ body.a11y-reduced-motion *,body.a11y-reduced-motion *::before,body.a11y-reduced-
 
 .personalized-shell{max-width:1150px;margin:0 auto;padding:20px}.personalized-hero{background:linear-gradient(135deg,#0f766e,#2563eb);color:#fff;border-radius:22px;padding:24px}.personalized-grid{display:grid;grid-template-columns:1fr 1.3fr;gap:16px;margin-top:16px}.personalized-card{background:#fff;border:1px solid #dbe5f0;border-radius:16px;padding:18px;box-shadow:0 8px 24px #173f8a10}.recommendation-card{border:1px solid #dbe5f0;border-radius:14px;padding:14px;margin-top:10px}.personalized-note{background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:12px}@media(max-width:800px){.personalized-grid{grid-template-columns:1fr}}
 
-/* v64 School Plan Dashboard content centre */
+/* v66 School Plan Dashboard persistent content centre */
 .school-dashboard-content{margin-top:16px}
 .school-module-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:14px}
 .school-module{border:1px solid #dce5f0;background:#fff;border-radius:15px;padding:16px;text-align:left;cursor:pointer;box-shadow:0 3px 12px #0000000a;transition:.15s}
@@ -745,7 +745,7 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
   <div class="topline"><div><h2>🏫 School Plan Dashboard</h2><p>Manage your school plan, school workspace, teachers, learners, classes and shared learning resources.</p></div><button class="btn" onclick="loadSchoolManagement()">↻ Refresh</button></div>
   <div class="notice"><b>School privacy:</b> Only authorised school members should access school records. Keep learner information to what the school needs for education and administration.</div>
   <div class="card" style="margin-top:14px"><div class="topline" style="margin:0"><div><h3>💼 School Plan</h3><p id="schoolPlanStatus" class="small">Loading school plan status…</p></div><span id="schoolPlanBadge" class="tag">Checking…</span></div></div>
-  <div class="card school-dashboard-overview" style="margin-top:14px">
+  <div id="schoolControlCentre" class="card school-dashboard-overview" style="margin-top:14px;display:block!important;visibility:visible!important" aria-label="School Control Centre">
   <h3>🏫 School Control Centre</h3>
   <p class="small">These are the school functions available directly from your School Plan Dashboard.</p>
   <div class="cards" style="margin-top:14px">
@@ -760,7 +760,7 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
     <div class="card"><h3>🤖 School AI Support</h3><p>Get school planning and learning-support assistance.</p></div>
   </div>
 </div>
-<div class="card school-dashboard-content">
+<div id="schoolManagementCentre" class="card school-dashboard-content" style="display:block!important;visibility:visible!important">
     <div class="topline"><div><h3>🧭 School Management Centre</h3><p class="small">All school operations are collected here. Select a section below to open its full tools.</p></div></div>
     <div class="school-module-grid">
       <button class="school-module" onclick="document.getElementById('schoolWorkspace')?.scrollIntoView({behavior:'smooth'});"><span class="school-module-icon">🏫</span><b>School Management</b><small>School profile, members, classes and administration.</small></button>
@@ -778,7 +778,20 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
     </div>
   </div>
   <div class="card" style="margin-top:14px"><label>School workspace<select id="schoolWorkspaceSelect" onchange="loadSelectedSchool()"><option value="">Loading school access...</option></select></label><p id="schoolAccessStatus" class="small" style="margin-top:8px"></p></div>
-  <div id="schoolWorkspace" style="display:block">
+  <div class="card" style="margin-top:14px;border:2px solid #dce7f7;background:#f8fbff;display:block!important;visibility:visible!important">
+    <h3 style="margin-top:0;color:#173f8a">📌 School Dashboard at a Glance</h3>
+    <div class="cards" style="margin-top:12px">
+      <div class="card"><h3>👥 People</h3><p>Teachers, learners and parent/guardian links.</p></div>
+      <div class="card"><h3>🎓 Classes</h3><p>Classes, subjects and teacher allocations.</p></div>
+      <div class="card"><h3>📅 Attendance</h3><p>Daily attendance and school calendar.</p></div>
+      <div class="card"><h3>🗓️ Timetable</h3><p>Lessons, periods and schedules.</p></div>
+      <div class="card"><h3>💰 Fees</h3><p>Charges, payments and balances.</p></div>
+      <div class="card"><h3>📝 Exams</h3><p>Exams, marks, grades and report cards.</p></div>
+      <div class="card"><h3>💬 Communication</h3><p>Announcements and authorised messages.</p></div>
+      <div class="card"><h3>📚 Digital Library</h3><p>Approved digital learning resources.</p></div>
+    </div>
+  </div>
+  <div id="schoolWorkspace" style="display:block!important;visibility:visible!important">
     <div class="school-stat-grid" style="margin-top:16px"><div class="card"><h3>👥 Members</h3><p><b id="schoolMemberCount">0</b></p></div><div class="card"><h3>👩🏽‍🏫 Teachers</h3><p><b id="schoolTeacherCount">0</b></p></div><div class="card"><h3>🎓 Learners</h3><p><b id="schoolLearnerCount">0</b></p></div><div class="card"><h3>📚 Classes</h3><p><b id="schoolClassCount">0</b></p></div></div>
     <div class="school-grid" style="margin-top:16px">
       <div class="card"><h3>🏷️ Create Class</h3><label>Class name<input id="schoolClassName" maxlength="100" placeholder="Grade 7 Blue"></label><label>Grade<input id="schoolClassGrade" maxlength="40" placeholder="Grade 7"></label><label>Stream<input id="schoolClassStream" maxlength="40" placeholder="Blue"></label><label>Teacher email (optional)<input id="schoolClassTeacher" type="email" maxlength="160" placeholder="teacher@example.com"></label><button class="btn primary" style="margin-top:10px" onclick="createSchoolClass()">Create Class</button></div>

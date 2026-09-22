@@ -1,7 +1,7 @@
-Tusome EduShelf v65 — School Plan Dashboard
+# Tusome EduShelf v66 — School Plan Dashboard
 
-This version makes the school contents visibly available on the School Plan Dashboard itself. The dashboard includes school people, classes, attendance, timetable, fees, exams/results, communication, digital library and School AI Support. The detailed management panels remain available below the overview.
+This version makes the School Plan Dashboard contents persistently visible in the HTML so they do not disappear when a school API/data loader is delayed or fails.
 
-The school workspace is visible while data loads so the page does not appear empty. PostgreSQL, school authentication and M-PESA Daraja configuration are preserved.
+Visible dashboard sections include People, Classes, Attendance, Timetable, Fees, Exams & Results, Communication, Digital Library, School AI Support, School Management, parent/guardian links, assignments, gradebook and shared resources.
 
-Deploy both server.mjs and index.html and restart the Node service on Render (or your hosting provider).
+Deploy both `index.html` and `server.mjs`, then restart/redeploy the Render service. Existing PostgreSQL and M-PESA Daraja configuration is preserved.

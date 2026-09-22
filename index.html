@@ -1904,29 +1904,50 @@ async function loadDashboardPremiumTrial(role){
   const button=document.getElementById(role==='learner'?'learnerTrialButton':'teacherTrialButton');
   if(!card)return;
   try{
-    const [pRes,sRes]=await Promise.all([fetch('/api/plans',{credentials:'include'}),fetch('/api/my/subscription',{credentials:'include'})]);
-    const p=await pRes.json(), d=await sRes.json();
-    if(!pRes.ok||!sRes.ok)throw new Error('Could not load premium trial status.');
-    const plan=(p.plans||[]).find(x=>x.audience===role);
-    const active=(d.subscriptions||[]).find(x=>x.status==='trial' && x.trialEndsAt && new Date(x.trialEndsAt)>new Date());
+    const sRes=await fetch('/api/my/subscription',{credentials:'include'});
+    const d=await sRes.json();
+    if(!sRes.ok)throw new Error(d.error||'Could not load premium trial status.');
+    const active=(d.subscriptions||[]).find(x=>x.audience===role && x.status==='trial' && x.trialEndsAt && new Date(x.trialEndsAt)>new Date());
     if(active){
-      card.style.display='flex'; text.textContent=`${active.name||'Premium'} is active until ${new Date(active.trialEndsAt).toLocaleString()}.`; text.className='trial-status'; button.style.display='none'; return;
+      card.style.display='flex';
+      text.textContent=`${active.name||'Premium'} is active until ${new Date(active.trialEndsAt).toLocaleString()}.`;
+      text.className='trial-status';
+      button.style.display='none';
+      return;
     }
-    if(d.trialAvailable && plan){
-      card.style.display='flex'; text.textContent='Try premium features free for 2 days. No payment is required to start the trial.'; text.className=''; button.style.display='inline-flex'; return;
+    if(d.trialAvailable){
+      card.style.display='flex';
+      text.textContent='Try premium features free for 2 days. No payment is required to start the trial.';
+      text.className='';
+      button.style.display='inline-flex';
+      button.disabled=false;
+      button.textContent='Start 2-Day Free Trial →';
+      return;
     }
     card.style.display='none';
-  }catch(e){card.style.display='none';}
+  }catch(e){
+    card.style.display='flex';
+    text.textContent=e.message||'Premium trial status could not be loaded.';
+    text.className='';
+    button.style.display='none';
+  }
 }
 
 async function startDashboardPremiumTrial(role){
   const planKey=role==='learner'?'learner_plus':'teacher_plus';
   if(!confirm(`Start your 2-day ${role} premium trial? No payment is required.`))return;
+  const button=document.getElementById(role==='learner'?'learnerTrialButton':'teacherTrialButton');
+  if(button){button.disabled=true;button.textContent='Starting trial...';}
   try{
     const r=await fetch('/api/subscriptions/trial',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({planKey})});
     const d=await r.json(); if(!r.ok)throw new Error(d.error||'Could not start the free trial.');
-    showToast?.('2-day premium trial started.','success'); loadDashboardPremiumTrial(role); if(typeof loadMembership==='function')loadMembership();
-  }catch(e){showToast?.(e.message,'error');}
+    showToast?.('2-day premium trial started.','success');
+    await loadDashboardPremiumTrial(role);
+    if(typeof loadMembership==='function')await loadMembership();
+  }catch(e){
+    showToast?.(e.message,'error');
+    if(button){button.disabled=false;button.textContent='Start 2-Day Free Trial →';}
+  }
 }
 
 async function loadMembership(){
@@ -1937,6 +1958,12 @@ async function loadMembership(){
     const subs=d.subscriptions||[], schools=d.schools||[];
     statusBox.innerHTML=subs.length?subs.slice(0,5).map(x=>`<div><b>${escapeHtml(x.name||x.planKey)}</b> — ${escapeHtml(x.status)} · ${escapeHtml(x.billingCycle||'')} · KES ${Number(x.amount||0).toFixed(2)}${x.endsAt?' · ends '+new Date(x.endsAt).toLocaleDateString():''}</div>`).join(''):'<b>No membership yet.</b> Choose a plan below.';
     if(schools.length) statusBox.innerHTML+=`<div style="margin-top:8px"><b>School:</b> ${schools.map(x=>escapeHtml(x.schoolName)+' ('+escapeHtml(x.status)+')').join(', ')}</div>`;
+    const role=getSessionRole();
+    const trialSub=subs.find(x=>x.audience===role&&x.status==='trial'&&x.trialEndsAt&&new Date(x.trialEndsAt)>new Date());
+    if(['learner','teacher'].includes(role)){
+      if(trialSub){ statusBox.innerHTML+=`<div class="premium-trial-card" style="margin-top:12px"><div><b>🎁 ${escapeHtml(trialSub.name||'Premium')} trial active</b><p class="trial-status">Active until ${new Date(trialSub.trialEndsAt).toLocaleString()}.</p></div></div>`; }
+      else if(d.trialAvailable){ statusBox.innerHTML+=`<div class="premium-trial-card" style="margin-top:12px"><div><b>🎁 2-Day Free Premium Trial</b><p>Start premium access without payment.</p></div><button class="btn primary" type="button" onclick="startDashboardPremiumTrial('${role}')">Start Free Trial →</button></div>`; }
+    }
     const schoolCard=document.querySelector('#membership .card:last-child'); if(schoolCard) schoolCard.style.display=['teacher','admin'].includes(getSessionRole())?'block':'none';
     plansBox.innerHTML=(p.plans||[]).filter(x=>x.audience!=='school').map(x=>`<div class="plan-card"><span class="market-badge">${x.audience==='learner'?'Learner':'Teacher'}</span><h3>${escapeHtml(x.name)}</h3><div class="plan-price">KES ${Number(x.priceMonthly||0).toFixed(0)} <small>/ month</small></div><div class="small">KES ${Number(x.priceYearly||0).toFixed(0)} / year</div><p>${escapeHtml(x.description||'')}</p><ul class="plan-features">${(x.features||[]).map(f=>`<li>${escapeHtml(f)}</li>`).join('')}</ul><div class="admin-action-row"><button class="btn primary" onclick="payMembership('${escapeHtml(x.planKey)}','monthly')">Pay Monthly</button><button class="btn" onclick="payMembership('${escapeHtml(x.planKey)}','yearly')">Pay Yearly</button></div></div>`).join('')||'<div class="notice">No active plans are configured.</div>';
     if(document.getElementById('schoolRequestEmail') && !document.getElementById('schoolRequestEmail').value) document.getElementById('schoolRequestEmail').value=localStorage.getItem('tusomeCurrentUser')||'';

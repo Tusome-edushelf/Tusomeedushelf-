@@ -1942,7 +1942,13 @@ app.get('/api/my/subscription', requireAuth, async (req,res)=>{
     const s=await db.query(`SELECT s.subscription_id AS "subscriptionId",s.plan_key AS "planKey",p.name,p.audience,s.status,s.billing_cycle AS "billingCycle",s.amount,s.starts_at AS "startsAt",s.ends_at AS "endsAt",s.trial_started_at AS "trialStartedAt",s.trial_ends_at AS "trialEndsAt",s.trial_used_at AS "trialUsedAt",s.requested_at AS "requestedAt" FROM subscriptions s JOIN subscription_plans p ON p.plan_key=s.plan_key WHERE s.user_email=$1 ORDER BY s.requested_at DESC LIMIT 10`,[req.user.email]);
     const schools=await db.query(`SELECT sc.school_id AS "schoolId",sc.school_name AS "schoolName",sm.member_role AS "memberRole",sc.status FROM school_memberships sm JOIN schools sc ON sc.school_id=sm.school_id WHERE sm.user_email=$1 AND sm.status='active' ORDER BY sc.school_name`,[req.user.email]);
     const trial=await db.query(`SELECT EXISTS(SELECT 1 FROM subscriptions WHERE user_email=$1 AND trial_used_at IS NOT NULL) AS "used", EXISTS(SELECT 1 FROM subscriptions WHERE user_email=$1 AND status IN ('active','trial') AND COALESCE(ends_at,NOW())>NOW() AND amount>0) AS "paidActive"`,[req.user.email]);
-    res.json({ok:true,subscriptions:s.rows,schools:schools.rows,trialAvailable:!trial.rows[0]?.used&&!trial.rows[0]?.paidActive});
+    const trialPlanKey=req.user.role==='learner'?'learner_plus':req.user.role==='teacher'?'teacher_plus':null;
+    let trialPlanAvailable=false;
+    if(trialPlanKey){
+      const tp=await db.query(`SELECT 1 FROM subscription_plans WHERE plan_key=$1 AND audience=$2 AND active=true LIMIT 1`,[trialPlanKey,req.user.role]);
+      trialPlanAvailable=tp.rowCount>0;
+    }
+    res.json({ok:true,subscriptions:s.rows,schools:schools.rows,trialAvailable:Boolean(trialPlanAvailable&&!trial.rows[0]?.used&&!trial.rows[0]?.paidActive),trialPlanKey});
   }catch(e){console.error(e);res.status(500).json({error:'Could not load membership status.'})}
 });
 

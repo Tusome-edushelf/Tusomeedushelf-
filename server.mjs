@@ -151,11 +151,11 @@ async function initDatabase() {
       notification_preferences JSONB NOT NULL DEFAULT '{"email":true,"platform":true}'::jsonb
     );
 
+    ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
+    ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('learner','teacher','admin','parent','school'));
     ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS notification_preferences JSONB NOT NULL DEFAULT '{"email":true,"platform":true}'::jsonb;
-    ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
-    ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('learner','teacher','admin','parent','school'));
 
     CREATE TABLE IF NOT EXISTS materials (
       id TEXT PRIMARY KEY,
@@ -712,23 +712,16 @@ async function initDatabase() {
     `, [user.email, user.role, user.passwordHash]);
   }
 
-  // Demo school account: separate School Portal login and workspace.
-  const demoSchoolId = 'SCH-DEMO-001';
-  await db.query(`
-    INSERT INTO schools(school_id,school_name,contact_email,status,created_by)
-    VALUES($1,'Tusome Demo Academy','school@edushelf.com','active','school@edushelf.com')
-    ON CONFLICT (school_id) DO UPDATE SET school_name=EXCLUDED.school_name,contact_email=EXCLUDED.contact_email,status='active'
-  `,[demoSchoolId]);
-  await db.query(`
-    INSERT INTO school_memberships(school_id,user_email,member_role,status)
-    VALUES($1,'school@edushelf.com','admin','active')
-    ON CONFLICT (school_id,user_email) DO UPDATE SET member_role='admin',status='active'
-  `,[demoSchoolId]);
-  await db.query(`
-    INSERT INTO subscriptions(subscription_id,user_email,school_id,plan_key,status,billing_cycle,amount,starts_at,ends_at)
-    VALUES('SCH-DEMO-SUB-001',NULL,$1,'school_starter','active','monthly',0,NOW(),NOW()+INTERVAL '30 days')
-    ON CONFLICT (subscription_id) DO UPDATE SET status='active',school_id=EXCLUDED.school_id,plan_key='school_starter',ends_at=EXCLUDED.ends_at
-  `,[demoSchoolId]);
+  // Demo school workspace/account. Safe to run on every startup.
+  await db.query(`INSERT INTO schools(school_id,school_name,contact_email,status,created_by)
+    VALUES('SCH-DEMO-001','Tusome Demo Academy','school@edushelf.com','active','school@edushelf.com')
+    ON CONFLICT(school_id) DO UPDATE SET school_name=EXCLUDED.school_name,contact_email=EXCLUDED.contact_email,status='active'`);
+  await db.query(`INSERT INTO school_memberships(school_id,user_email,member_role,status)
+    VALUES('SCH-DEMO-001','school@edushelf.com','admin','active')
+    ON CONFLICT(school_id,user_email) DO UPDATE SET member_role='admin',status='active'`);
+  await db.query(`INSERT INTO subscriptions(subscription_id,user_email,school_id,plan_key,status,billing_cycle,amount,starts_at,ends_at)
+    VALUES('SCH-DEMO-SUB-001','school@edushelf.com','SCH-DEMO-001','school_starter','active','monthly',0,NOW(),NOW()+INTERVAL '30 days')
+    ON CONFLICT(subscription_id) DO UPDATE SET status='active',school_id='SCH-DEMO-001',ends_at=NOW()+INTERVAL '30 days',updated_at=NOW()`);
 
   // One-time migration of the old JSON transaction file into PostgreSQL.
   const legacy = await readTx();
@@ -1221,6 +1214,36 @@ async function notifyAdmins(title, message, type='info') {
   try { const r=await db.query(`SELECT email FROM users WHERE role='admin'`); await Promise.all(r.rows.map(x=>createNotification(x.email,title,message,type))); } catch(e) { console.warn('Admin notification failed:',e.message); }
 }
 
+app.post('/api/auth/school-register', async (req,res)=>{
+  if(!databaseReady) return res.status(503).json({error:'School account creation requires the PostgreSQL database to be ready.'});
+  const schoolName=String(req.body?.schoolName||'').trim().slice(0,160);
+  const email=String(req.body?.email||'').trim().toLowerCase();
+  const password=String(req.body?.password||'');
+  const phone=String(req.body?.contactPhone||'').trim().slice(0,40);
+  const planKey=['school_starter','school_growth'].includes(String(req.body?.planKey))?String(req.body.planKey):'school_starter';
+  if(!schoolName) return res.status(400).json({error:'School name is required.'});
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({error:'Please enter a valid school email address.'});
+  if(password.length<8) return res.status(400).json({error:'Password must be at least 8 characters long.'});
+  try{
+    if(await findUser(email)) return res.status(409).json({error:'An account with that email already exists. Please use Sign In instead.'});
+    const p=await db.query(`SELECT plan_key FROM subscription_plans WHERE plan_key=$1 AND audience='school' AND active=true`,[planKey]);
+    if(!p.rowCount) return res.status(400).json({error:'Selected school plan is not available.'});
+    const schoolId='SCH-'+Date.now().toString(36).toUpperCase()+'-'+Math.random().toString(36).slice(2,7).toUpperCase();
+    const subId='SUB-'+Date.now().toString(36).toUpperCase()+'-'+Math.random().toString(36).slice(2,7).toUpperCase();
+    await db.query('BEGIN');
+    try{
+      await db.query(`INSERT INTO users(email,role,password_hash) VALUES($1,'school',$2)`,[email,hashPassword(password)]);
+      await db.query(`INSERT INTO schools(school_id,school_name,contact_email,contact_phone,status,created_by) VALUES($1,$2,$3,$4,'active',$3)`,[schoolId,schoolName,email,phone||null]);
+      await db.query(`INSERT INTO school_memberships(school_id,user_email,member_role,status) VALUES($1,$2,'admin','active')`,[schoolId,email]);
+      await db.query(`INSERT INTO subscriptions(subscription_id,user_email,school_id,plan_key,status,billing_cycle,amount,starts_at,ends_at) VALUES($1,$2,$3,$4,'active','monthly',0,NOW(),NOW()+INTERVAL '30 days')`,[subId,email,schoolId,planKey]);
+      await db.query('COMMIT');
+    }catch(e){await db.query('ROLLBACK');throw e;}
+    const user={email,role:'school'}; setSessionCookie(res,user);
+    void audit({user},'school_register','school',schoolId,{schoolName,planKey});
+    res.status(201).json({ok:true,user,school:{schoolId,schoolName,planKey,status:'active'}});
+  }catch(e){console.error('School registration failed:',e);res.status(500).json({error:e.message||'Could not create the school account.'});}
+});
+
 app.post('/api/auth/register', async (req, res) => {
   const { email, password, role } = req.body || {};
   const normalizedEmail = String(email || '').trim().toLowerCase();
@@ -1243,35 +1266,6 @@ app.post('/api/auth/register', async (req, res) => {
   void audit({user}, 'register', 'user', normalizedEmail);
   void createNotification(normalizedEmail, 'Welcome to Tusome EduShelf', 'Your account is ready. Explore learning materials and your role-specific tools.', 'success');
   res.status(201).json({ ok: true, user });
-});
-
-
-app.post('/api/auth/school-register', async (req,res)=>{
-  const email=String(req.body?.email||'').trim().toLowerCase();
-  const password=String(req.body?.password||'');
-  const schoolName=String(req.body?.schoolName||'').trim().slice(0,160);
-  const contactPhone=String(req.body?.contactPhone||'').trim().slice(0,40);
-  const planKey=['school_starter','school_growth'].includes(String(req.body?.planKey||''))?String(req.body.planKey):'school_starter';
-  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return res.status(400).json({error:'Please enter a valid school email address.'});
-  if(password.length<8)return res.status(400).json({error:'Password must be at least 8 characters long.'});
-  if(!schoolName)return res.status(400).json({error:'School name is required.'});
-  const existing=await findUser(email); if(existing)return res.status(409).json({error:'A school account with that email already exists.'});
-  const hash=hashPassword(password), schoolId='SCH-'+Date.now().toString(36).toUpperCase()+'-'+crypto.randomBytes(4).toString('hex').toUpperCase();
-  if(db && databaseReady){
-    const client=await db.connect();
-    try{
-      await client.query('BEGIN');
-      await client.query('INSERT INTO users(email,role,password_hash,display_name) VALUES($1,\'school\',$2,$3)',[email,hash,schoolName]);
-      await client.query('INSERT INTO schools(school_id,school_name,contact_email,contact_phone,status,created_by) VALUES($1,$2,$3,$4,\'active\',$3)',[schoolId,schoolName,email,contactPhone||null]);
-      await client.query('INSERT INTO school_memberships(school_id,user_email,member_role,status) VALUES($1,$2,\'admin\',\'active\')',[schoolId,email]);
-      await client.query('INSERT INTO subscriptions(subscription_id,user_email,school_id,plan_key,status,billing_cycle,amount,starts_at) VALUES($1,NULL,$2,$3,\'requested\',\'monthly\',0,NULL)',['SCHREQ-'+Date.now().toString(36).toUpperCase(),schoolId,planKey]);
-      await client.query('COMMIT');
-    }catch(e){await client.query('ROLLBACK');throw e}finally{client.release()}
-  }else{
-    return res.status(503).json({error:'School registration requires PostgreSQL to be ready.'});
-  }
-  const user={email,role:'school'}; setSessionCookie(res,user); void audit({user},'school_register','school',schoolId,{schoolName,planKey});
-  res.status(201).json({ok:true,user,school:{schoolId,schoolName,planKey},message:'School account created. Your School Dashboard is ready.'});
 });
 
 app.post('/api/auth/login', async (req, res) => {
@@ -1993,13 +1987,7 @@ app.get('/api/my/subscription', requireAuth, async (req,res)=>{
     const s=await db.query(`SELECT s.subscription_id AS "subscriptionId",s.plan_key AS "planKey",p.name,p.audience,s.status,s.billing_cycle AS "billingCycle",s.amount,s.starts_at AS "startsAt",s.ends_at AS "endsAt",s.trial_started_at AS "trialStartedAt",s.trial_ends_at AS "trialEndsAt",s.trial_used_at AS "trialUsedAt",s.requested_at AS "requestedAt" FROM subscriptions s JOIN subscription_plans p ON p.plan_key=s.plan_key WHERE s.user_email=$1 ORDER BY s.requested_at DESC LIMIT 10`,[req.user.email]);
     const schools=await db.query(`SELECT sc.school_id AS "schoolId",sc.school_name AS "schoolName",sm.member_role AS "memberRole",sc.status FROM school_memberships sm JOIN schools sc ON sc.school_id=sm.school_id WHERE sm.user_email=$1 AND sm.status='active' ORDER BY sc.school_name`,[req.user.email]);
     const trial=await db.query(`SELECT EXISTS(SELECT 1 FROM subscriptions WHERE user_email=$1 AND trial_used_at IS NOT NULL) AS "used", EXISTS(SELECT 1 FROM subscriptions WHERE user_email=$1 AND status IN ('active','trial') AND COALESCE(ends_at,NOW())>NOW() AND amount>0) AS "paidActive"`,[req.user.email]);
-    const trialPlanKey=req.user.role==='learner'?'learner_plus':req.user.role==='teacher'?'teacher_plus':null;
-    let trialPlanAvailable=false;
-    if(trialPlanKey){
-      const tp=await db.query(`SELECT 1 FROM subscription_plans WHERE plan_key=$1 AND audience=$2 AND active=true LIMIT 1`,[trialPlanKey,req.user.role]);
-      trialPlanAvailable=tp.rowCount>0;
-    }
-    res.json({ok:true,subscriptions:s.rows,schools:schools.rows,trialAvailable:Boolean(trialPlanAvailable&&!trial.rows[0]?.used&&!trial.rows[0]?.paidActive),trialPlanKey});
+    res.json({ok:true,subscriptions:s.rows,schools:schools.rows,trialAvailable:!trial.rows[0]?.used&&!trial.rows[0]?.paidActive});
   }catch(e){console.error(e);res.status(500).json({error:'Could not load membership status.'})}
 });
 
@@ -2087,7 +2075,7 @@ app.post('/api/schools/request', requireRole('teacher','admin'), async (req,res)
     await db.query('BEGIN');
     try{
       await db.query(`INSERT INTO schools(school_id,school_name,contact_email,contact_phone,status,created_by) VALUES($1,$2,$3,$4,'pending',$5)`,[schoolId,schoolName,contactEmail,contactPhone,req.user.email]);
-      await db.query(`INSERT INTO school_memberships(school_id,user_email,member_role,status) VALUES($1,$2,'admin','active')`,[schoolId,req.user.email]);
+      await db.query(`INSERT INTO school_memberships(school_id,user_email,member_role,status) VALUES($1,$2,$3,'active')`,[schoolId,req.user.email,req.user.role]);
       await db.query(`INSERT INTO subscriptions(subscription_id,school_id,plan_key,status,billing_cycle,amount) VALUES($1,$2,$3,'requested','monthly',$4)`,[subId,schoolId,planKey,Number(p.rows[0].price_monthly)]);
       await db.query('COMMIT');
     }catch(e){await db.query('ROLLBACK');throw e}

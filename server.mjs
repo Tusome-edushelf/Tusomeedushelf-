@@ -142,7 +142,7 @@ async function initDatabase() {
     CREATE TABLE IF NOT EXISTS users (
       id BIGSERIAL PRIMARY KEY,
       email TEXT NOT NULL UNIQUE,
-      role TEXT NOT NULL CHECK (role IN ('learner','teacher','admin','parent')),
+      role TEXT NOT NULL CHECK (role IN ('learner','teacher','admin','parent','school')),
       password_hash TEXT NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -154,6 +154,8 @@ async function initDatabase() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS notification_preferences JSONB NOT NULL DEFAULT '{"email":true,"platform":true}'::jsonb;
+    ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
+    ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('learner','teacher','admin','parent','school'));
 
     CREATE TABLE IF NOT EXISTS materials (
       id TEXT PRIMARY KEY,
@@ -1223,11 +1225,45 @@ app.post('/api/auth/register', async (req, res) => {
   res.status(201).json({ ok: true, user });
 });
 
+app.post('/api/auth/school-register', async (req,res)=>{
+  const schoolName=String(req.body?.schoolName||'').trim().slice(0,160);
+  const email=String(req.body?.email||'').trim().toLowerCase();
+  const password=String(req.body?.password||'');
+  const phone=String(req.body?.phone||'').trim().slice(0,40);
+  if(!schoolName)return res.status(400).json({error:'School name is required.'});
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return res.status(400).json({error:'Please enter a valid school administrator email address.'});
+  if(password.length<8)return res.status(400).json({error:'Password must be at least 8 characters long.'});
+  try{
+    const existing=await findUser(email);
+    if(existing)return res.status(409).json({error:'An account with that email already exists. Please use School Sign In instead.'});
+    if(!db||!databaseReady)return res.status(503).json({error:'The school database is not ready. Please try again shortly.'});
+    const plan=await db.query(`SELECT plan_key,price_monthly FROM subscription_plans WHERE plan_key='school_starter' AND audience='school' AND active=true LIMIT 1`);
+    const planKey=plan.rowCount?plan.rows[0].plan_key:'school_starter';
+    const amount=plan.rowCount?Number(plan.rows[0].price_monthly||0):0;
+    const schoolId='SCH-'+Date.now().toString(36).toUpperCase()+'-'+Math.random().toString(36).slice(2,7).toUpperCase();
+    const subId='SUB-'+Date.now().toString(36).toUpperCase()+'-'+Math.random().toString(36).slice(2,7).toUpperCase();
+    const passwordHash=hashPassword(password);
+    const user={email,role:'school'};
+    await db.query('BEGIN');
+    try{
+      await db.query(`INSERT INTO users(email,role,password_hash) VALUES($1,'school',$2)`,[email,passwordHash]);
+      await db.query(`INSERT INTO schools(school_id,school_name,contact_email,contact_phone,status,created_by) VALUES($1,$2,$3,$4,'active',$3)`,[schoolId,schoolName,email,phone]);
+      await db.query(`INSERT INTO school_memberships(school_id,user_email,member_role,status) VALUES($1,$2,'admin','active')`,[schoolId,email]);
+      await db.query(`INSERT INTO subscriptions(subscription_id,school_id,plan_key,status,billing_cycle,amount) VALUES($1,$2,$3,'requested','monthly',$4)`,[subId,schoolId,planKey,amount]);
+      await db.query('COMMIT');
+    }catch(e){await db.query('ROLLBACK');throw e}
+    setSessionCookie(res,user);
+    void audit({user},'school_register','school',schoolId,{schoolName});
+    void createNotification(email,'Welcome to Tusome EduShelf School','Your school administrator account and school workspace are ready.','success');
+    res.status(201).json({ok:true,user,school:{schoolId,schoolName},message:'School account created successfully.'});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not create the school account.'})}
+});
+
 app.post('/api/auth/login', async (req, res) => {
   const { email, password, role } = req.body || {};
   const user = await findUser(email);
   if (!user || !verifyPassword(password, user.passwordHash)) return res.status(401).json({ error: 'Invalid email or password.' });
-  if (!['learner', 'teacher', 'admin', 'parent'].includes(String(role)) || user.role !== role) return res.status(403).json({ error: 'The selected account type does not match this account.' });
+  if (!['learner', 'teacher', 'admin', 'parent', 'school'].includes(String(role)) || user.role !== role) return res.status(403).json({ error: 'The selected account type does not match this account.' });
   setSessionCookie(res, user);
   void audit({user}, 'login', 'user', user.email);
   res.json({ ok: true, user: { email: user.email, role: user.role } });

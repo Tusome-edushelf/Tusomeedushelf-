@@ -107,6 +107,8 @@ body.a11y-reduced-motion *,body.a11y-reduced-motion *::before,body.a11y-reduced-
 .school-dashboard-list{margin:0;padding:0;list-style:none}.school-dashboard-list li{padding:11px 0;border-bottom:1px solid #e8edf3}.school-dashboard-list li:last-child{border-bottom:0}
 @media(max-width:900px){.school-module-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.school-content-columns{grid-template-columns:1fr}}
 @media(max-width:520px){.school-module-grid{grid-template-columns:1fr}}
+
+.school-auth-gate{background:linear-gradient(135deg,#f7fbff,#ffffff);border:2px solid #d8e6f7}.school-auth-actions{display:flex;gap:12px;flex-wrap:wrap}.school-auth-gate form{max-width:620px}.school-auth-gate .auth-switch{margin-top:12px}
 </style>
 </style>
 
@@ -745,7 +747,36 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
 <section id="schoolDashboard" class="page">
   <div class="topline"><div><h2>🏫 School Plan Dashboard</h2><p>Manage your school plan, school workspace, teachers, learners, classes and shared learning resources.</p></div><button class="btn" onclick="loadSchoolManagement()">↻ Refresh</button></div>
   <div class="notice"><b>School privacy:</b> Only authorised school members should access school records. Keep learner information to what the school needs for education and administration.</div>
-  <div class="card" style="margin-top:14px"><div class="topline" style="margin:0"><div><h3>💼 School Plan</h3><p id="schoolPlanStatus" class="small">Loading school plan status…</p></div><span id="schoolPlanBadge" class="tag">Checking…</span></div></div>
+  <div id="schoolAuthGate" class="card school-auth-gate" style="margin-top:14px;display:block">
+    <div class="topline" style="margin:0 0 14px"><div><h3>🏫 Access your School Dashboard</h3><p class="small">School administrators can sign in to an existing school account or create a new school account here.</p></div></div>
+    <div class="school-auth-actions">
+      <button class="btn primary" type="button" onclick="openSchoolSignIn()">🔐 School Sign In</button>
+      <button class="btn" type="button" onclick="openSchoolRegister()">➕ Create School Account</button>
+    </div>
+    <div id="schoolAuthMessage" class="small" style="margin-top:12px"></div>
+    <div id="schoolSignInBox" class="card" style="margin-top:14px;display:none;box-shadow:none;border:1px solid #dbe5f2">
+      <h3>🔐 School Sign In</h3>
+      <form onsubmit="schoolSignIn(event)">
+        <label>School administrator email<input id="schoolSignInEmail" type="email" required autocomplete="email" placeholder="school@example.com"></label>
+        <label>Password<input id="schoolSignInPassword" type="password" required autocomplete="current-password" placeholder="Your password"></label>
+        <button class="btn primary" type="submit">Sign In to School Dashboard</button>
+      </form>
+      <p class="auth-switch">Need a school account? <button type="button" onclick="openSchoolRegister()">Create School Account</button></p>
+    </div>
+    <div id="schoolRegisterBox" class="card" style="margin-top:14px;display:none;box-shadow:none;border:1px solid #dbe5f2">
+      <h3>➕ Create School Account</h3>
+      <p class="small">Create the school administrator account and school workspace in one step.</p>
+      <form onsubmit="schoolRegister(event)">
+        <label>School name<input id="schoolRegisterName" type="text" required maxlength="160" placeholder="e.g. Tusome Academy"></label>
+        <label>Administrator email<input id="schoolRegisterEmail" type="email" required maxlength="160" autocomplete="email" placeholder="admin@school.com"></label>
+        <label>Phone (optional)<input id="schoolRegisterPhone" type="tel" maxlength="40" autocomplete="tel" placeholder="07XXXXXXXX"></label>
+        <label>Password<input id="schoolRegisterPassword" type="password" required minlength="8" autocomplete="new-password" placeholder="At least 8 characters"></label>
+        <button class="btn primary" type="submit">Create School Account</button>
+      </form>
+      <p class="auth-switch">Already have a school account? <button type="button" onclick="openSchoolSignIn()">School Sign In</button></p>
+    </div>
+  </div>
+  <div id="schoolPlanCard" class="card" style="margin-top:14px"><div class="topline" style="margin:0"><div><h3>💼 School Plan</h3><p id="schoolPlanStatus" class="small">Loading school plan status…</p></div><span id="schoolPlanBadge" class="tag">Checking…</span></div></div>
   <div id="schoolControlCentre" class="card school-dashboard-overview" style="margin-top:14px;display:block!important;visibility:visible!important" aria-label="School Control Centre">
   <h3>🏫 School Control Centre</h3>
   <p class="small">These are the school functions available directly from your School Plan Dashboard.</p>
@@ -778,8 +809,8 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
       <div class="card" style="box-shadow:none;border:1px solid #e1e7f0"><h3>⚡ Quick Actions</h3><p class="small">Common school administrator tasks.</p><button class="btn primary" onclick="document.getElementById('schoolClassName')?.focus();document.getElementById('schoolWorkspace')?.scrollIntoView({behavior:'smooth'})">＋ Create Class</button><button class="btn" onclick="document.getElementById('schoolInviteEmail')?.focus();document.getElementById('schoolWorkspace')?.scrollIntoView({behavior:'smooth'})">＋ Add Teacher/Learner</button><button class="btn" onclick="show('communication')">📢 Publish Announcement</button><button class="btn" onclick="show('attendance')">✅ Open Attendance</button></div>
     </div>
   </div>
-  <div class="card" style="margin-top:14px"><label>School workspace<select id="schoolWorkspaceSelect" onchange="loadSelectedSchool()"><option value="">Loading school access...</option></select></label><p id="schoolAccessStatus" class="small" style="margin-top:8px"></p></div>
-  <div class="card" style="margin-top:14px;border:2px solid #dce7f7;background:#f8fbff;display:block!important;visibility:visible!important">
+  <div id="schoolWorkspaceCard" class="card" style="margin-top:14px"><label>School workspace<select id="schoolWorkspaceSelect" onchange="loadSelectedSchool()"><option value="">Loading school access...</option></select></label><p id="schoolAccessStatus" class="small" style="margin-top:8px"></p></div>
+  <div id="schoolGlanceCard" class="card" style="margin-top:14px;border:2px solid #dce7f7;background:#f8fbff;display:block!important;visibility:visible!important">
     <h3 style="margin-top:0;color:#173f8a">📌 School Dashboard at a Glance</h3>
     <div class="cards" style="margin-top:12px">
       <div class="card"><h3>👥 People</h3><p>Teachers, learners and parent/guardian links.</p></div>
@@ -2062,16 +2093,51 @@ configureAIAssistant(getSessionRole()||'learner');
 let schoolWorkspaces=[]; let selectedSchoolId='';
 async function openSchoolDashboard(skipHistory=false){
   const role=getSessionRole();
-  if(!role){show('login');return}
-  if(role==='admin'){showPageDirect('schoolDashboard',skipHistory);loadSchoolManagement();return}
+  showPageDirect('schoolDashboard',skipHistory);
+  if(!role){showSchoolAuthGate('Please sign in with a school administrator account or create a school account to continue.');return}
+  if(role==='admin'){hideSchoolAuthGate();loadSchoolManagement();return}
   try{
     const r=await fetch('/api/schools/mine',{credentials:'include'}),d=await r.json();
     if(!r.ok)throw new Error(d.error||'Could not verify school access.');
-    const isSchoolAdmin=(d.schools||[]).some(x=>x.memberRole==='admin');
-    if(!isSchoolAdmin){showToast?.('School Plan Dashboard is available only to school administrators.','error');return}
-    showPageDirect('schoolDashboard',skipHistory);loadSchoolManagement();
-  }catch(e){showToast?.(e.message,'error')}
+    const isSchoolAdmin=(d.schools||[]).some(x=>x.memberRole==='admin'&&x.status!=='suspended');
+    if(!isSchoolAdmin){showSchoolAuthGate('This dashboard is for school administrator accounts. Sign in with a school account or create one below.');return}
+    hideSchoolAuthGate();loadSchoolManagement();
+  }catch(e){showSchoolAuthGate(e.message||'Please sign in or create a school account.')}
 }
+function showSchoolAuthGate(message=''){
+  const gate=document.getElementById('schoolAuthGate');if(gate)gate.style.display='block';
+  ['schoolControlCentre','schoolManagementCentre','schoolPlanCard','schoolWorkspaceCard','schoolGlanceCard'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none'});
+  const msg=document.getElementById('schoolAuthMessage');if(msg)msg.textContent=message;
+}
+function hideSchoolAuthGate(){
+  const gate=document.getElementById('schoolAuthGate');if(gate)gate.style.display='none';
+  ['schoolControlCentre','schoolManagementCentre','schoolPlanCard','schoolWorkspaceCard','schoolGlanceCard'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='block'});
+}
+function openSchoolSignIn(){
+  document.getElementById('schoolSignInBox').style.display='block';document.getElementById('schoolRegisterBox').style.display='none';document.getElementById('schoolSignInEmail')?.focus();
+}
+function openSchoolRegister(){
+  document.getElementById('schoolRegisterBox').style.display='block';document.getElementById('schoolSignInBox').style.display='none';document.getElementById('schoolRegisterName')?.focus();
+}
+async function schoolSignIn(e){
+  e.preventDefault();const form=e.target,button=form.querySelector('button[type="submit"]');button.disabled=true;button.textContent='Signing in...';
+  try{
+    const email=document.getElementById('schoolSignInEmail').value.trim(),password=document.getElementById('schoolSignInPassword').value;
+    const r=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({email,password,role:'school'})});
+    const d=await r.json();if(!r.ok)throw new Error(d.error||'School sign in failed.');
+    setSessionRole(d.user.role,d.user.email);form.reset();hideSchoolAuthGate();showPageDirect('schoolDashboard',true);loadSchoolManagement();showToast?.('School sign in successful.','success');
+  }catch(err){showToast?.(err.message,'error')}finally{button.disabled=false;button.textContent='Sign In to School Dashboard'}
+}
+async function schoolRegister(e){
+  e.preventDefault();const form=e.target,button=form.querySelector('button[type="submit"]');button.disabled=true;button.textContent='Creating school account...';
+  try{
+    const body={schoolName:document.getElementById('schoolRegisterName').value.trim(),email:document.getElementById('schoolRegisterEmail').value.trim(),phone:document.getElementById('schoolRegisterPhone').value.trim(),password:document.getElementById('schoolRegisterPassword').value};
+    const r=await fetch('/api/auth/school-register',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(body)});
+    const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not create the school account.');
+    setSessionRole(d.user.role,d.user.email);form.reset();hideSchoolAuthGate();showPageDirect('schoolDashboard',true);loadSchoolManagement();showToast?.('School account created successfully.','success');
+  }catch(err){showToast?.(err.message,'error')}finally{button.disabled=false;button.textContent='Create School Account'}
+}
+
 function showPageDirect(id,skipHistory=false){
   const active=document.querySelector('.page.active');
   const current=active?.id;

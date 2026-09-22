@@ -183,7 +183,7 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
       <div class="home-feature-grid">
         <div class="home-feature teacher"><div class="icon">👩🏽‍🏫</div><h3>For Teachers</h3><p>Create lesson plans, find resources, manage classes and support learner progress.</p><button class="btn" onclick="show('teacher')">Teacher Dashboard →</button></div>
         <div class="home-feature learner"><div class="icon">🎓</div><h3>For Learners</h3><p>Access learning materials, complete activities, track progress and build achievements.</p><button class="btn" onclick="show('learner')">Learner Dashboard →</button></div>
-        <div class="home-feature school"><div class="icon">🏫</div><h3>For Schools</h3><p>Manage your school, teachers, learners, classes, attendance, timetable, fees, exams and communication.</p><button class="btn" onclick="show('schoolDashboard')">School Dashboard →</button></div>
+        <div class="home-feature school"><div class="icon">🏫</div><h3>For Schools</h3><p>Manage your school, teachers, learners, classes, attendance, timetable, fees, exams and communication.</p><button class="btn" onclick="openSchoolDashboard()">School Dashboard →</button></div>
         <div class="home-feature materials"><div class="icon">📖</div><h3>Learning Materials</h3><p>Access notes, exercises, past papers, videos and other approved digital resources.</p><button class="btn" onclick="show('digitalLibrary')">Explore Materials →</button></div>
       </div>
     </div>
@@ -747,6 +747,19 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
 <section id="schoolDashboard" class="page">
   <div class="topline"><div><h2>🏫 School Plan Dashboard</h2><p>Manage your school plan, school workspace, teachers, learners, classes and shared learning resources.</p></div><button class="btn" onclick="loadSchoolManagement()">↻ Refresh</button></div>
   <div class="notice"><b>School privacy:</b> Only authorised school members should access school records. Keep learner information to what the school needs for education and administration.</div>
+  <div class="card" id="schoolAccessPanel" style="margin-top:14px;border:2px solid #1d4ed8;background:linear-gradient(135deg,#eff6ff,#ffffff);padding:22px">
+    <div class="topline" style="margin:0 0 14px"><div><h3 style="margin:0">🏫 School Account Access</h3><p class="small" style="margin-top:6px">Sign in to an existing school administrator account or create a new school account.</p></div></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px">
+      <div class="card" style="margin:0;box-shadow:none;border:1px solid #bfdbfe">
+        <h3>🔐 School Sign In</h3><p class="small">Already have a school account? Sign in and open your School Plan Dashboard.</p>
+        <button class="btn primary" type="button" onclick="openSchoolSignIn()">Sign In to School Dashboard →</button>
+      </div>
+      <div class="card" style="margin:0;box-shadow:none;border:1px solid #bfdbfe">
+        <h3>➕ Create School Account</h3><p class="small">New school? Create the administrator account and school workspace.</p>
+        <button class="btn" type="button" onclick="openSchoolRegister()">Create School Account →</button>
+      </div>
+    </div>
+  </div>
   <div id="schoolAuthGate" class="card school-auth-gate" style="margin-top:14px;display:block">
     <div class="topline" style="margin:0 0 14px"><div><h3>🏫 Access your School Dashboard</h3><p class="small">School administrators can sign in to an existing school account or create a new school account here.</p></div></div>
     <div class="school-auth-actions">

@@ -714,9 +714,7 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
     <button class="teacher-quick-card" onclick="document.getElementById('teacherUploadsSection')?.scrollIntoView({behavior:'smooth',block:'start'})"><span>📚</span><b>My Materials</b><small>Open your recent uploads.</small></button>
     <button class="teacher-quick-card" onclick="setTeacherFocusGoal()"><span>🎯</span><b>Teaching Goal</b><small id="teacherGoalQuick">Set your focus for this period.</small></button>
     <button class="teacher-quick-card" onclick="show('membership')"><span>👑</span><b>Teacher Plus</b><small>Premium teacher tools and features.</small></button>
-    <button class="teacher-quick-card" onclick="show('schoolManagement')"><span>🏫</span><b>School Management</b><small>Classes, members and shared resources.</small></button><button class="teacher-quick-card" onclick="show('fees')"><span>💰</span><b>School Fees</b><small>Fee charges, balances and payment records.</small></button>
-    <button class="teacher-quick-card" onclick="show('attendance')"><span>✅</span><b>Attendance</b><small>Mark today's class attendance.</small></button>
-    <button class="teacher-quick-card" onclick="show('digitalLibrary')"><span>📚</span><b>Digital Library</b><small>Curate useful digital resources.</small></button><button class="teacher-quick-card" onclick="show('timetable')"><span>🗓️</span><b>Timetable</b><small>View your school teaching schedule.</small></button>
+    <button class="teacher-quick-card" onclick="show('digitalLibrary')"><span>📚</span><b>Digital Library</b><small>Access approved digital learning resources.</small></button>
   </div>
   <div class="cards teacher-stats">
     <div class="card"><h3>📤 Uploaded</h3><p><b id="count">3</b> materials</p></div>
@@ -740,11 +738,21 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
 
 
 <section id="schoolManagement" class="page">
-  <div class="topline"><div><h2>🏫 School Management</h2><p>Manage an active school workspace, classes, teachers, learners and shared learning resources.</p></div><button class="btn" onclick="loadSchoolManagement()">↻ Refresh</button></div>
+  <div class="topline"><div><h2>🏫 School Plan Dashboard</h2><p>Manage your school, people, classes, learning, attendance, timetable, fees and communication from one place.</p></div><button class="btn" onclick="loadSchoolManagement()">↻ Refresh</button></div>
   <div class="notice"><b>School privacy:</b> Only authorised school members should access school records. Keep learner information to what the school needs for education and administration.</div>
   <div class="card" style="margin-top:14px"><label>School workspace<select id="schoolWorkspaceSelect" onchange="loadSelectedSchool()"><option value="">Loading school access...</option></select></label><p id="schoolAccessStatus" class="small" style="margin-top:8px"></p></div>
   <div id="schoolWorkspace" style="display:none">
     <div class="school-stat-grid" style="margin-top:16px"><div class="card"><h3>👥 Members</h3><p><b id="schoolMemberCount">0</b></p></div><div class="card"><h3>👩🏽‍🏫 Teachers</h3><p><b id="schoolTeacherCount">0</b></p></div><div class="card"><h3>🎓 Learners</h3><p><b id="schoolLearnerCount">0</b></p></div><div class="card"><h3>📚 Classes</h3><p><b id="schoolClassCount">0</b></p></div></div>
+    <div class="teacher-quick-grid" style="margin-top:18px" aria-label="School dashboard sections">
+      <button class="teacher-quick-card" onclick="document.getElementById('schoolWorkspace')?.scrollIntoView({behavior:'smooth',block:'start'})"><span>🏫</span><b>School Management</b><small>Classes, teachers, learners and parents.</small></button>
+      <button class="teacher-quick-card" onclick="show('attendance')"><span>✅</span><b>Attendance</b><small>School attendance records and registers.</small></button>
+      <button class="teacher-quick-card" onclick="show('timetable')"><span>🗓️</span><b>Timetable</b><small>Build, review and publish the school timetable.</small></button>
+      <button class="teacher-quick-card" onclick="show('fees')"><span>💰</span><b>School Fees</b><small>Charges, payments, balances and records.</small></button>
+      <button class="teacher-quick-card" onclick="show('exams')"><span>📝</span><b>Exams & Results</b><small>Assessments, gradebook and report cards.</small></button>
+      <button class="teacher-quick-card" onclick="show('communication')"><span>💬</span><b>Communication</b><small>School announcements and messages.</small></button>
+      <button class="teacher-quick-card" onclick="show('digitalLibrary')"><span>📚</span><b>Digital Library</b><small>School learning resources.</small></button>
+      <button class="teacher-quick-card" onclick="openAIAssistant('admin')"><span>🤖</span><b>School AI Support</b><small>Support school planning and analysis.</small></button>
+    </div>
     <div class="school-grid" style="margin-top:16px">
       <div class="card"><h3>🏷️ Create Class</h3><label>Class name<input id="schoolClassName" maxlength="100" placeholder="Grade 7 Blue"></label><label>Grade<input id="schoolClassGrade" maxlength="40" placeholder="Grade 7"></label><label>Stream<input id="schoolClassStream" maxlength="40" placeholder="Blue"></label><label>Teacher email (optional)<input id="schoolClassTeacher" type="email" maxlength="160" placeholder="teacher@example.com"></label><button class="btn primary" style="margin-top:10px" onclick="createSchoolClass()">Create Class</button></div>
       <div class="card"><h3>➕ Add Teacher / Learner</h3><label>Email<input id="schoolInviteEmail" type="email" maxlength="160" placeholder="person@example.com"></label><label>Role<select id="schoolInviteRole"><option value="teacher">Teacher</option><option value="learner">Learner</option></select></label><label>Class (optional)<select id="schoolInviteClass"><option value="">No class</option></select></label><button class="btn primary" style="margin-top:10px" onclick="inviteSchoolMember()">Add / Invite</button><p class="small" style="margin-top:8px">If the account already exists, access is added immediately. Otherwise an invitation is recorded for when the account is created.</p></div>
@@ -1695,7 +1703,7 @@ const AI_DASHBOARDS={
   parent:{title:'🤖 Parent / Guardian AI',description:'Simple study-support information focused only on learner progress and revision.',features:[['📈','Progress Summary','Explain recent learner progress in simple language.'],['📖','Revision Activities','Suggest age-appropriate revision activities.'],['📊','Performance Report','Explain performance information without making high-stakes decisions.'],['💡','Study Support','Suggest practical ways to support study at home.']]}
 };
 function configureAIAssistant(dashboard){
-  const cfg=AI_DASHBOARDS[dashboard]||AI_DASHBOARDS.learner;
+  const cfg=AI_DASHBOARDS[dashboard]||AI_DASHBOARDS.admin;
   document.getElementById('aiTitle').textContent=cfg.title;
   document.getElementById('aiDescription').textContent=cfg.description;
   const box=document.getElementById('aiFeatureCards');
@@ -1709,7 +1717,7 @@ function configureAIAssistant(dashboard){
     admin:[['admin_summary','Platform Activity Summary'],['moderation','Material Moderation Assistance'],['duplicate','Duplicate-Material Detection'],['admin_reports','Uploads, Users & Payments Report'],['approval_queue','Materials Waiting for Approval'],['answer','Admin Question / Analysis']],
     parent:[['parent_progress','Learner Progress Summary'],['parent_revision','Suggested Revision Activities'],['parent_report','Explain Performance Report'],['parent_study','Study-Support Suggestions']]
   };
-  const options=modeSets[dashboard]||modeSets.learner;
+  const options=modeSets[dashboard]||modeSets.admin;
   mode.innerHTML=options.map(o=>`<option value="${o[0]}">${o[1]}</option>`).join('');
   const labels=document.querySelectorAll('#ai form label');
   if(labels[0])labels[0].textContent=dashboard==='admin'?'Subject / Area':'Subject';

@@ -1,7 +1,10 @@
-# Tusome EduShelf v66 — School Plan Dashboard
+Tusome EduShelf v67 — School Home Access Fix
 
-This version makes the School Plan Dashboard contents persistently visible in the HTML so they do not disappear when a school API/data loader is delayed or fails.
+Changes:
+- Added a prominent “For Schools” card directly after the Learner card on the Home page.
+- School Dashboard button uses the existing school access/login flow.
+- Desktop home role cards use four columns; mobile remains one column through the existing responsive rules.
+- Preserved the v66 School Plan Dashboard content centre and all existing school functionality.
+- PostgreSQL, school authentication and M-PESA Daraja configuration are preserved.
 
-Visible dashboard sections include People, Classes, Attendance, Timetable, Fees, Exams & Results, Communication, Digital Library, School AI Support, School Management, parent/guardian links, assignments, gradebook and shared resources.
-
-Deploy both `index.html` and `server.mjs`, then restart/redeploy the Render service. Existing PostgreSQL and M-PESA Daraja configuration is preserved.
+Deploy both index.html and server.mjs, then restart/redeploy the Render service.

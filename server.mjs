@@ -696,10 +696,12 @@ async function initDatabase() {
   const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
   const learnerPassword = process.env.DEMO_LEARNER_PASSWORD || 'learner123';
   const teacherPassword = process.env.DEMO_TEACHER_PASSWORD || 'teacher123';
+  const schoolPassword = process.env.DEMO_SCHOOL_PASSWORD || 'school123';
   const seeds = [
     { email: adminEmail, role: 'admin', passwordHash: hashPassword(adminPassword, 'edushelf-admin-salt-v1') },
     { email: 'learner@edushelf.com', role: 'learner', passwordHash: hashPassword(learnerPassword, 'edushelf-learner-salt-v1') },
-    { email: 'teacher@edushelf.com', role: 'teacher', passwordHash: hashPassword(teacherPassword, 'edushelf-teacher-salt-v1') }
+    { email: 'teacher@edushelf.com', role: 'teacher', passwordHash: hashPassword(teacherPassword, 'edushelf-teacher-salt-v1') },
+    { email: 'school@edushelf.com', role: 'school', passwordHash: hashPassword(schoolPassword, 'edushelf-school-salt-v1') }
   ];
   for (const user of seeds) {
     await db.query(`
@@ -709,6 +711,24 @@ async function initDatabase() {
       SET role = EXCLUDED.role, password_hash = EXCLUDED.password_hash, updated_at = NOW()
     `, [user.email, user.role, user.passwordHash]);
   }
+
+  // Demo school account: separate School Portal login and workspace.
+  const demoSchoolId = 'SCH-DEMO-001';
+  await db.query(`
+    INSERT INTO schools(school_id,school_name,contact_email,status,created_by)
+    VALUES($1,'Tusome Demo Academy','school@edushelf.com','active','school@edushelf.com')
+    ON CONFLICT (school_id) DO UPDATE SET school_name=EXCLUDED.school_name,contact_email=EXCLUDED.contact_email,status='active'
+  `,[demoSchoolId]);
+  await db.query(`
+    INSERT INTO school_memberships(school_id,user_email,member_role,status)
+    VALUES($1,'school@edushelf.com','admin','active')
+    ON CONFLICT (school_id,user_email) DO UPDATE SET member_role='admin',status='active'
+  `,[demoSchoolId]);
+  await db.query(`
+    INSERT INTO subscriptions(subscription_id,user_email,school_id,plan_key,status,billing_cycle,amount,starts_at,ends_at)
+    VALUES('SCH-DEMO-SUB-001',NULL,$1,'school_starter','active','monthly',0,NOW(),NOW()+INTERVAL '30 days')
+    ON CONFLICT (subscription_id) DO UPDATE SET status='active',school_id=EXCLUDED.school_id,plan_key='school_starter',ends_at=EXCLUDED.ends_at
+  `,[demoSchoolId]);
 
   // One-time migration of the old JSON transaction file into PostgreSQL.
   const legacy = await readTx();

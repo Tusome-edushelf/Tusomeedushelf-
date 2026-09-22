@@ -142,7 +142,7 @@ async function initDatabase() {
     CREATE TABLE IF NOT EXISTS users (
       id BIGSERIAL PRIMARY KEY,
       email TEXT NOT NULL UNIQUE,
-      role TEXT NOT NULL CHECK (role IN ('learner','teacher','admin','parent','school')),
+      role TEXT NOT NULL CHECK (role IN ('learner','teacher','admin','parent')),
       password_hash TEXT NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -151,8 +151,6 @@ async function initDatabase() {
       notification_preferences JSONB NOT NULL DEFAULT '{"email":true,"platform":true}'::jsonb
     );
 
-    ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
-    ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('learner','teacher','admin','parent','school'));
     ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS notification_preferences JSONB NOT NULL DEFAULT '{"email":true,"platform":true}'::jsonb;
@@ -696,12 +694,10 @@ async function initDatabase() {
   const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
   const learnerPassword = process.env.DEMO_LEARNER_PASSWORD || 'learner123';
   const teacherPassword = process.env.DEMO_TEACHER_PASSWORD || 'teacher123';
-  const schoolPassword = process.env.DEMO_SCHOOL_PASSWORD || 'school123';
   const seeds = [
     { email: adminEmail, role: 'admin', passwordHash: hashPassword(adminPassword, 'edushelf-admin-salt-v1') },
     { email: 'learner@edushelf.com', role: 'learner', passwordHash: hashPassword(learnerPassword, 'edushelf-learner-salt-v1') },
-    { email: 'teacher@edushelf.com', role: 'teacher', passwordHash: hashPassword(teacherPassword, 'edushelf-teacher-salt-v1') },
-    { email: 'school@edushelf.com', role: 'school', passwordHash: hashPassword(schoolPassword, 'edushelf-school-salt-v1') }
+    { email: 'teacher@edushelf.com', role: 'teacher', passwordHash: hashPassword(teacherPassword, 'edushelf-teacher-salt-v1') }
   ];
   for (const user of seeds) {
     await db.query(`
@@ -711,17 +707,6 @@ async function initDatabase() {
       SET role = EXCLUDED.role, password_hash = EXCLUDED.password_hash, updated_at = NOW()
     `, [user.email, user.role, user.passwordHash]);
   }
-
-  // Demo school workspace/account. Safe to run on every startup.
-  await db.query(`INSERT INTO schools(school_id,school_name,contact_email,status,created_by)
-    VALUES('SCH-DEMO-001','Tusome Demo Academy','school@edushelf.com','active','school@edushelf.com')
-    ON CONFLICT(school_id) DO UPDATE SET school_name=EXCLUDED.school_name,contact_email=EXCLUDED.contact_email,status='active'`);
-  await db.query(`INSERT INTO school_memberships(school_id,user_email,member_role,status)
-    VALUES('SCH-DEMO-001','school@edushelf.com','admin','active')
-    ON CONFLICT(school_id,user_email) DO UPDATE SET member_role='admin',status='active'`);
-  await db.query(`INSERT INTO subscriptions(subscription_id,user_email,school_id,plan_key,status,billing_cycle,amount,starts_at,ends_at)
-    VALUES('SCH-DEMO-SUB-001','school@edushelf.com','SCH-DEMO-001','school_starter','active','monthly',0,NOW(),NOW()+INTERVAL '30 days')
-    ON CONFLICT(subscription_id) DO UPDATE SET status='active',school_id='SCH-DEMO-001',ends_at=NOW()+INTERVAL '30 days',updated_at=NOW()`);
 
   // One-time migration of the old JSON transaction file into PostgreSQL.
   const legacy = await readTx();
@@ -1214,36 +1199,6 @@ async function notifyAdmins(title, message, type='info') {
   try { const r=await db.query(`SELECT email FROM users WHERE role='admin'`); await Promise.all(r.rows.map(x=>createNotification(x.email,title,message,type))); } catch(e) { console.warn('Admin notification failed:',e.message); }
 }
 
-app.post('/api/auth/school-register', async (req,res)=>{
-  if(!databaseReady) return res.status(503).json({error:'School account creation requires the PostgreSQL database to be ready.'});
-  const schoolName=String(req.body?.schoolName||'').trim().slice(0,160);
-  const email=String(req.body?.email||'').trim().toLowerCase();
-  const password=String(req.body?.password||'');
-  const phone=String(req.body?.contactPhone||'').trim().slice(0,40);
-  const planKey=['school_starter','school_growth'].includes(String(req.body?.planKey))?String(req.body.planKey):'school_starter';
-  if(!schoolName) return res.status(400).json({error:'School name is required.'});
-  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({error:'Please enter a valid school email address.'});
-  if(password.length<8) return res.status(400).json({error:'Password must be at least 8 characters long.'});
-  try{
-    if(await findUser(email)) return res.status(409).json({error:'An account with that email already exists. Please use Sign In instead.'});
-    const p=await db.query(`SELECT plan_key FROM subscription_plans WHERE plan_key=$1 AND audience='school' AND active=true`,[planKey]);
-    if(!p.rowCount) return res.status(400).json({error:'Selected school plan is not available.'});
-    const schoolId='SCH-'+Date.now().toString(36).toUpperCase()+'-'+Math.random().toString(36).slice(2,7).toUpperCase();
-    const subId='SUB-'+Date.now().toString(36).toUpperCase()+'-'+Math.random().toString(36).slice(2,7).toUpperCase();
-    await db.query('BEGIN');
-    try{
-      await db.query(`INSERT INTO users(email,role,password_hash) VALUES($1,'school',$2)`,[email,hashPassword(password)]);
-      await db.query(`INSERT INTO schools(school_id,school_name,contact_email,contact_phone,status,created_by) VALUES($1,$2,$3,$4,'active',$3)`,[schoolId,schoolName,email,phone||null]);
-      await db.query(`INSERT INTO school_memberships(school_id,user_email,member_role,status) VALUES($1,$2,'admin','active')`,[schoolId,email]);
-      await db.query(`INSERT INTO subscriptions(subscription_id,user_email,school_id,plan_key,status,billing_cycle,amount,starts_at,ends_at) VALUES($1,$2,$3,$4,'active','monthly',0,NOW(),NOW()+INTERVAL '30 days')`,[subId,email,schoolId,planKey]);
-      await db.query('COMMIT');
-    }catch(e){await db.query('ROLLBACK');throw e;}
-    const user={email,role:'school'}; setSessionCookie(res,user);
-    void audit({user},'school_register','school',schoolId,{schoolName,planKey});
-    res.status(201).json({ok:true,user,school:{schoolId,schoolName,planKey,status:'active'}});
-  }catch(e){console.error('School registration failed:',e);res.status(500).json({error:e.message||'Could not create the school account.'});}
-});
-
 app.post('/api/auth/register', async (req, res) => {
   const { email, password, role } = req.body || {};
   const normalizedEmail = String(email || '').trim().toLowerCase();
@@ -1272,7 +1227,7 @@ app.post('/api/auth/login', async (req, res) => {
   const { email, password, role } = req.body || {};
   const user = await findUser(email);
   if (!user || !verifyPassword(password, user.passwordHash)) return res.status(401).json({ error: 'Invalid email or password.' });
-  if (!['learner', 'teacher', 'admin', 'parent', 'school'].includes(String(role)) || user.role !== role) return res.status(403).json({ error: 'The selected account type does not match this account.' });
+  if (!['learner', 'teacher', 'admin', 'parent'].includes(String(role)) || user.role !== role) return res.status(403).json({ error: 'The selected account type does not match this account.' });
   setSessionCookie(res, user);
   void audit({user}, 'login', 'user', user.email);
   res.json({ ok: true, user: { email: user.email, role: user.role } });

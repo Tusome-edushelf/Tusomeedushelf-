@@ -1,9 +1,7 @@
-Tusome EduShelf — v63 School Dashboard Content Transfer
+# Tusome EduShelf v64 — School Plan Dashboard Content Centre
 
-School-specific contents have been moved into the dedicated School Plan Dashboard.
+The School Plan Dashboard now visibly presents the school-management modules at the top of the dashboard, with direct access to Attendance, Timetable & Calendar, School Fees, Exams & Results, Communication, Digital Library and School AI Support. Existing school management, academic management, assignments, submissions, gradebook and shared-resource tools remain below in the school workspace.
 
-Teacher Dashboard now focuses on teaching work: uploads, Teacher AI, analytics, earnings, materials, teaching goals, Teacher Plus and general Digital Library access.
+Preserved: school authentication/role handling, PostgreSQL integration and M-PESA Daraja configuration.
 
-School Plan Dashboard contains: School Management, Attendance, Timetable, School Fees, Exams & Results, Communication, Digital Library and School AI Support.
-
-Deploy both server.mjs and index.html, then restart the Node service. Existing PostgreSQL and M-PESA Daraja configuration is preserved.
+Deploy both `index.html` and `server.mjs`, then restart the Node service.

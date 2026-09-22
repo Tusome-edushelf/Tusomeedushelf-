@@ -136,7 +136,7 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
   <div class="logo">Tusome <span>EduShelf</span></div>
   <nav>
     <button onclick="show('home')">Home</button>
-    <button class="nav-auth" onclick="show('help')">❓ Help</button><button id="notificationNav" class="nav-auth nav-notify" onclick="show('notifications')" aria-label="Notifications">🔔 <span id="notificationNavCount" class="notify-count" aria-live="polite">0</span></button><button class="nav-auth" onclick="show('account')">👤 Account</button><button class="nav-auth a11y-toggle" onclick="toggleAccessibilityPanel()" aria-expanded="false" aria-controls="accessibilityPanel">⚙️ Accessibility</button>
+    <button class="nav-auth" onclick="show('help')">❓ Help</button><button id="notificationNav" class="nav-auth nav-notify" onclick="show('notifications')" aria-label="Notifications">🔔 <span id="notificationNavCount" class="notify-count" aria-live="polite">0</span></button><button id="schoolDashboardNav" class="nav-auth" onclick="show('schoolDashboard')" style="display:none">🏫 School Dashboard</button><button class="nav-auth" onclick="show('account')">👤 Account</button><button class="nav-auth a11y-toggle" onclick="toggleAccessibilityPanel()" aria-expanded="false" aria-controls="accessibilityPanel">⚙️ Accessibility</button>
     <button class="nav-auth" onclick="show('login')">Sign In</button>
     <button class="nav-auth nav-signup" onclick="show('signup')">Sign Up</button>
   </nav>
@@ -705,7 +705,7 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
     <button class="teacher-quick-card" onclick="document.getElementById('teacherUploadsSection')?.scrollIntoView({behavior:'smooth',block:'start'})"><span>📚</span><b>My Materials</b><small>Open your recent uploads.</small></button>
     <button class="teacher-quick-card" onclick="setTeacherFocusGoal()"><span>🎯</span><b>Teaching Goal</b><small id="teacherGoalQuick">Set your focus for this period.</small></button>
     <button class="teacher-quick-card" onclick="show('membership')"><span>👑</span><b>Teacher Plus</b><small>Premium teacher tools and features.</small></button>
-    <button class="teacher-quick-card" onclick="show('schoolManagement')"><span>🏫</span><b>School Management</b><small>Classes, members and shared resources.</small></button><button class="teacher-quick-card" onclick="show('fees')"><span>💰</span><b>School Fees</b><small>Fee charges, balances and payment records.</small></button>
+    <button class="teacher-quick-card" onclick="show('fees')"><span>💰</span><b>School Fees</b><small>Fee charges, balances and payment records.</small></button>
     <button class="teacher-quick-card" onclick="show('attendance')"><span>✅</span><b>Attendance</b><small>Mark today's class attendance.</small></button>
     <button class="teacher-quick-card" onclick="show('digitalLibrary')"><span>📚</span><b>Digital Library</b><small>Curate useful digital resources.</small></button><button class="teacher-quick-card" onclick="show('timetable')"><span>🗓️</span><b>Timetable</b><small>View your school teaching schedule.</small></button>
   </div>
@@ -730,9 +730,10 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
 
 
 
-<section id="schoolManagement" class="page">
-  <div class="topline"><div><h2>🏫 School Management</h2><p>Manage an active school workspace, classes, teachers, learners and shared learning resources.</p></div><button class="btn" onclick="loadSchoolManagement()">↻ Refresh</button></div>
+<section id="schoolDashboard" class="page">
+  <div class="topline"><div><h2>🏫 School Plan Dashboard</h2><p>Manage your school plan, school workspace, teachers, learners, classes and shared learning resources.</p></div><button class="btn" onclick="loadSchoolManagement()">↻ Refresh</button></div>
   <div class="notice"><b>School privacy:</b> Only authorised school members should access school records. Keep learner information to what the school needs for education and administration.</div>
+  <div class="card" style="margin-top:14px"><div class="topline" style="margin:0"><div><h3>💼 School Plan</h3><p id="schoolPlanStatus" class="small">Loading school plan status…</p></div><span id="schoolPlanBadge" class="tag">Checking…</span></div></div>
   <div class="card" style="margin-top:14px"><label>School workspace<select id="schoolWorkspaceSelect" onchange="loadSelectedSchool()"><option value="">Loading school access...</option></select></label><p id="schoolAccessStatus" class="small" style="margin-top:8px"></p></div>
   <div id="schoolWorkspace" style="display:none">
     <div class="school-stat-grid" style="margin-top:16px"><div class="card"><h3>👥 Members</h3><p><b id="schoolMemberCount">0</b></p></div><div class="card"><h3>👩🏽‍🏫 Teachers</h3><p><b id="schoolTeacherCount">0</b></p></div><div class="card"><h3>🎓 Learners</h3><p><b id="schoolLearnerCount">0</b></p></div><div class="card"><h3>📚 Classes</h3><p><b id="schoolClassCount">0</b></p></div></div>
@@ -823,7 +824,7 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
 </section>
 
 <section id="attendance" class="page">
-  <div class="topline"><div><h2>📅 Attendance & School Calendar</h2><p>Track learner attendance and keep important school dates in one place.</p></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" onclick="loadAttendance()">↻ Refresh</button><button class="btn" onclick="show(getSessionRole()==='parent'?'parent':getSessionRole()==='learner'?'learner':'schoolManagement')">Back</button></div></div>
+  <div class="topline"><div><h2>📅 Attendance & School Calendar</h2><p>Track learner attendance and keep important school dates in one place.</p></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" onclick="loadAttendance()">↻ Refresh</button><button class="btn" onclick="show(getSessionRole()==='parent'?'parent':getSessionRole()==='learner'?'learner':'schoolDashboard')">Back</button></div></div>
   <div class="notice"><b>Attendance note:</b> Attendance records are school records. Teachers and authorised school administrators enter or correct attendance; learners and parents can view records relevant to them.</div>
   <div id="attendanceTeacherPanel" class="card" style="margin-top:16px;display:none">
     <div class="topline"><div><h3>✅ Daily Register</h3><p class="small">Choose a date, review your assigned class learners and save attendance.</p></div><label style="max-width:190px">Date<input id="attendanceDate" type="date" onchange="loadAttendanceRegister()"></label></div>
@@ -1001,7 +1002,7 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
   </div>
   <div class="command-grid">
     <div class="card"><h3>⚠️ Needs Attention</h3><div id="commandAttention"><span class="small">Loading...</span></div></div>
-    <div class="card"><h3>🧭 Platform Shortcuts</h3><ul class="command-list"><li><button class="btn" onclick="show('communication')">💬 Communication Centre</button></li><li><button class="btn" onclick="adminTab('analytics')">📊 Platform Analytics</button></li><li><button class="btn" onclick="adminTab('backups')">🛡️ Backup & Recovery</button></li><li><button class="btn" onclick="show('schoolManagement')">🏫 School Management</button></li><li><button class="btn" onclick="show('digitalLibrary')">📚 Digital Library</button></li><li><button class="btn" onclick="openAIAssistant('admin')">🤖 Administrator AI</button></li></ul></div>
+    <div class="card"><h3>🧭 Platform Shortcuts</h3><ul class="command-list"><li><button class="btn" onclick="show('communication')">💬 Communication Centre</button></li><li><button class="btn" onclick="adminTab('analytics')">📊 Platform Analytics</button></li><li><button class="btn" onclick="adminTab('backups')">🛡️ Backup & Recovery</button></li><li><button class="btn" onclick="show('schoolDashboard')">🏫 School Dashboard</button></li><li><button class="btn" onclick="show('digitalLibrary')">📚 Digital Library</button></li><li><button class="btn" onclick="openAIAssistant('admin')">🤖 Administrator AI</button></li></ul></div>
   </div>
   <div class="admin-tabs">
     <button class="btn primary" onclick="adminTab('command')">🏠 Command Centre</button>
@@ -1637,6 +1638,10 @@ function navigateBack(fallback='home'){
   show(previous||fallback,true);
 }
 function show(id,skipHistory=false){
+  if(id==='schoolDashboard'){
+    openSchoolDashboard(skipHistory);
+    return;
+  }
   const active=document.querySelector('.page.active');
   const current=active?.id;
   if(!skipHistory && current && current!==id && current!=='login'){
@@ -1644,7 +1649,7 @@ function show(id,skipHistory=false){
     appPageHistory.push(current);
     if(appPageHistory.length>12)appPageHistory.shift();
   }
-  const protectedRoles={learner:'learner',teacher:'teacher',admin:'admin',communication:'user',account:'user',reader:'learner',practice:'learner',discussions:'learner',portfolio:'learner',community:'learner',membership:'user',schoolManagement:'user',attendance:'user',exams:'user',fees:'user',timetable:'user',parent:'parent',digitalLibrary:'user'};
+  const protectedRoles={learner:'learner',teacher:'teacher',admin:'admin',communication:'user',account:'user',reader:'learner',practice:'learner',discussions:'learner',portfolio:'learner',community:'learner',membership:'user',schoolDashboard:'schoolAdmin',attendance:'user',exams:'user',fees:'user',timetable:'user',parent:'parent',digitalLibrary:'user'};
   if(protectedRoles[id]){
     const role=getSessionRole();
     if(!role){show('login');return}
@@ -1663,7 +1668,7 @@ function show(id,skipHistory=false){
   const el=document.getElementById(id);if(el)el.classList.add('active');
   if(id==='teacher'){loadServerMaterials().then(renderTeacher);loadTeacherEarnings();loadTeacherAnalytics()}
   if(id==='membership'){loadMembership()} if(id==='digitalLibrary'){loadDigitalLibrary()}
-  if(id==='schoolManagement'){loadSchoolManagement()} if(id==='timetable'){loadTimetable()} if(id==='attendance'){loadAttendance()} if(id==='exams'){loadExamsPage()} if(id==='fees'){loadFeesPage()}
+  if(id==='schoolDashboard'){loadSchoolManagement()} if(id==='timetable'){loadTimetable()} if(id==='attendance'){loadAttendance()} if(id==='exams'){loadExamsPage()} if(id==='fees'){loadFeesPage()}
   if(id==='learner'){loadLearnerAssignments();loadLearnerGradebook();loadLearnerPortfolio()}
   if(id==='portfolio')loadLearnerPortfolio();
   if(id==='community')loadCommunity();
@@ -1998,7 +2003,52 @@ async function setSchoolStatus(id,status){if(!confirm(`Set school status to ${st
 
 configureAIAssistant(getSessionRole()||'learner');
 let schoolWorkspaces=[]; let selectedSchoolId='';
-async function loadSchoolManagement(){const sel=document.getElementById('schoolWorkspaceSelect');if(!sel)return;try{const r=await fetch('/api/schools/mine',{credentials:'include'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load school access.');schoolWorkspaces=d.schools||[];sel.innerHTML=schoolWorkspaces.length?schoolWorkspaces.map(x=>`<option value="${escapeHtml(x.schoolId)}">${escapeHtml(x.schoolName)} — ${escapeHtml(x.memberRole)}</option>`).join(''):'<option value="">No active school workspace</option>';if(!schoolWorkspaces.length){document.getElementById('schoolWorkspace').style.display='none';document.getElementById('schoolAccessStatus').textContent='No active school workspace is available. Request one from Premium Membership or ask your school administrator to add your account.';return}selectedSchoolId=selectedSchoolId&&schoolWorkspaces.some(x=>x.schoolId===selectedSchoolId)?selectedSchoolId:schoolWorkspaces[0].schoolId;sel.value=selectedSchoolId;loadSelectedSchool()}catch(e){sel.innerHTML='<option value="">Unable to load</option>';showToast?.(e.message,'error')}}
+async function openSchoolDashboard(skipHistory=false){
+  const role=getSessionRole();
+  if(!role){show('login');return}
+  if(role==='admin'){showPageDirect('schoolDashboard',skipHistory);loadSchoolManagement();return}
+  try{
+    const r=await fetch('/api/schools/mine',{credentials:'include'}),d=await r.json();
+    if(!r.ok)throw new Error(d.error||'Could not verify school access.');
+    const isSchoolAdmin=(d.schools||[]).some(x=>x.memberRole==='admin');
+    if(!isSchoolAdmin){showToast?.('School Plan Dashboard is available only to school administrators.','error');return}
+    showPageDirect('schoolDashboard',skipHistory);loadSchoolManagement();
+  }catch(e){showToast?.(e.message,'error')}
+}
+function showPageDirect(id,skipHistory=false){
+  const active=document.querySelector('.page.active');
+  const current=active?.id;
+  if(!skipHistory && current && current!==id && current!=='login'){
+    appPageHistory=appPageHistory.filter(x=>x!==id);appPageHistory.push(current);if(appPageHistory.length>12)appPageHistory.shift();
+  }
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  const el=document.getElementById(id);if(el)el.classList.add('active');
+  refreshNotificationBadge();
+}
+async function updateSchoolDashboardNav(){
+  const btn=document.getElementById('schoolDashboardNav');if(!btn)return;
+  btn.style.display='none';
+  const role=getSessionRole();
+  if(!role)return;
+  if(role==='admin'){btn.style.display='inline-block';return}
+  try{const r=await fetch('/api/schools/mine',{credentials:'include'});if(!r.ok)return;const d=await r.json();if((d.schools||[]).some(x=>x.memberRole==='admin'))btn.style.display='inline-block';}catch(_e){}
+}
+
+async function loadSchoolPlanStatus(){
+  const status=document.getElementById('schoolPlanStatus'),badge=document.getElementById('schoolPlanBadge');
+  if(!status||!badge)return;
+  try{
+    const r=await fetch('/api/my/subscription',{credentials:'include'}),d=await r.json();
+    if(!r.ok)throw new Error(d.error||'Could not load school plan status.');
+    const schoolSubs=(d.subscriptions||[]).filter(x=>x.audience==='school'&&x.schoolId);
+    const current=schoolSubs.find(x=>['active','trial','requested','pending_payment'].includes(x.status));
+    if(!current){status.textContent='No school plan subscription is currently linked to this workspace.';badge.textContent='No plan';return}
+    status.textContent=`${current.name||current.planKey} · ${current.status}${current.endsAt?' · Ends '+new Date(current.endsAt).toLocaleDateString():''}`;
+    badge.textContent=current.status==='active'?'Active':current.status.replace('_',' ');
+  }catch(e){status.textContent=e.message;badge.textContent='Unavailable'}
+}
+
+async function loadSchoolManagement(){loadSchoolPlanStatus();const sel=document.getElementById('schoolWorkspaceSelect');if(!sel)return;try{const r=await fetch('/api/schools/mine',{credentials:'include'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load school access.');schoolWorkspaces=d.schools||[];sel.innerHTML=schoolWorkspaces.length?schoolWorkspaces.map(x=>`<option value="${escapeHtml(x.schoolId)}">${escapeHtml(x.schoolName)} — ${escapeHtml(x.memberRole)}</option>`).join(''):'<option value="">No active school workspace</option>';if(!schoolWorkspaces.length){document.getElementById('schoolWorkspace').style.display='none';document.getElementById('schoolAccessStatus').textContent='No active school workspace is available. Request one from Premium Membership or ask your school administrator to add your account.';return}selectedSchoolId=selectedSchoolId&&schoolWorkspaces.some(x=>x.schoolId===selectedSchoolId)?selectedSchoolId:schoolWorkspaces[0].schoolId;sel.value=selectedSchoolId;loadSelectedSchool()}catch(e){sel.innerHTML='<option value="">Unable to load</option>';showToast?.(e.message,'error')}}
 async function loadSelectedSchool(){const sel=document.getElementById('schoolWorkspaceSelect');selectedSchoolId=sel?.value||selectedSchoolId;if(!selectedSchoolId)return;try{const r=await fetch('/api/schools/dashboard?schoolId='+encodeURIComponent(selectedSchoolId),{credentials:'include'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load school dashboard.');document.getElementById('schoolWorkspace').style.display='block';document.getElementById('schoolAccessStatus').textContent=`${d.school.schoolName} · ${d.school.memberRole}`;document.getElementById('schoolMemberCount').textContent=d.counts.members;document.getElementById('schoolTeacherCount').textContent=d.counts.teachers;document.getElementById('schoolLearnerCount').textContent=d.counts.learners;document.getElementById('schoolClassCount').textContent=d.counts.classes;window.schoolData=d;renderSchoolManagement(d);loadAcademicManagement()}catch(e){document.getElementById('schoolWorkspace').style.display='none';showToast?.(e.message,'error')}}
 function renderSchoolManagement(d){const classes=d.classes||[],members=d.members||[],materials=d.materials||[];const cls=document.getElementById('schoolClassesTable');cls.innerHTML=classes.length?classes.map(c=>`<tr><td>${escapeHtml(c.className)}</td><td>${escapeHtml(c.grade||'—')}</td><td>${escapeHtml(c.stream||'—')}</td><td>${c.learnerCount||0}</td><td>${d.school.memberRole==='admin'||getSessionRole()==='admin'?`<button class="btn" onclick="deleteSchoolClass('${escapeHtml(c.classId)}')">Remove</button>`:'—'}</td></tr>`).join(''):'<tr><td colspan="5">No classes yet.</td></tr>';const mt=document.getElementById('schoolMembersTable');mt.innerHTML=members.length?members.map(m=>`<tr><td>${escapeHtml(m.email)}</td><td>${escapeHtml(m.memberRole)}</td><td>${escapeHtml(m.status)}</td><td>${(d.school.memberRole==='admin'||getSessionRole()==='admin')&&m.email!==getSessionUserEmail()?`<button class="btn" onclick="suspendSchoolMember('${encodeURIComponent(m.email)}')">Suspend</button>`:'—'}</td></tr>`).join(''):'<tr><td colspan="4">No members yet.</td></tr>';const cs=document.getElementById('schoolInviteClass');if(cs)cs.innerHTML='<option value="">No class</option>'+classes.map(c=>`<option value="${escapeHtml(c.classId)}">${escapeHtml(c.className)}</option>`).join('');const pls=document.getElementById('schoolParentLearner');if(pls){const learners=members.filter(m=>m.memberRole==='learner'&&m.status==='active');pls.innerHTML='<option value="">Select learner</option>'+learners.map(m=>`<option value="${escapeHtml(m.email)}">${escapeHtml(m.email)}</option>`).join('');}loadSchoolParentLinks();const rr=document.getElementById('schoolResources');rr.innerHTML=materials.length?materials.map(m=>`<div class="school-resource"><b>${escapeHtml(m.title)}</b><div class="small">${escapeHtml(m.subject||'')} · ${escapeHtml(m.grade||'')} · ${escapeHtml(m.teacherEmail||'')}</div><button class="btn" style="margin-top:6px" onclick="openMaterialById('${escapeHtml(m.id)}')">Open</button></div>`).join(''):'<div class="notice">No approved learning resources yet.</div>';}
 function getSessionUserEmail(){return sessionStorage.getItem('tusomeCurrentUser')||localStorage.getItem('tusomeCurrentUser')||''}
@@ -2048,7 +2098,7 @@ async function deleteSchoolClass(id){if(!confirm('Remove this class?'))return;tr
 async function inviteSchoolMember(){const body={schoolId:selectedSchoolId,email:document.getElementById('schoolInviteEmail').value.trim(),memberRole:document.getElementById('schoolInviteRole').value,classId:document.getElementById('schoolInviteClass').value||null};if(!body.email)return showToast?.('Enter an email address.','error');try{const r=await fetch('/api/schools/invites',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(body)});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not add member.');showToast?.(d.message||'Member invitation recorded.','success');document.getElementById('schoolInviteEmail').value='';loadSelectedSchool()}catch(e){showToast?.(e.message,'error')}}
 async function suspendSchoolMember(email){if(!confirm('Suspend this school member?'))return;try{const r=await fetch('/api/schools/members/'+email,{method:'DELETE',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({schoolId:selectedSchoolId})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not suspend member.');loadSelectedSchool()}catch(e){showToast?.(e.message,'error')}}
 
-(async()=>{await loadServerMaterials();if(getSessionRole()==='learner'){await loadServerPurchases();await loadLearnerActivity()}populateMaterialFilters();populateMaterialFilters();renderMaterials();renderTeacher();renderAdmin();refreshProgress();checkAIStatus();if(getSessionRole()==='learner'){loadMarketplace();loadMembership();loadDashboardPremiumTrial('learner');loadLearnerAssignments();loadLearnerGradebook()} if(getSessionRole()==='teacher'){loadMembership();loadDashboardPremiumTrial('teacher');loadSchoolManagement()} if(getSessionRole()==='admin'){loadAdminMemberships();loadSchoolManagement()} if(getSessionRole()==='parent'){loadParentChildren()}})();
+(async()=>{await loadServerMaterials();if(getSessionRole()==='learner'){await loadServerPurchases();await loadLearnerActivity()}populateMaterialFilters();populateMaterialFilters();renderMaterials();renderTeacher();renderAdmin();refreshProgress();checkAIStatus();if(getSessionRole()==='learner'){loadMarketplace();loadMembership();loadDashboardPremiumTrial('learner');loadLearnerAssignments();loadLearnerGradebook()} if(getSessionRole()==='teacher'){loadMembership();loadDashboardPremiumTrial('teacher')} if(getSessionRole()==='admin'){loadAdminMemberships();loadSchoolManagement()} if(getSessionRole()==='parent'){loadParentChildren()} updateSchoolDashboardNav()})();
 </script>
 <button id="communicationLaunch" class="btn primary communication-launch" onclick="openCommunicationCentre()" style="position:fixed;right:18px;bottom:18px;z-index:20;border-radius:24px">💬 Communication Centre</button>
 <script>

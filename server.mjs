@@ -2036,7 +2036,7 @@ app.post('/api/schools/request', requireRole('teacher','admin'), async (req,res)
     await db.query('BEGIN');
     try{
       await db.query(`INSERT INTO schools(school_id,school_name,contact_email,contact_phone,status,created_by) VALUES($1,$2,$3,$4,'pending',$5)`,[schoolId,schoolName,contactEmail,contactPhone,req.user.email]);
-      await db.query(`INSERT INTO school_memberships(school_id,user_email,member_role,status) VALUES($1,$2,$3,'active')`,[schoolId,req.user.email,req.user.role]);
+      await db.query(`INSERT INTO school_memberships(school_id,user_email,member_role,status) VALUES($1,$2,'admin','active')`,[schoolId,req.user.email]);
       await db.query(`INSERT INTO subscriptions(subscription_id,school_id,plan_key,status,billing_cycle,amount) VALUES($1,$2,$3,'requested','monthly',$4)`,[subId,schoolId,planKey,Number(p.rows[0].price_monthly)]);
       await db.query('COMMIT');
     }catch(e){await db.query('ROLLBACK');throw e}

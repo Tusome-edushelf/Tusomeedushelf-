@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
-app.use(express.json({ limit: '18mb' }));
+app.use(express.json({ limit: '30mb' }));
 
 const PORT = Number(process.env.PORT || 3000);
 const DATA_DIR = path.join(__dirname, 'data');
@@ -2903,7 +2903,7 @@ function tusomeAIHistory(history) {
   }).join('\n');
 }
 
-async function callSeparateTusomeAI({ prompt, thinkingLevel = 'medium', history = [], file }) {
+async function callSeparateTusomeAI({ prompt, thinkingLevel = 'medium', history = [], file, files = [] }) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('GEMINI_API_KEY is not configured on the server.');
 
@@ -2916,6 +2916,13 @@ async function callSeparateTusomeAI({ prompt, thinkingLevel = 'medium', history 
   const timeoutMs = Math.max(10000, Number(process.env.TUSOME_AI_TIMEOUT_MS || defaultTimeoutMs));
   const historyText = tusomeAIHistory(history);
   const parts = [];
+  const inputFiles = Array.isArray(files) && files.length ? files : (file ? [file] : []);
+  if (inputFiles.length > 5) throw new Error('You can attach up to 5 files per message.');
+  const totalUploadBytes = inputFiles.reduce((sum, item) => {
+    const raw = String(item?.data || '').replace(/^data:[^;]+;base64,/, '');
+    return sum + Math.floor(raw.length * 3 / 4);
+  }, 0);
+  if (totalUploadBytes > 20 * 1024 * 1024) throw new Error('Combined attachments must be 20 MB or smaller.');
 
   const system = `You are Tusome AI, a separate general-purpose AI assistant inside Tusome EduShelf.
 
@@ -2951,7 +2958,8 @@ THINKING LEVEL: ${level}
   parts.push({ text: system });
   if (historyText) parts.push({ text: `CONVERSATION HISTORY:\n${historyText}` });
 
-  if (file?.data && file?.mimeType) {
+  for (const file of inputFiles) {
+    if (!file?.data || !file?.mimeType) continue;
     const mime = String(file.mimeType).toLowerCase();
     const allowed = [
       'application/pdf', 'image/png', 'image/jpeg', 'image/webp',
@@ -2962,7 +2970,7 @@ THINKING LEVEL: ${level}
     const raw = String(file.data).replace(/^data:[^;]+;base64,/, '');
     const bytes = Math.floor(raw.length * 3 / 4);
     const maxBytes = 10 * 1024 * 1024;
-    if (bytes > maxBytes) throw new Error('The uploaded file is too large. Please keep it below 10 MB.');
+    if (bytes > maxBytes) throw new Error(`The file ${String(file.name || 'file')} is too large. Each file must be 10 MB or smaller.`);
     if (mime.startsWith('text/') || mime === 'application/json') {
       const decoded = Buffer.from(raw, 'base64').toString('utf8').slice(0, 120000);
       parts.push({ text: `UPLOADED FILE: ${String(file.name || 'file')}\n\n${decoded}` });
@@ -3056,7 +3064,8 @@ app.post('/api/tusome-ai/chat', async (req, res) => {
       prompt,
       thinkingLevel: req.body?.thinkingLevel,
       history: req.body?.history,
-      file: req.body?.file
+      file: req.body?.file,
+      files: req.body?.files
     });
     res.json({ ok: true, answer: result.answer, model: result.model, thinkingLevel: result.thinkingLevel });
   } catch (e) {

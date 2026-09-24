@@ -1,25 +1,13 @@
-# Separate Tusome AI addition
+# Tusome AI — Multi-File Handling Update
 
-This addition is designed to coexist with the existing EduShelf AI.
+Replace the current `tusome-ai.html` and `server.mjs` in the EduShelf GitHub repository with the files in this folder.
 
-## Files
-- `tusome-ai.html` — standalone Tusome AI interface.
-- `server.mjs` — EduShelf `server.mjs` with an isolated `/api/tusome-ai/chat` endpoint and `/tusome-ai` page route added. Existing `/api/ai` and `/api/home-ai` routes are preserved.
-
-## Render environment
-The new endpoint uses the existing `GEMINI_API_KEY` Render environment variable. Optional variables:
-- `TUSOME_AI_MODEL` (default: `gemini-3.8-flash`)
-- `TUSOME_AI_FALLBACK_MODELS` (default: `gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash`)
-- `TUSOME_AI_TIMEOUT_MS` (default: `45000`)
-- `TUSOME_AI_RATE_LIMIT` (default: `20` requests per 5 minutes per client IP)
-
-## URL
-After deployment, the new page is available at:
-`/tusome-ai`
-
-## Thinking modes
-- Fast = low
-- Balanced = medium
-- Deep = high
-
-These are sent to Gemini 3 through `generationConfig.thinkingConfig.thinkingLevel`.
+## Added
+- Multiple file selection in one message (up to 5 files).
+- Combined upload limit of 20 MB per message; individual file limit remains 10 MB.
+- Visible attachment chips with remove controls before sending.
+- Uploaded files are shown with the user message in chat history.
+- Previous conversation attachments are kept in browser IndexedDB and can be reused from the conversation history when available.
+- Clearing/deleting a chat removes its stored attachment data.
+- Server accepts the new `files` array while remaining compatible with the previous single `file` field.
+- Existing Fast / Balanced / Deep modes and math rendering remain intact.

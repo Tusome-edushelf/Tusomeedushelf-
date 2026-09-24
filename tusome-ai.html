@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111827">
+<title>Tusome AI · EduShelf</title>
+<style>
+:root{--bg:#0b1020;--panel:#111827;--panel2:#172033;--line:#263248;--text:#f8fafc;--muted:#9aa7bd;--accent:#7c5cff;--user:#263a67;--assistant:#172033;--danger:#ef4444;--ok:#22c55e}
+*{box-sizing:border-box}body{margin:0;background:linear-gradient(180deg,#090e1a,#0b1020 40%,#0b1020);color:var(--text);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;min-height:100vh}
+.app{max-width:980px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column}.top{position:sticky;top:0;z-index:10;background:rgba(9,14,26,.94);backdrop-filter:blur(14px);border-bottom:1px solid var(--line);padding:14px 16px}.brand{display:flex;align-items:center;gap:12px}.logo{width:42px;height:42px;border-radius:13px;background:linear-gradient(135deg,#7c5cff,#4f8cff);display:grid;place-items:center;font-size:22px;font-weight:800}.title{font-weight:800;font-size:18px}.sub{font-size:12px;color:var(--muted);margin-top:2px}.back{margin-left:auto;color:var(--muted);text-decoration:none;font-size:13px}.controls{padding:12px 16px;border-bottom:1px solid var(--line);background:rgba(17,24,39,.82)}.levels{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.level{border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:12px;padding:10px 8px;text-align:center;font-weight:700;cursor:pointer}.level small{display:block;color:var(--muted);font-weight:500;font-size:11px;margin-top:3px}.level.active{border-color:#8b7cff;background:#211c43;box-shadow:0 0 0 1px rgba(124,92,255,.2) inset}.hint{font-size:12px;color:var(--muted);margin:9px 2px 0}.chat{flex:1;padding:18px 16px 130px}.empty{border:1px dashed var(--line);background:rgba(17,24,39,.55);border-radius:18px;padding:28px 20px;text-align:center;margin:12px 0 18px}.empty h2{margin:0 0 8px;font-size:22px}.empty p{margin:0;color:var(--muted);line-height:1.55}.msg{display:flex;margin:0 0 14px}.msg.user{justify-content:flex-end}.bubble{max-width:min(86%,760px);border:1px solid var(--line);border-radius:17px;padding:12px 14px;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.55}.user .bubble{background:var(--user);border-color:#38558e;border-bottom-right-radius:5px}.assistant .bubble{background:var(--assistant);border-bottom-left-radius:5px}.meta{font-size:10px;color:var(--muted);margin:0 3px 5px}.compose{position:fixed;bottom:0;left:0;right:0;background:rgba(9,14,26,.96);backdrop-filter:blur(16px);border-top:1px solid var(--line);padding:10px 12px calc(10px + env(safe-area-inset-bottom));z-index:20}.compose-inner{max-width:980px;margin:auto}.row{display:flex;gap:8px;align-items:flex-end}.input{flex:1;min-height:46px;max-height:150px;resize:vertical;background:#0f172a;border:1px solid var(--line);border-radius:14px;color:var(--text);padding:12px;font:inherit;outline:none}.input:focus{border-color:#6d5be7}.send{border:0;border-radius:13px;background:var(--accent);color:white;font-weight:800;padding:13px 17px;min-height:46px;cursor:pointer}.send:disabled{opacity:.55;cursor:not-allowed}.tools{display:flex;align-items:center;gap:8px;margin-top:8px}.file{display:none}.filebtn,.clear{border:1px solid var(--line);background:#111827;color:var(--muted);border-radius:10px;padding:8px 10px;font-size:12px;cursor:pointer}.file-name{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}.status{font-size:11px;color:var(--muted);margin-left:auto}.status.ok{color:var(--ok)}.status.bad{color:var(--danger)}.typing{opacity:.75}.error{color:#fecaca}.notice{font-size:11px;color:var(--muted);padding-top:4px}@media(max-width:600px){.top{padding:12px}.chat{padding:14px 10px 135px}.controls{padding:10px}.levels{gap:6px}.level{padding:9px 5px;font-size:13px}.bubble{max-width:92%}.back{font-size:12px}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <div class="logo">✦</div>
+      <div><div class="title">Tusome AI</div><div class="sub">Separate general-purpose AI inside EduShelf</div></div>
+      <a class="back" href="/">← EduShelf</a>
+    </div>
+  </header>
+
+  <section class="controls">
+    <div class="levels" role="group" aria-label="Thinking level">
+      <button class="level" data-level="low">⚡ Fast<small>Low thinking · quicker</small></button>
+      <button class="level active" data-level="medium">⚖️ Balanced<small>Medium thinking · default</small></button>
+      <button class="level" data-level="high">🧠 Deep<small>High thinking · harder tasks</small></button>
+    </div>
+    <div class="hint" id="hint">Balanced thinking is selected for most questions. Use Deep for difficult maths, coding or multi-step reasoning.</div>
+  </section>
+
+  <main class="chat" id="chat">
+    <div class="empty" id="empty"><h2>How can I help?</h2><p>Ask a general question, solve a problem, write or debug code, explain a concept, analyze a file, or work through a difficult task.</p></div>
+  </main>
+</div>
+
+<div class="compose">
+  <div class="compose-inner">
+    <div class="row">
+      <textarea id="prompt" class="input" placeholder="Message Tusome AI…" rows="1"></textarea>
+      <button id="send" class="send">Send</button>
+    </div>
+    <div class="tools">
+      <label class="filebtn">📎 Upload file<input id="file" class="file" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.heic,.heif,.txt,.csv,.json,.md,application/pdf,image/*,text/plain,text/csv,application/json,text/markdown"></label>
+      <span id="fileName" class="file-name">No file selected</span>
+      <button id="clear" class="clear" type="button">Clear chat</button>
+      <span id="status" class="status">Checking AI…</span>
+    </div>
+    <div class="notice">Files are sent to the separate Tusome AI endpoint for the current request. Keep uploads under 10 MB.</div>
+  </div>
+</div>
+
+<script>
+const state={level:'medium',history:[],busy:false,file:null};
+const chat=document.getElementById('chat'),empty=document.getElementById('empty'),prompt=document.getElementById('prompt'),send=document.getElementById('send'),fileInput=document.getElementById('file'),fileName=document.getElementById('fileName'),status=document.getElementById('status'),hint=document.getElementById('hint');
+const hints={low:'Fast mode limits thinking to reduce latency and cost. Good for simple questions, drafting and quick explanations.',medium:'Balanced thinking is selected for most questions. Use Deep for difficult maths, coding or multi-step reasoning.',high:'Deep mode gives Gemini more reasoning allowance. It can take longer, but is intended for harder problems.'};
+
+document.querySelectorAll('.level').forEach(btn=>btn.addEventListener('click',()=>{state.level=btn.dataset.level;document.querySelectorAll('.level').forEach(x=>x.classList.toggle('active',x===btn));hint.textContent=hints[state.level]}));
+function esc(v){return String(v??'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]))}
+function addMessage(role,text,label){if(empty)empty.remove();const wrap=document.createElement('div');wrap.className='msg '+role;const box=document.createElement('div');box.className='bubble';if(label){const meta=document.createElement('div');meta.className='meta';meta.textContent=label;wrap.appendChild(meta)}box.textContent=text;wrap.appendChild(box);chat.appendChild(wrap);chat.scrollTop=chat.scrollHeight;return box}
+function setStatus(text,kind=''){status.textContent=text;status.className='status '+kind}
+async function readFile(file){if(!file)return null;if(file.size>10*1024*1024)throw new Error('Please keep the uploaded file below 10 MB.');const data=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=()=>reject(new Error('Could not read the selected file.'));r.readAsDataURL(file)});return{name:file.name,mimeType:file.type||'application/octet-stream',data}}
+fileInput.addEventListener('change',()=>{state.file=fileInput.files?.[0]||null;fileName.textContent=state.file?state.file.name:'No file selected'});
+document.getElementById('clear').addEventListener('click',()=>{state.history=[];chat.innerHTML='';chat.appendChild(empty);setStatus('Ready','ok')});
+async function health(){try{const r=await fetch('/api/tusome-ai/health');const d=await r.json();if(d.configured)setStatus('AI connected','ok');else setStatus('API key not configured','bad')}catch{setStatus('Server unavailable','bad')}}
+async function sendMessage(){if(state.busy)return;const text=prompt.value.trim();if(!text&&!state.file)return;state.busy=true;send.disabled=true;prompt.disabled=true;const shown=text||'Analyze the uploaded file.';addMessage('user',shown);const pending=addMessage('assistant','Thinking…','Tusome AI');pending.classList.add('typing');try{const file=await readFile(state.file);const res=await fetch('/api/tusome-ai/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:text,thinkingLevel:state.level,history:state.history.slice(-12),file})});const data=await res.json();if(!res.ok)throw new Error(data.error||'Tusome AI request failed.');pending.classList.remove('typing');pending.textContent=data.answer||'No text response.';state.history.push({role:'user',text:shown},{role:'assistant',text:data.answer||''});state.history=state.history.slice(-12);setStatus((data.model||'Gemini')+' · '+data.thinkingLevel,'ok');prompt.value='';fileInput.value='';state.file=null;fileName.textContent='No file selected'}catch(e){pending.classList.remove('typing');pending.classList.add('error');pending.textContent='Sorry — Tusome AI could not respond.\n\n'+e.message;setStatus('Request failed','bad')}finally{state.busy=false;send.disabled=false;prompt.disabled=false;prompt.focus();}}
+send.addEventListener('click',sendMessage);prompt.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage()}});health();prompt.focus();
+</script>
+</body>
+</html>

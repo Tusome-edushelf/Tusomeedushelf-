@@ -962,7 +962,7 @@ async function callGemini({ subject, grade, mode, focus, prompt, file, questionF
 
   // Stable multimodal models that are currently listed by Google.
   const primaryModel = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
-  const fallbackModels = (process.env.GEMINI_FALLBACK_MODELS || 'gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash')
+  const fallbackModels = (process.env.GEMINI_FALLBACK_MODELS || 'gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash,gemini-3.5-flash-lite,gemini-2.5-flash')
     .split(',').map(x => x.trim()).filter(Boolean);
   const models = [...new Set([primaryModel, ...fallbackModels])];
 
@@ -2908,7 +2908,7 @@ async function callSeparateTusomeAI({ prompt, thinkingLevel = 'medium', history 
   if (!apiKey) throw new Error('GEMINI_API_KEY is not configured on the server.');
 
   const primaryModel = process.env.TUSOME_AI_MODEL || process.env.GEMINI_MODEL || 'gemini-3.8-flash';
-  const fallbackModels = String(process.env.TUSOME_AI_FALLBACK_MODELS || process.env.GEMINI_FALLBACK_MODELS || 'gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash')
+  const fallbackModels = String(process.env.TUSOME_AI_FALLBACK_MODELS || process.env.GEMINI_FALLBACK_MODELS || 'gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash,gemini-3.5-flash-lite,gemini-2.5-flash')
     .split(',').map(x => x.trim()).filter(Boolean);
   const models = [...new Set([primaryModel, ...fallbackModels])];
   const level = tusomeAIThinkingLevel(thinkingLevel);
@@ -2979,7 +2979,9 @@ THINKING LEVEL: ${level}
           body: JSON.stringify({
             contents: [{ role: 'user', parts }],
             generationConfig: {
-              thinkingConfig: { thinkingLevel: level }
+              thinkingConfig: model.startsWith('gemini-2.5-')
+                ? { thinkingBudget: level === 'low' ? 1024 : level === 'medium' ? 8192 : 24576 }
+                : { thinkingLevel: level }
             }
           })
         });

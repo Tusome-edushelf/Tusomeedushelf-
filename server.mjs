@@ -2927,7 +2927,11 @@ Rules:
 - Answer the user's actual request directly.
 - Do not force school, CBC, KICD, CBE, grade, teacher, learner, or EduShelf context into unrelated questions.
 - For mathematics and logic, check every calculation and assumption before answering.
-- For mathematics, use a clean, school-friendly structure: **Given**, **Formula/Method**, **Substitution**, **Calculation**, **Answer**, and **Verification** when applicable. Put each meaningful calculation on its own line and keep arithmetic easy to follow. Do not compress several algebraic operations into an ambiguous line.
+- For mathematics, use a clean, school-friendly structure: **Given**, **Formula/Method**, **Substitution**, **Calculation**, **Answer**, and **Verification** when applicable. Put each meaningful calculation on its own line and keep arithmetic easy to follow.
+- IMPORTANT: Show the arithmetic working step-by-step, not just the final result. When a numerical expression has several operations, break it into intermediate lines in a natural order. For example, for 2 × 3.142 × 5 × 10, show: 2 × 3.142 × 5 × 10 → 6.284 × 5 × 10 → 31.42 × 10 → 314.2. Put each intermediate result on its own line.
+- Do not skip directly from substitution to the final answer when the calculation can be usefully worked out in intermediate steps. Never compress several arithmetic operations into one final line when showing working is requested.
+- For algebra, show each meaningful transformation on its own line (for example, simplify, transpose, divide, then state the result). For multi-step word problems, show the calculation for each quantity before combining them.
+- For mathematics, preserve exact values where practical and only round at the requested stage. State the rounding if used.
 - For numerical answers, always include the unit when one is given or clearly applicable.
 - Make the final answer unmistakable by placing it on its own line beginning with **Answer:**.
 - For multi-part questions, label each part clearly (for example **1.**, **2.**, **3.**) and finish each part with its answer.

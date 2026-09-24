@@ -1,12 +1,19 @@
-# Tusome AI Conversation Export Update
+# Tusome AI — Study Mode Update
 
-This update adds conversation export to the existing Tusome AI page while preserving chat history, multi-file handling, math rendering, and Fast/Balanced/Deep modes.
+This update adds a Study Mode toggle to the existing Tusome AI page.
 
 ## Features
-- PDF export: opens a print-ready conversation in a new tab/window; choose **Save as PDF** in the browser print dialog.
-- Word export: downloads a `.doc` file that opens in Microsoft Word and compatible word processors.
-- Exports the current conversation only, including user/AI messages and attachment names.
-- Uses the existing client-side chat history; no API key or server changes are required.
+- 🎓 Study Mode toggle
+- Guided, step-by-step tutoring instead of immediately giving full answers
+- Hints and check-for-understanding questions
+- Works with Fast / Balanced / Deep
+- Works with uploaded files and multi-file conversations
+- Preserves chat history and export features
+- Existing EduShelf AI is untouched
 
-## Install
-Replace the existing `tusome-ai.html` in the EduShelf GitHub repository with the supplied file, commit, and let Render deploy.
+## Files to upload
+Replace these files in the GitHub EduShelf repository:
+- `tusome-ai.html`
+- `server.mjs`
+
+No API key changes are required.

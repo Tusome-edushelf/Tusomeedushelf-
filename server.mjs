@@ -2912,7 +2912,8 @@ async function callSeparateTusomeAI({ prompt, thinkingLevel = 'medium', history 
     .split(',').map(x => x.trim()).filter(Boolean);
   const models = [...new Set([primaryModel, ...fallbackModels])];
   const level = tusomeAIThinkingLevel(thinkingLevel);
-  const timeoutMs = Math.max(10000, Number(process.env.TUSOME_AI_TIMEOUT_MS || 45000));
+  const defaultTimeoutMs = level === 'high' ? 90000 : 45000;
+  const timeoutMs = Math.max(10000, Number(process.env.TUSOME_AI_TIMEOUT_MS || defaultTimeoutMs));
   const historyText = tusomeAIHistory(history);
   const parts = [];
 
@@ -3008,7 +3009,8 @@ THINKING LEVEL: ${level}
     } catch (err) {
       lastError = err;
       if (err?.name === 'AbortError') {
-        throw new Error(`Tusome AI did not respond within ${Math.round(timeoutMs / 1000)} seconds. Please try again or choose Fast.`);
+        lastError = new Error(`Model ${model} timed out after ${Math.round(timeoutMs / 1000)} seconds.`);
+        continue;
       }
       const transient = transientStatuses.has(Number(err?.status || 0)) || /high demand|temporarily|unavailable|overloaded|rate limit|resource exhausted/i.test(err?.message || '');
       if (!transient) throw err;

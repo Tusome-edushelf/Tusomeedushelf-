@@ -2993,8 +2993,14 @@ THINKING LEVEL: ${level}
       catch { throw new Error(`Gemini returned a non-JSON response (${response.status}).`); }
 
       if (!response.ok) {
-        const err = new Error(data?.error?.message || `Gemini request failed (${response.status}).`);
+        const apiCode = data?.error?.code ?? null;
+        const apiStatus = data?.error?.status ?? null;
+        const apiMessage = data?.error?.message || `Gemini request failed (${response.status}).`;
+        console.error(`[Tusome AI][Gemini] model=${model} http=${response.status} status=${apiStatus || 'n/a'} code=${apiCode ?? 'n/a'} message=${String(apiMessage).slice(0, 1200)}`);
+        const err = new Error(apiMessage);
         err.status = response.status;
+        err.apiCode = apiCode;
+        err.apiStatus = apiStatus;
         throw err;
       }
 
@@ -3009,6 +3015,7 @@ THINKING LEVEL: ${level}
     } catch (err) {
       lastError = err;
       if (err?.name === 'AbortError') {
+        console.error(`[Tusome AI][Gemini] model=${model} timeout_ms=${timeoutMs}`);
         lastError = new Error(`Model ${model} timed out after ${Math.round(timeoutMs / 1000)} seconds.`);
         continue;
       }

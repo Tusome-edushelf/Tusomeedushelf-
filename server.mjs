@@ -2908,9 +2908,9 @@ async function callSeparateTusomeAI({ prompt, thinkingLevel = 'medium', history 
   if (!apiKey) throw new Error('GEMINI_API_KEY is not configured on the server.');
 
   const primaryModel = process.env.TUSOME_AI_MODEL || process.env.GEMINI_MODEL || 'gemini-3.8-flash';
-  const fallbackModels = String(process.env.TUSOME_AI_FALLBACK_MODELS || process.env.GEMINI_FALLBACK_MODELS || 'gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash,gemini-3.5-flash-lite,gemini-2.5-flash')
+  const fallbackModels = String(process.env.TUSOME_AI_FALLBACK_MODELS || process.env.GEMINI_FALLBACK_MODELS || 'gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite')
     .split(',').map(x => x.trim()).filter(Boolean);
-  const models = [...new Set([primaryModel, ...fallbackModels])];
+  const models = [...new Set([primaryModel, ...fallbackModels])].filter(model => !['gemini-2.5-flash', 'gemini-2.5-flash-lite'].includes(model));
   const level = tusomeAIThinkingLevel(thinkingLevel);
   const defaultTimeoutMs = level === 'high' ? 90000 : 45000;
   const timeoutMs = Math.max(10000, Number(process.env.TUSOME_AI_TIMEOUT_MS || defaultTimeoutMs));
@@ -2979,9 +2979,7 @@ THINKING LEVEL: ${level}
           body: JSON.stringify({
             contents: [{ role: 'user', parts }],
             generationConfig: {
-              thinkingConfig: model.startsWith('gemini-2.5-')
-                ? { thinkingBudget: level === 'low' ? 1024 : level === 'medium' ? 8192 : 24576 }
-                : { thinkingLevel: level }
+              thinkingConfig: { thinkingLevel: level }
             }
           })
         });

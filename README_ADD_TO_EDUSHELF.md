@@ -1,13 +1,12 @@
-# Tusome AI — Multi-File Handling Update
+# Tusome AI Conversation Export Update
 
-Replace the current `tusome-ai.html` and `server.mjs` in the EduShelf GitHub repository with the files in this folder.
+This update adds conversation export to the existing Tusome AI page while preserving chat history, multi-file handling, math rendering, and Fast/Balanced/Deep modes.
 
-## Added
-- Multiple file selection in one message (up to 5 files).
-- Combined upload limit of 20 MB per message; individual file limit remains 10 MB.
-- Visible attachment chips with remove controls before sending.
-- Uploaded files are shown with the user message in chat history.
-- Previous conversation attachments are kept in browser IndexedDB and can be reused from the conversation history when available.
-- Clearing/deleting a chat removes its stored attachment data.
-- Server accepts the new `files` array while remaining compatible with the previous single `file` field.
-- Existing Fast / Balanced / Deep modes and math rendering remain intact.
+## Features
+- PDF export: opens a print-ready conversation in a new tab/window; choose **Save as PDF** in the browser print dialog.
+- Word export: downloads a `.doc` file that opens in Microsoft Word and compatible word processors.
+- Exports the current conversation only, including user/AI messages and attachment names.
+- Uses the existing client-side chat history; no API key or server changes are required.
+
+## Install
+Replace the existing `tusome-ai.html` in the EduShelf GitHub repository with the supplied file, commit, and let Render deploy.

@@ -150,6 +150,8 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
   <nav>
     <button onclick="show('home')">Home</button>
     <button class="nav-auth" onclick="show('help')">❓ Help</button><button id="notificationNav" class="nav-auth nav-notify" onclick="show('notifications')" aria-label="Notifications">🔔 <span id="notificationNavCount" class="notify-count" aria-live="polite">0</span></button><button id="schoolDashboardNav" class="nav-auth" onclick="show('schoolDashboard')" style="display:none">🏫 School Dashboard</button><button class="nav-auth" onclick="show('account')">👤 Account</button><button class="nav-auth a11y-toggle" onclick="toggleAccessibilityPanel()" aria-expanded="false" aria-controls="accessibilityPanel">⚙️ Accessibility</button>
+    <button class="nav-auth" type="button" onclick="openTusomeAI()">✨ Tusome AI</button>
+    <button class="nav-auth" type="button" onclick="show('notes')">📝 Notes Generator</button>
     <button class="nav-auth" onclick="show('login')">Sign In</button>
     <button class="nav-auth nav-signup" onclick="show('signup')">Sign Up</button>
   </nav>
@@ -565,44 +567,41 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
 </section>
 
 
-<section id="cbe" class="page">
+<section id="notes" class="page">
   <div class="topline">
-    <div><h2>🇰🇪 Kenya CBE Learning Guide</h2><p>EduShelf is designed to organize learning around Kenya's competency-based approach.</p></div>
-    <div>
-      <button class="btn primary" onclick="show('ai')">Use AI Assistant</button>
-      <button class="btn" onclick="show('curriculum');loadCurriculumCatalogue()">Browse Curriculum</button>
-    </div>
+    <div><h2>📝 CBE Notes Generator</h2><p>Create original study and teaching notes from your own topic, prompt or material.</p></div>
+    <button class="btn primary" type="button" onclick="openTusomeAI()">✨ Open Tusome AI</button>
   </div>
   <div class="notice">
-    <b>Important:</b> The live system should use the current KICD curriculum designs and approved materials as its authoritative curriculum source. Teachers and administrators should verify generated content against the relevant official curriculum design.
+    <b>How this works:</b> EduShelf generates original notes. It does not host or reproduce KICD curriculum designs, textbooks or KNEC papers. Use the official references below to verify curriculum alignment and terminology.
   </div>
   <div class="cards">
-    <div class="card"><h3>🎯 Learning Outcomes</h3><p>AI prompts learners toward what they should know, understand and demonstrate.</p></div>
-    <div class="card"><h3>🧠 Core Competencies</h3><p>Activities can support communication and collaboration, critical thinking and problem solving, creativity and imagination, citizenship, digital literacy, learning to learn and self-efficacy.</p></div>
-    <div class="card"><h3>🔎 Inquiry-Based Learning</h3><p>AI can generate key inquiry questions, examples, activities and reflection prompts.</p></div>
-    <div class="card"><h3>📊 Assessment</h3><p>Teachers can create formative questions, tasks, checklists and rubric-style practice aligned to the selected learning outcome.</p></div>
-    <div class="card"><h3>🌱 Values & PCIs</h3><p>Learning activities can identify relevant values and pertinent and contemporary issues where appropriate.</p></div>
-    <div class="card"><h3>🇰🇪 Kenyan Context</h3><p>Examples and activities can use appropriate Kenyan contexts while remaining relevant to the selected learning area.</p></div>
-  </div>
-</section>
-
-<section id="curriculum" class="page">
-  <div class="topline">
-    <div><h2>📚 KICD Curriculum Catalogue</h2><p>Browse the curriculum records currently imported into EduShelf.</p></div>
-    <button class="btn primary" onclick="loadCurriculumCatalogue()">Refresh</button>
-  </div>
-  <div class="card">
-    <div class="cards">
-      <div><card class="card"><label>Grade</label><select id="catGrade" onchange="loadCurriculumCatalogue()"><option value="">All grades</option><option>Grade 1</option><option>Grade 2</option><option>Grade 3</option><option>Grade 4</option><option>Grade 5</option><option>Grade 6</option><option>Grade 7</option><option>Grade 8</option><option>Grade 9</option><option>Grade 10</option><option>Grade 11</option><option>Grade 12</option></select></card>
-      <div class="card"><label>Learning Area</label><select id="catSubject" onchange="loadCurriculumCatalogue()"><option value="">All learning areas</option>
-        <option>Mathematics</option><option>English</option><option>Kiswahili</option><option>Integrated Science</option>
-        <option>Biology</option><option>Chemistry</option><option>Physics</option><option>Agriculture</option>
-        <option>Social Studies</option><option>Pre-Technical Studies</option><option>Creative Arts & Sports</option>
-        <option>Business Studies</option><option>Geography</option><option>History & Citizenship</option>
-        <option>Computer Studies</option><option>ICT</option><option>Home Science</option>
-      </select></div>
+    <div class="card">
+      <h3>📚 Generate Notes</h3>
+      <form id="notesForm" onsubmit="generateNotes(event)">
+        <label>Subject / Learning Area</label>
+        <select id="notesSubject"><option>Mathematics</option><option>English</option><option>Kiswahili</option><option>Integrated Science</option><option>Biology</option><option>Chemistry</option><option>Physics</option><option>Agriculture</option><option>Social Studies</option><option>Pre-Technical Studies</option><option>Creative Arts & Sports</option><option>Business Studies</option><option>Geography</option><option>History & Citizenship</option><option>Computer Studies</option><option>ICT</option><option>Home Science</option></select>
+        <label>Grade / Level</label>
+        <select id="notesGrade"><option>Grade 1</option><option>Grade 2</option><option>Grade 3</option><option>Grade 4</option><option>Grade 5</option><option>Grade 6</option><option>Grade 7</option><option>Grade 8</option><option>Grade 9</option><option>Grade 10</option><option>Grade 11</option><option>Grade 12</option></select>
+        <label>Topic</label>
+        <input id="notesTopic" required placeholder="e.g. Linear equations, photosynthesis, persuasive writing">
+        <label>What should the notes include?</label>
+        <textarea id="notesPrompt" rows="5" placeholder="Add key points, examples, revision questions, vocabulary, practical activities, or paste your own teacher notes."></textarea>
+        <label>Note style</label>
+        <select id="notesStyle"><option value="revision">Revision notes</option><option value="teacher">Teacher lesson notes</option><option value="learner">Learner-friendly notes</option><option value="exam">Exam preparation notes</option></select>
+        <button class="btn primary" type="submit">📝 Generate Notes</button>
+      </form>
+      <div id="notesResult" class="card" style="display:none;margin-top:16px"><h3>Generated Notes</h3><div id="notesAnswer" class="ai-answer"></div></div>
     </div>
-    <div id="curriculumCatalogue" style="margin-top:15px"><p>Choose a grade or refresh to load records.</p></div>
+    <div class="card">
+      <h3>🔗 Official Reference Sources</h3>
+      <p class="small">These links take you to official sources. EduShelf does not copy their documents into its library.</p>
+      <p><a href="https://kicd.ac.ke/cbc-materials/" target="_blank" rel="noopener noreferrer">KICD — CBC Materials</a></p>
+      <p><a href="https://kicd.ac.ke/cbc-materials/curriculum-designs/" target="_blank" rel="noopener noreferrer">KICD — Curriculum Designs</a></p>
+      <p><a href="https://kicd.ac.ke/media-centre/downloads/" target="_blank" rel="noopener noreferrer">KICD — Downloads & Standards</a></p>
+      <p><a href="https://www.knec.ac.ke/circular-on-accessing-kjsea-sample-paper/" target="_blank" rel="noopener noreferrer">KNEC — KJSEA Sample Paper Guidance</a></p>
+      <div class="notice" style="margin-top:14px"><b>Reference rule:</b> Generated notes are original study support. For exact official wording, current learning outcomes, assessment requirements or examination material, follow the official source and verify before use.</div>
+    </div>
   </div>
 </section>
 
@@ -684,6 +683,7 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
   <div class="notice"><b>Payment safety:</b> If you are under 18, use only a parent/guardian or other authorized adult's payment method with their permission. Never enter an M-PESA PIN into Tusome EduShelf.</div>
   <div class="card" style="margin-top:14px"><h3>📱 Membership payment number</h3><label>Authorized M-PESA number<input id="membershipPhone" inputmode="tel" autocomplete="tel" maxlength="16" placeholder="07XXXXXXXX"></label><p class="small">The server sends the M-PESA prompt to this number. Tusome EduShelf never asks for your M-PESA PIN.</p></div>
   <div id="membershipStatus" class="membership-status">Loading membership status…</div>
+  <div class="card" style="margin-top:14px"><div class="topline" style="margin:0"><div><h3>✨ Tusome AI Usage</h3><p class="small">Your separate Tusome AI allowance is enforced on the server and resets monthly.</p></div><button class="btn" type="button" onclick="loadTusomeAIEntitlement()">↻ Refresh</button></div><div id="tusomeAIEntitlementBox" class="small" style="margin-top:10px">Loading AI allowance…</div><button class="btn primary" type="button" style="margin-top:10px" onclick="openTusomeAI()">Open Tusome AI</button></div>
   <div class="membership-grid" id="membershipPlans" style="margin-top:18px"></div>
   <div class="card" style="margin-top:18px"><h3>🏫 School Plans</h3><p>Schools can request a school workspace with teacher and learner management, shared resources and analytics.</p><div class="school-panel"><label>School name<input id="schoolRequestName" maxlength="160" placeholder="School name"></label><label>Contact email<input id="schoolRequestEmail" type="email" maxlength="160" placeholder="school@example.com"></label><label>Contact phone (optional)<input id="schoolRequestPhone" maxlength="40" placeholder="Optional"></label><label>Plan<select id="schoolRequestPlan"><option value="school_starter">School Starter</option><option value="school_growth">School Growth</option></select></label></div><button class="btn primary" style="margin-top:12px" onclick="requestSchoolPlan()">Request School Plan</button><p class="small" style="margin-top:8px">A school plan request does not charge the account. An authorized administrator handles activation and payment arrangements.</p></div>
 </section>
@@ -1044,9 +1044,8 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
 
 <section id="digitalLibrary" class="page">
   <div class="digital-library-shell">
-    <div class="topline"><div><h2>📚 Digital Library & Resource Centre</h2><p>Find approved digital learning resources in one place — PDFs, notes, videos, links and other online study materials.</p></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" type="button" onclick="navigateBack('learner')">← Back</button><button class="btn primary" type="button" onclick="loadDigitalLibrary()">↻ Refresh</button><button class="btn" type="button" onclick="show('upload')">＋ Upload CBE/KJSEA Material</button></div></div>
+    <div class="topline"><div><h2>📚 Digital Library & Resource Centre</h2><p>Find approved digital learning resources in one place — PDFs, notes, videos, links and other online study materials.</p></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" type="button" onclick="navigateBack('learner')">← Back</button><button class="btn primary" type="button" onclick="loadDigitalLibrary()">↻ Refresh</button></div></div>
     <div class="digital-library-hero"><h3 style="margin-top:0">A digital-only learning shelf</h3><p style="margin-bottom:0">This centre does not track physical books, borrowing, returns or stock. It is for online resources only.</p></div>
-    <div class="digital-library-note"><b>🇰🇪 KICD / KNEC CBE & KJSEA Library</b><p style="margin:6px 0">Official source links are kept here so learners and teachers can reach KICD curriculum resources and KNEC KJSEA sample-paper guidance without copying material that Tusome EduShelf is not authorised to redistribute.</p><div id="cbeOfficialResources" class="digital-library-grid" style="margin-top:10px"></div></div>
     <div class="digital-library-kpis" aria-label="Digital library statistics">
       <div class="digital-library-kpi"><small>Total resources</small><b id="dlTotal">0</b></div>
       <div class="digital-library-kpi"><small>Online links</small><b id="dlLinks">0</b></div>
@@ -1152,6 +1151,8 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
 
   <div id="adminMemberships" class="admin-panel" style="display:none">
     <div class="cards"><div class="card"><h3>👑 Requests</h3><p><b id="adminSubRequests">0</b></p></div><div class="card"><h3>✅ Active Memberships</h3><p><b id="adminSubActive">0</b></p></div><div class="card"><h3>🏫 Schools</h3><p><b id="adminSchoolCount">0</b></p></div></div>
+    <div class="cards" style="margin-top:16px"><div class="card"><h3>✨ AI Requests This Month</h3><p><b id="adminAIRequests">0</b></p></div><div class="card"><h3>⚡ AI Units Used</h3><p><b id="adminAIUnits">0</b></p></div><div class="card"><h3>💰 AI Membership Revenue</h3><p><b id="adminAIRevenue">KES 0.00</b></p></div><div class="card"><h3>📊 AI Revenue Plans</h3><p id="adminAIPlans">Loading…</p></div></div>
+    <div class="card" style="margin-top:16px"><h3>✨ Tusome AI Usage by Plan</h3><div class="table-like"><table><thead><tr><th>Plan</th><th>Users/Scopes</th><th>Requests</th><th>Units</th></tr></thead><tbody id="adminAIUsageTable"><tr><td colspan="4">Loading…</td></tr></tbody></table></div></div>
     <div class="card" style="margin-top:16px"><h3>Membership Requests</h3><p class="small">Activate only after the organization's authorized payment/account checks are complete.</p><div class="table-like"><table><thead><tr><th>Date</th><th>Account/School</th><th>Plan</th><th>Amount</th><th>Status</th><th>Action</th></tr></thead><tbody id="adminSubscriptionsTable"></tbody></table></div></div>
     <div class="card" style="margin-top:16px"><h3>🏫 School Workspaces</h3><div class="table-like"><table><thead><tr><th>School</th><th>Contact</th><th>Members</th><th>Status</th><th>Action</th></tr></thead><tbody id="adminSchoolsTable"></tbody></table></div></div>
   </div>
@@ -1186,11 +1187,6 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
       <option>Computer Studies</option><option>ICT</option><option>Home Science</option>
     </select>
     <label>Class / Grade</label><select id="grade"><option>Grade 1</option><option>Grade 2</option><option>Grade 3</option><option>Grade 4</option><option>Grade 5</option><option>Grade 6</option><option>Grade 7</option><option>Grade 8</option><option>Grade 9</option><option>Grade 10</option><option>Grade 11</option><option>Grade 12</option></select>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div><label>Source authority</label><select id="sourceAuthority"><option>Teacher/School</option><option>KICD</option><option>KNEC</option><option>Tusome EduShelf</option></select></div><div><label>Material type</label><select id="materialType"><option value="teacher_resource">Teacher resource</option><option value="curriculum_design">Curriculum design</option><option value="approved_course_material">Approved course material</option><option value="approved_complementary">Approved complementary material</option><option value="kjsea_sample">KJSEA sample paper</option><option value="kjsea_past_paper">KJSEA past paper</option><option value="kjsea_rubric">KJSEA rubric / OMR</option><option value="practice_paper">Practice paper</option><option value="other">Other</option></select></div></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div><label>Academic year</label><input id="academicYear" maxlength="20" placeholder="e.g. 2025 / 2026"></div><div><label>CBE stage</label><input id="cbeStage" maxlength="60" placeholder="e.g. Junior School / Grade 9"></div></div>
-    <label>Official source URL (KICD/KNEC when applicable)</label><input id="officialSourceUrl" type="url" placeholder="https://kicd.ac.ke/... or https://www.knec.ac.ke/...">
-    <label>Rights / permission status</label><select id="rightsStatus"><option value="original_teacher_content">Original teacher content</option><option value="uploaded_with_permission">Uploaded with permission</option><option value="official_public_link">Official public link (keep source link)</option><option value="pending_review">Pending review</option></select>
-    <div class="notice" style="margin-top:6px">📌 For KICD/KNEC files, upload only material you are authorised to host. Otherwise keep the official source link in the library instead of copying the file.</div>
     <label>Strand / Sub-strand</label><input id="strand" placeholder="e.g. Algebra / Linear functions">
     <label>Topic</label><input id="topic" required placeholder="e.g. Linear Functions">
     <label>Core competency</label>
@@ -1246,7 +1242,7 @@ async function upload(e){
   button.disabled=true;button.textContent='Uploading...';
   try{
     const data=await toDataUrl();
-    const payload={title:document.getElementById('title').value.trim(),subject:document.getElementById('subject').value,grade:document.getElementById('grade').value,strand:document.getElementById('strand').value.trim(),competency:document.getElementById('competency').value,topic:document.getElementById('topic').value.trim(),price:Number(document.getElementById('price').value||0),description:document.getElementById('desc').value.trim(),sourceAuthority:document.getElementById('sourceAuthority').value,materialType:document.getElementById('materialType').value,academicYear:document.getElementById('academicYear').value.trim(),officialSourceUrl:document.getElementById('officialSourceUrl').value.trim(),rightsStatus:document.getElementById('rightsStatus').value,cbeStage:document.getElementById('cbeStage').value.trim(),file:{name:file.name,data,mimeType:file.type||'application/octet-stream'}};
+    const payload={title:document.getElementById('title').value.trim(),subject:document.getElementById('subject').value,grade:document.getElementById('grade').value,strand:document.getElementById('strand').value.trim(),competency:document.getElementById('competency').value,topic:document.getElementById('topic').value.trim(),price:Number(document.getElementById('price').value||0),description:document.getElementById('desc').value.trim(),file:{name:file.name,data,mimeType:file.type||'application/octet-stream'}};
     const r=await fetch('/api/materials',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(payload)});
     const raw=await r.text(); let d={}; try{d=JSON.parse(raw)}catch{}
     if(!r.ok)throw new Error(d.error||'The material could not be uploaded.');
@@ -1784,7 +1780,6 @@ function show(id,skipHistory=false){
   if(id==='notifications')renderNotifications(); else refreshNotificationBadge(); if(id==='account')loadAccountProfile();
   if(id==='progress')refreshProgress(); if(id==='parent')loadParentChildren();
   if(id==='payments')renderPayments();
-  if(id==='curriculum')loadCurriculumCatalogue();
   updatePublicUi();
   window.scrollTo(0,0);
 }
@@ -1869,34 +1864,6 @@ async function loadAccountProfile(){try{const r=await fetch('/api/account/profil
 async function saveAccountProfile(){try{const body={displayName:document.getElementById('accountDisplayName').value,avatarUrl:document.getElementById('accountAvatarUrl').value,notificationPreferences:{platform:document.getElementById('prefPlatform').checked,email:document.getElementById('prefEmail').checked}};const r=await fetch('/api/account/profile',{method:'PATCH',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(body)});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not save profile.');alert('Account settings saved.');loadAccountProfile()}catch(e){alert(e.message)}}
 async function changeAccountPassword(){const notice=document.getElementById('passwordNotice');try{const r=await fetch('/api/account/password',{method:'PATCH',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({currentPassword:document.getElementById('currentPassword').value,newPassword:document.getElementById('newPassword').value})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not change password.');notice.textContent='Password changed successfully.';showToast('Password changed successfully.','success');document.getElementById('currentPassword').value='';document.getElementById('newPassword').value='';}catch(e){notice.textContent=friendlyError(e,'Could not change your password.');showToast(notice.textContent,'error')}}
 async function askAI(e){e.preventDefault();const subject=document.getElementById('aiSubject').value,grade=document.getElementById('aiGrade').value,mode=document.getElementById('aiMode').value,focus=document.getElementById('cbeFocus').value,enteredPrompt=document.getElementById('aiPrompt').value.trim(),qFile=document.getElementById('aiQuestionFile')?.files?.[0],wFile=document.getElementById('aiWorkingFile')?.files?.[0],box=document.getElementById('aiResult'),answer=document.getElementById('aiAnswer'),button=e.target.querySelector('button[type="submit"]');const defaultPrompts={lesson:'Create a lesson plan for the selected subject and grade. Include objectives, learning activities, resources, differentiation and assessment.',scheme:'Create a structured scheme of work for the selected subject and grade, with sequence, topics, outcomes, activities, resources and assessment checkpoints.',assessment:'Create an assessment for the selected subject and grade with clear questions/tasks and marking guidance.',rubric:'Create a four-level rubric with observable criteria for the selected subject and grade.',differentiated:'Create differentiated activities for learners needing support, learners at expected level and learners ready for extension.',remediation:'Create remedial activities for likely learning gaps in the selected topic.',enrichment:'Create enrichment activities that deepen understanding of the selected topic.',admin_summary:'Summarize the current platform activity from the supplied dashboard data.',moderation:'Review the supplied material information for moderation concerns and items requiring human review.',duplicate:'Identify likely duplicate or highly similar materials from the supplied material list.',admin_reports:'Prepare a concise report on uploads, users and payments from the supplied dashboard data.',approval_queue:'Identify materials currently waiting for approval from the supplied dashboard data.',parent_progress:'Summarize the learner progress from the supplied progress data.',parent_revision:'Suggest revision activities based on the learner progress data.',parent_report:'Explain the learner performance information in simple language.',parent_study:'Suggest practical study-support ideas based on the learner progress data.'};const prompt=enteredPrompt||defaultPrompts[mode]||'';if(!prompt&&!qFile&&!wFile){alert('Enter a question or upload a question paper first.');return}if(mode==='mark'&&!qFile&&!wFile){alert('For Mark My Work, upload your question paper and/or your working.');return}button.disabled=true;button.textContent='⏳ Gemini is working...';answer.textContent='Gemini is preparing your response...';box.style.display='block';try{const readFile=async(file)=>{if(!file)return null;if(file.size>12*1024*1024)throw new Error('Please keep each uploaded file below 12 MB.');const dataUrl=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error('Could not read the selected file.'));reader.readAsDataURL(file)});return{name:file.name,mimeType:file.type,data:dataUrl}};const [questionFile,workingFile]=await Promise.all([readFile(qFile),readFile(wFile)]);const res=await fetch('/api/ai',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({subject,grade,mode,focus,prompt,file:questionFile,questionFile,workingFile,role:aiReturnDashboard,context:await buildAIContext(aiReturnDashboard,mode)})});const data=await res.json();if(!res.ok)throw new Error(data.error||'The Gemini service could not respond.');renderAIResponse(answer,data.answer);if(mode==='mark')saveMarkAttempt(subject,grade,prompt,data.answer);logActivity('Used Gemini AI Study Assistant: '+mode+' / '+subject+' / '+grade);logNotification('Gemini response generated for '+subject+' ('+grade+').');refreshProgress();renderNotifications()}catch(err){answer.textContent='Sorry, Gemini could not respond.\n\n'+err.message;checkAIStatus()}finally{button.disabled=false;button.textContent='✨ Ask AI'}}
-async function loadCurriculumCatalogue(){const box=document.getElementById('curriculumCatalogue');if(!box)return;box.textContent='Loading curriculum records...';try{const grade=document.getElementById('catGrade').value,subject=document.getElementById('catSubject').value;const r=await fetch('/api/curriculum?'+new URLSearchParams({grade,subject}));const data=await r.json();box.innerHTML=data.records.length?data.records.map(x=>`<div class="material"><div><b>${x.grade} • ${x.subject}</b><br><span class="tag">${x.strand}</span> <span class="tag">${x.substrand}</span><br><small>${(x.learningOutcomes||[]).join(' • ')||'Structure record — exact learning outcomes not yet imported for this entry.'}</small></div><span class="tag">${(x.learningOutcomes||[]).length} outcomes</span></div>`).join(''):'<p>No imported record matches this selection yet.</p>'}catch(e){box.textContent='Start the EduShelf server to load curriculum records.'}}
-document.getElementById('aiMode')?.addEventListener('change',()=>{const mode=document.getElementById('aiMode').value;const hint=document.getElementById('aiFileHint');if(hint){hint.innerHTML=mode==='mark'?'Upload the <b>question paper</b> in the first slot and <b>your working</b> in the second slot. Gemini will compare them and mark each step.':'Use the <b>Question Paper</b> slot for a paper you want Gemini to solve. The <b>Your Working</b> slot is for Mark My Work.';}});
-
-async function runGeneratedAI(subject,grade,mode,focus,prompt,resultBox,answerBox,extraContext=''){resultBox.style.display='block';answerBox.textContent='Generating...';try{const res=await fetch('/api/ai',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({subject,grade,mode,focus,prompt,role:aiReturnDashboard,context:extraContext})});const data=await res.json();if(!res.ok)throw new Error(data.error||'AI request failed.');renderAIResponse(answerBox,data.answer);logActivity('Generated '+mode+' / '+subject+' / '+grade);logNotification('New AI '+mode+' generated for '+subject+' ('+grade+').');refreshProgress()}catch(err){answerBox.textContent='Sorry, the AI service is unavailable.\n\n'+err.message}}
-function generateLesson(e){e.preventDefault();runGeneratedAI(document.getElementById('lessonSubject').value,document.getElementById('lessonGrade').value,'lesson','Learning Outcome / Strand / Sub-strand',`Create a ${document.getElementById('lessonDuration').value} lesson plan for ${document.getElementById('lessonStrand').value}. Topic/learning outcome: ${document.getElementById('lessonTopic').value}. Include objectives, key inquiry question, learning experiences, resources, competencies, values, PCIs, differentiation and assessment.`,document.getElementById('lessonResult'),document.getElementById('lessonAnswer'))}
-function generateAssessment(e){e.preventDefault();runGeneratedAI(document.getElementById('assessmentSubject').value,document.getElementById('assessmentGrade').value,'assessment','Assessment / Rubric',`Create a ${document.getElementById('assessmentType').value} assessment for ${document.getElementById('assessmentStrand').value}. Topic/outcome: ${document.getElementById('assessmentTopic').value}. Include instructions, tasks/questions, marking guidance and a 4-level rubric with observable criteria.`,document.getElementById('assessmentResult'),document.getElementById('assessmentAnswer'))}
-async function checkMaterialQuality(){
-  const file=document.getElementById('file')?.files?.[0];
-  const box=document.getElementById('materialQualityResult'),answer=document.getElementById('materialQualityAnswer');
-  if(!file){alert('Select the material file first.');return}
-  if(file.size>12*1024*1024){alert('Please keep the material below 12 MB.');return}
-  const allowed=['application/pdf','image/png','image/jpeg','image/webp','image/heic','image/heif'];
-  if(!allowed.includes(file.type)){answer.textContent='For the AI quality check, please use a PDF or supported image. You can still submit DOC/DOCX/PPT/PPTX for normal admin review.';box.style.display='block';return}
-  const data=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=()=>reject(new Error('Could not read the material.'));r.readAsDataURL(file)});
-  box.style.display='block';answer.textContent='Checking material quality...';
-  try{const res=await fetch('/api/ai',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({role:'teacher',mode:'material_quality',subject:document.getElementById('subject').value,grade:document.getElementById('grade').value,focus:document.getElementById('strand').value,prompt:`Review this proposed learning material before submission. Title: ${document.getElementById('title').value}. Topic: ${document.getElementById('topic').value}. Competency: ${document.getElementById('competency').value}. Description: ${document.getElementById('desc').value}`,file:{name:file.name,mimeType:file.type,data}})});const d=await res.json();if(!res.ok)throw new Error(d.error||'Quality check failed.');renderAIResponse(answer,d.answer);logActivity('Used AI material quality checker: '+document.getElementById('title').value)}catch(e){answer.textContent='Quality check failed.\n\n'+e.message}}
-function escHtml(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
-function getMarkAttempts(){try{return JSON.parse(localStorage.getItem('tusomeMarkAttempts')||'[]')}catch{return[]}}
-function saveMarkAttempt(subject,grade,prompt,answer){
-  const text=String(answer||''); if(!text)return;
-  const matches=[...text.matchAll(/(?:score|marks?|percentage|percent)\s*[:\-]?\s*(\d+(?:\.\d+)?)\s*(?:\/\s*(\d+(?:\.\d+)?))?\s*%?/ig)];
-  let score=null;
-  for(const m of matches){const a=Number(m[1]),b=m[2]?Number(m[2]):null;if(b&&b>0&&a<=b){score=Math.round(a/b*100);break}if(a>=0&&a<=100){score=Math.round(a);break}}
-  const q=[...text.matchAll(/(?:question|q(?:uestion)?\.?)\s*(\d+)/ig)].map(m=>Number(m[1])).filter(n=>n>0);
-  const attempts=getMarkAttempts();
-  attempts.unshift({id:Date.now(),subject,grade,topic:(prompt||'General').slice(0,90),score,questions:[...new Set(q)].length||1,time:new Date().toISOString(),key:`${subject}|${prompt||'General'}`});
-  localStorage.setItem('tusomeMarkAttempts',JSON.stringify(attempts.slice(0,100)));
-}
 function progressScoreClass(score){return score>=80?'score-good':score>=50?'score-mid':'score-low'}
 function formatAgo(iso){const d=new Date(iso),mins=Math.floor(Math.max(0,Date.now()-d.getTime())/60000);if(mins<1)return'Just now';if(mins<60)return mins+' min ago';const h=Math.floor(mins/60);if(h<24)return h+' hr ago';const days=Math.floor(h/24);return days+' day'+(days===1?'':'s')+' ago'}
 function refreshProgress(){
@@ -1920,13 +1887,79 @@ function refreshProgress(){
   const p=document.getElementById('progressActivity');if(p)p.innerHTML=logs.length?logs.slice(0,10).map(x=>`<div class="material"><div>📝 ${escHtml(x.action)}</div><small>${escHtml(x.time)}</small></div>`).join(''):'<p>No learning activity yet.</p>';
   const pa=document.getElementById('parentActivity');if(pa)pa.textContent=views+' material view(s) recorded.';const pai=document.getElementById('parentAI');if(pai)pai.textContent=ai+' AI-assisted study session(s) recorded.';const pp=document.getElementById('parentPractice');if(pp)pp.textContent=practice+' practice/assessment action(s) recorded.';
 }
+async function generateNotes(e){
+  e.preventDefault();
+  const subject=document.getElementById('notesSubject').value;
+  const grade=document.getElementById('notesGrade').value;
+  const topic=document.getElementById('notesTopic').value.trim();
+  const extra=document.getElementById('notesPrompt').value.trim();
+  const style=document.getElementById('notesStyle').value;
+  const box=document.getElementById('notesResult');
+  const answer=document.getElementById('notesAnswer');
+  const button=e.target.querySelector('button[type="submit"]');
+  if(!topic){return;}
+  button.disabled=true; button.textContent='⏳ Generating...'; box.style.display='block'; answer.textContent='Preparing original notes...';
+  const styleText={revision:'concise revision notes with key points, examples and self-check questions',teacher:'structured teacher notes with lesson flow, examples, learner activities and assessment ideas',learner:'simple learner-friendly notes with definitions, examples and quick checks',exam:'exam-preparation notes with key concepts, common errors, worked examples where appropriate and self-check questions'}[style]||'clear study notes';
+  const prompt=`Create original ${styleText} for ${subject}, ${grade}, on the topic: ${topic}. ${extra?`Use these user-provided instructions/material as the basis where relevant: ${extra}`:''} Do not reproduce or quote copyrighted textbooks, KICD curriculum designs, KNEC papers, publisher materials or other protected documents. Do not claim that the generated notes are an official KICD or KNEC document. If curriculum alignment is mentioned, describe it cautiously and tell the user to verify against the current official source. End with a short “Verification & References” section that points the user to the official KICD CBE materials page and, where relevant, KNEC official assessment guidance.`;
+  try{
+    const res=await fetch('/api/ai',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},credentials:'include',body:JSON.stringify({subject,grade,mode:'notes',focus:'Original CBE study notes',prompt,role:getSessionRole()||'learner'})});
+    const raw=await res.text(); let d; try{d=raw?JSON.parse(raw):{}}catch{throw new Error(/<!doctype html|<html/i.test(raw)?'The server returned an HTML page. Deploy the current server.mjs and restart Render.':'The notes service returned an invalid response.')}
+    if(!res.ok)throw new Error(d.error||`Could not generate notes (HTTP ${res.status}).`);
+    renderAIResponse(answer,d.answer||'No notes were generated.');
+  }catch(err){answer.textContent=err.message||'Could not generate notes.';showToast?.(err.message||'Could not generate notes.','error')}
+  finally{button.disabled=false;button.textContent='📝 Generate Notes';}
+}
+
+async function openTusomeAI(){
+  try{
+    const r=await fetch('/api/auth/me',{credentials:'include'});
+    if(!r.ok){show('login');showToast?.('Please sign in to use Tusome AI.','error');return;}
+    window.location.href='/tusome-ai.html';
+  }catch{show('login');showToast?.('Please sign in to use Tusome AI.','error')}
+}
+async function loadTusomeAIEntitlement(){
+  const box=document.getElementById('tusomeAIEntitlementBox'); if(!box)return;
+  try{
+    const r=await fetch('/api/tusome-ai/entitlement',{credentials:'include'}); const d=await r.json();
+    if(!r.ok)throw new Error(d.error||'Could not load AI allowance.');
+    const e=d.entitlement;
+    box.innerHTML=e.unlimited?'<b>Administrator access:</b> Unlimited internal Tusome AI usage.':`<b>${escHtml(e.planName)}</b> • ${e.remaining} / ${e.monthlyLimit} AI units remaining this month${e.scopeType==='school'?` • Shared school pool for ${e.memberCount} active member${e.memberCount===1?'':'s'}.`:''}`;
+  }catch(e){box.textContent=e.message||'Could not load AI allowance.'}
+}
+
+async function loadAdminAIRevenue(){
+  const set=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v};
+  const tb=document.getElementById('adminAIUsageTable');
+  try{
+    const r=await fetch('/api/admin/tusome-ai/revenue',{credentials:'include',headers:{'Accept':'application/json'}});
+    const raw=await r.text();
+    let d=null;
+    try{d=raw?JSON.parse(raw):null}catch{
+      if(/<!doctype html|<html[\s>]/i.test(raw)){
+        throw new Error('The Render server is still running the older server.mjs. Deploy the updated server.mjs and restart the service.');
+      }
+      throw new Error('The AI revenue endpoint returned an invalid response.');
+    }
+    if(!r.ok)throw new Error(d?.error||`Could not load AI revenue (HTTP ${r.status}).`);
+    set('adminAIRequests',Number(d.summary?.requests||0).toLocaleString());
+    set('adminAIUnits',Number(d.summary?.units||0).toLocaleString());
+    set('adminAIRevenue','KES '+Number(d.summary?.membershipRevenue||0).toFixed(2));
+    set('adminAIPlans',(d.planRevenue||[]).map(x=>`${x.planName}: KES ${Number(x.revenue||0).toFixed(0)}`).join(' • ')||'No paid AI membership revenue yet');
+    if(tb)tb.innerHTML=(d.usageByPlan||[]).length?(d.usageByPlan||[]).map(x=>`<tr><td>${escapeHtml(x.planName||x.planKey||'Free')}</td><td>${Number(x.scopes||0)}</td><td>${Number(x.requests||0)}</td><td>${Number(x.units||0)}</td></tr>`).join(''):'<tr><td colspan="4">No AI usage recorded this month.</td></tr>';
+  }catch(e){
+    set('adminAIPlans','Unavailable');
+    if(tb)tb.innerHTML=`<tr><td colspan="4">${escapeHtml(e.message||'Could not load AI usage.')}</td></tr>`;
+  }
+}
+
 async function restoreServerSession(){
   try{
     const r=await fetch('/api/auth/me',{credentials:'include'});
-    if(r.ok){const d=await r.json();setSessionRole(d.user.role,d.user.email);if(d.user.role==='learner')await loadServerPurchases()}
+    if(r.ok){const d=await r.json();setSessionRole(d.user.role,d.user.email);if(d.user.role==='learner')await loadServerPurchases();await loadTusomeAIEntitlement();if(d.user.role==='admin')await loadAdminAIRevenue()}
     else{sessionStorage.removeItem('tusomeLoggedIn');sessionStorage.removeItem('tusomeRole');sessionStorage.removeItem('tusomeCurrentUser')}
   }catch{}
   updatePublicUi();
+  const params=new URLSearchParams(location.search);if(params.get('openMembership')==='1'){show('membership');loadMembership();history.replaceState({},'',location.pathname)}
 }
 
 function getTeacherPrefs(){try{return JSON.parse(localStorage.getItem('tusomeTeacherDashboardPrefs')||'null')||{analytics:true,earnings:true,uploads:true,goal:true}}catch{return {analytics:true,earnings:true,uploads:true,goal:true}}}
@@ -2104,7 +2137,7 @@ async function pollMembershipPayment(checkoutRequestId){
 }
 async function requestMembership(planKey,billingCycle){return payMembership(planKey,billingCycle)}
 async function requestSchoolPlan(){const schoolName=document.getElementById('schoolRequestName')?.value.trim(),contactEmail=document.getElementById('schoolRequestEmail')?.value.trim(),contactPhone=document.getElementById('schoolRequestPhone')?.value.trim(),planKey=document.getElementById('schoolRequestPlan')?.value||'school_starter';if(!schoolName){showToast?.('Enter the school name.','error');return}if(!confirm('Submit this school plan request? It does not charge the account.'))return;try{const r=await fetch('/api/schools/request',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({schoolName,contactEmail,contactPhone,planKey})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Request failed.');showToast?.('School plan request submitted.','success');loadMembership()}catch(e){showToast?.(e.message,'error')}}
-async function loadAdminMemberships(){try{const r=await fetch('/api/admin/subscriptions',{credentials:'include'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load memberships.');const subs=d.subscriptions||[], schools=d.schools||[];document.getElementById('adminSubRequests').textContent=subs.filter(x=>['requested','pending_payment'].includes(x.status)).length;document.getElementById('adminSubActive').textContent=subs.filter(x=>x.status==='active').length;document.getElementById('adminSchoolCount').textContent=schools.length;const tb=document.getElementById('adminSubscriptionsTable');tb.innerHTML=subs.length?subs.map(x=>`<tr><td>${new Date(x.requestedAt).toLocaleString()}</td><td>${escapeHtml(x.schoolName||x.userEmail||'—')}</td><td>${escapeHtml(x.name||x.planKey)}</td><td>KES ${Number(x.amount||0).toFixed(2)}</td><td>${escapeHtml(x.status)}</td><td>${['requested','pending_payment'].includes(x.status)?`<button class="btn" onclick="setSubscriptionStatus('${escapeHtml(x.subscriptionId)}','active')">Activate 30d</button> <button class="btn" onclick="setSubscriptionStatus('${escapeHtml(x.subscriptionId)}','rejected')">Reject</button>`:'—'}</td></tr>`).join(''):'<tr><td colspan="6">No membership requests.</td></tr>';const sb=document.getElementById('adminSchoolsTable');sb.innerHTML=schools.length?schools.map(x=>`<tr><td>${escapeHtml(x.schoolName)}</td><td>${escapeHtml(x.contactEmail||'—')}<br>${escapeHtml(x.contactPhone||'')}</td><td>${x.memberCount}</td><td>${escapeHtml(x.status)}</td><td>${x.status==='pending'?`<button class="btn" onclick="setSchoolStatus('${escapeHtml(x.schoolId)}','active')">Activate</button>`:x.status==='active'?`<button class="btn" onclick="setSchoolStatus('${escapeHtml(x.schoolId)}','suspended')">Suspend</button>`:`<button class="btn" onclick="setSchoolStatus('${escapeHtml(x.schoolId)}','active')">Reactivate</button>`}</td></tr>`).join(''):'<tr><td colspan="5">No school requests.</td></tr>'}catch(e){showToast?.(e.message,'error')}}
+async function loadAdminMemberships(){loadAdminAIRevenue();try{const r=await fetch('/api/admin/subscriptions',{credentials:'include'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load memberships.');const subs=d.subscriptions||[], schools=d.schools||[];document.getElementById('adminSubRequests').textContent=subs.filter(x=>['requested','pending_payment'].includes(x.status)).length;document.getElementById('adminSubActive').textContent=subs.filter(x=>x.status==='active').length;document.getElementById('adminSchoolCount').textContent=schools.length;const tb=document.getElementById('adminSubscriptionsTable');tb.innerHTML=subs.length?subs.map(x=>`<tr><td>${new Date(x.requestedAt).toLocaleString()}</td><td>${escapeHtml(x.schoolName||x.userEmail||'—')}</td><td>${escapeHtml(x.name||x.planKey)}</td><td>KES ${Number(x.amount||0).toFixed(2)}</td><td>${escapeHtml(x.status)}</td><td>${['requested','pending_payment'].includes(x.status)?`<button class="btn" onclick="setSubscriptionStatus('${escapeHtml(x.subscriptionId)}','active')">Activate 30d</button> <button class="btn" onclick="setSubscriptionStatus('${escapeHtml(x.subscriptionId)}','rejected')">Reject</button>`:'—'}</td></tr>`).join(''):'<tr><td colspan="6">No membership requests.</td></tr>';const sb=document.getElementById('adminSchoolsTable');sb.innerHTML=schools.length?schools.map(x=>`<tr><td>${escapeHtml(x.schoolName)}</td><td>${escapeHtml(x.contactEmail||'—')}<br>${escapeHtml(x.contactPhone||'')}</td><td>${x.memberCount}</td><td>${escapeHtml(x.status)}</td><td>${x.status==='pending'?`<button class="btn" onclick="setSchoolStatus('${escapeHtml(x.schoolId)}','active')">Activate</button>`:x.status==='active'?`<button class="btn" onclick="setSchoolStatus('${escapeHtml(x.schoolId)}','suspended')">Suspend</button>`:`<button class="btn" onclick="setSchoolStatus('${escapeHtml(x.schoolId)}','active')">Reactivate</button>`}</td></tr>`).join(''):'<tr><td colspan="5">No school requests.</td></tr>'}catch(e){showToast?.(e.message,'error')}}
 async function setSubscriptionStatus(id,status){if(!confirm(status==='active'?'Activate this membership for 30 days?':`Set membership to ${status}?`))return;try{const r=await fetch('/api/admin/subscriptions/'+encodeURIComponent(id)+'/status',{method:'PATCH',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({status,days:30})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Update failed.');loadAdminMemberships()}catch(e){showToast?.(e.message,'error')}}
 async function setSchoolStatus(id,status){if(!confirm(`Set school status to ${status}?`))return;try{const r=await fetch('/api/admin/schools/'+encodeURIComponent(id)+'/status',{method:'PATCH',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({status})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Update failed.');loadAdminMemberships()}catch(e){showToast?.(e.message,'error')}}
 
@@ -2376,10 +2409,9 @@ async function loadDigitalLibrary(){
   const d=await r.json();
   if(!r.ok){showToast?.(d.error||'Could not load the digital library.','error');return}
   digitalLibraryResources=Array.isArray(d.resources)?d.resources:[];
-  try{const cr=await fetch('/api/cbe-library/catalog',{credentials:'include'});const cd=await cr.json();if(cr.ok&&Array.isArray(cd.resources)){const official=cd.resources.map(x=>({...x,kind:'official',resourceId:'official-'+x.id,resourceType:x.type,subject:'',topic:'',description:x.description}));digitalLibraryResources=[...official,...digitalLibraryResources];const ob=document.getElementById('cbeOfficialResources');if(ob)ob.innerHTML=official.map(x=>`<article class="digital-resource-card"><div class="digital-resource-meta"><span class="tag">${escHtml(x.authority)}</span><span class="tag">Official source</span><span class="tag">${escHtml(x.grade)}</span></div><h3>${escHtml(x.title)}</h3><p class="small">${escHtml(x.description)}</p><button class="btn primary" type="button" onclick="window.open('${x.url}','_blank','noopener,noreferrer')">Open official source →</button></article>`).join('')}}catch(e){console.warn('CBE catalogue unavailable',e)}
   if(role==='learner'){await loadServerMaterials();await loadServerPurchases();}
-  document.getElementById('dlTotal').textContent=digitalLibraryResources.length;
-  document.getElementById('dlLinks').textContent=Number(d.counts?.links||0)+digitalLibraryResources.filter(x=>x.kind==='official').length;
+  document.getElementById('dlTotal').textContent=d.counts?.total??digitalLibraryResources.length;
+  document.getElementById('dlLinks').textContent=d.counts?.links??digitalLibraryResources.filter(x=>x.kind==='link').length;
   document.getElementById('dlUploaded').textContent=d.counts?.uploaded??digitalLibraryResources.filter(x=>x.kind==='material').length;
   const saved=Object.values(learnerActivity||{}).filter(x=>x?.bookmarked).length;
   document.getElementById('dlSaved').textContent=String(saved);
@@ -2401,7 +2433,7 @@ function renderDigitalLibrary(){
   let rows=digitalLibraryResources.filter(x=>{const hay=[x.title,x.subject,x.grade,x.topic,x.strand,x.description,x.resourceType].filter(Boolean).join(' ').toLowerCase();return(!q||hay.includes(q))&&(!subject||x.subject===subject)&&(!grade||x.grade===grade)&&(!type||x.resourceType===type)});
   if(sort==='az')rows.sort((a,b)=>String(a.title||'').localeCompare(String(b.title||'')));else rows.sort((a,b)=>new Date(b.createdAt||0)-new Date(a.createdAt||0));
   const box=document.getElementById('digitalLibraryResults');
-  box.innerHTML=rows.length?rows.map(x=>{const meta=[x.subject,x.grade,x.topic].filter(Boolean);const desc=escHtml(x.description||'Digital learning resource.');const title=escHtml(x.title||'Untitled resource');const typeLabel=escHtml(x.resourceType||'Resource');const id=escHtml(x.resourceId||'');const paid=x.kind==='material'&&isPurchased(x.resourceId);const m= x.kind==='material' ? materials.find(mm=>String(mm.id)===String(x.resourceId)) : null;const price=m?materialPrice(m):0;const button=x.kind==='material'?(price>0&&!paid?`<button class="btn primary" type="button" onclick="openDigitalLibraryMaterial('${id}')">Buy — KES ${price}</button>`:`<button class="btn primary" type="button" onclick="openDigitalLibraryMaterial('${id}')">Open</button>`):`<button class="btn primary" type="button" onclick="window.open('${x.url||''}','_blank','noopener,noreferrer')">${x.kind==='official'?'Open Official Source →':'Open Resource'}</button>`;return `<article class="digital-resource-card"><div class="digital-resource-meta"><span class="tag">${typeLabel}</span>${x.sourceAuthority?`<span class="tag">${escHtml(x.sourceAuthority)}</span>`:''}${meta.map(v=>`<span class="tag">${escHtml(v)}</span>`).join('')}</div><h3>${title}</h3><p class="small">${desc}</p><small class="small">${x.kind==='material'?'Approved Tusome EduShelf material':x.kind==='official'?'Official source link':'Curated online resource'}</small><div class="digital-resource-actions">${button}${x.kind==='material'&&getSessionRole()==='learner'?`<button class="btn" type="button" onclick="saveDigitalLibraryMaterial('${id}')">🔖 Save</button>`:''}</div></article>`}).join(''):'<div class="notice" style="grid-column:1/-1">No digital resources match your filters.</div>';
+  box.innerHTML=rows.length?rows.map(x=>{const meta=[x.subject,x.grade,x.topic].filter(Boolean);const desc=escHtml(x.description||'Digital learning resource.');const title=escHtml(x.title||'Untitled resource');const typeLabel=escHtml(x.resourceType||'Resource');const id=escHtml(x.resourceId||'');const paid=x.kind==='material'&&isPurchased(x.resourceId);const m= x.kind==='material' ? materials.find(mm=>String(mm.id)===String(x.resourceId)) : null;const price=m?materialPrice(m):0;const button=x.kind==='material'?(price>0&&!paid?`<button class="btn primary" type="button" onclick="openDigitalLibraryMaterial('${id}')">Buy — KES ${price}</button>`:`<button class="btn primary" type="button" onclick="openDigitalLibraryMaterial('${id}')">Open</button>`):`<button class="btn primary" type="button" onclick="openDigitalLibraryLink('${id}')">Open Resource</button>`;return `<article class="digital-resource-card"><div class="digital-resource-meta"><span class="tag">${typeLabel}</span>${meta.map(v=>`<span class="tag">${escHtml(v)}</span>`).join('')}</div><h3>${title}</h3><p class="small">${desc}</p><small class="small">${x.kind==='material'?'Approved Tusome EduShelf material':'Curated online resource'}</small><div class="digital-resource-actions">${button}${x.kind==='material'&&getSessionRole()==='learner'?`<button class="btn" type="button" onclick="saveDigitalLibraryMaterial('${id}')">🔖 Save</button>`:''}</div></article>`}).join(''):'<div class="notice" style="grid-column:1/-1">No digital resources match your filters.</div>';
 }
 function openDigitalLibraryLink(id){const item=digitalLibraryResources.find(x=>String(x.resourceId)===String(id));if(item?.url)window.open(item.url,'_blank','noopener,noreferrer')}
 async function openDigitalLibraryMaterial(id){

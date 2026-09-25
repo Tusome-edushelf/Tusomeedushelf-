@@ -200,12 +200,6 @@ async function initDatabase() {
     );
 
     ALTER TABLE materials ADD COLUMN IF NOT EXISTS file_id TEXT;
-    ALTER TABLE materials ADD COLUMN IF NOT EXISTS source_authority TEXT;
-    ALTER TABLE materials ADD COLUMN IF NOT EXISTS material_type TEXT;
-    ALTER TABLE materials ADD COLUMN IF NOT EXISTS academic_year TEXT;
-    ALTER TABLE materials ADD COLUMN IF NOT EXISTS official_source_url TEXT;
-    ALTER TABLE materials ADD COLUMN IF NOT EXISTS rights_status TEXT;
-    ALTER TABLE materials ADD COLUMN IF NOT EXISTS cbe_stage TEXT;
 
     CREATE INDEX IF NOT EXISTS idx_materials_approval_status ON materials (approval_status);
     CREATE INDEX IF NOT EXISTS idx_materials_teacher_email ON materials (teacher_email);
@@ -689,12 +683,6 @@ async function initDatabase() {
 
   const defaultTeacherRevenue = Math.min(100, Math.max(0, Number(process.env.TEACHER_REVENUE_PERCENT || 80)));
   await db.query(`INSERT INTO platform_settings(setting_key,setting_value) VALUES ('teacher_revenue_percentage',$1),('platform_revenue_percentage',$2) ON CONFLICT(setting_key) DO NOTHING`, [String(defaultTeacherRevenue), String(100-defaultTeacherRevenue)]);
-  const curriculumSeeds = [
-    ['7|Mathematics','KICD Grade 7 Mathematics includes Numbers, Algebra, Measurements, Geometry, and Data Handling and Probability.'],
-    ['8|Mathematics','KICD Grade 8 Mathematics includes Numbers, Algebra, Measurements, Geometry, and Data Handling and Probability.'],
-    ['9|Mathematics','Use the KICD Grade 9 Mathematics curriculum context where available; verify specific strands and learning outcomes before publication.']
-  ];
-  for (const [k,v] of curriculumSeeds) await db.query(`INSERT INTO curriculum_data(curriculum_key,curriculum_value) VALUES($1,$2) ON CONFLICT(curriculum_key) DO NOTHING`,[k,v]);
 
 
   // Seed/update the three current demo accounts from Render environment variables.
@@ -953,13 +941,12 @@ function curriculumContext(subject, grade, focus) {
   const g = String(grade || '').trim();
   const subj = String(subject || '').trim();
   const f = String(focus || '').trim();
-  const known = {
-    '7|Mathematics': 'KICD Grade 7 Mathematics includes Numbers, Algebra, Measurements, Geometry, and Data Handling and Probability. Algebra includes Algebraic Expressions, Linear Equations and Linear Inequalities. Measurements include Pythagorean Relationship, Length, Area, Volume and Capacity, Time, Distance and Speed, Temperature, and Money.',
-    '8|Mathematics': 'KICD Grade 8 Mathematics includes Numbers, Algebra, Measurements, Geometry, and Data Handling and Probability. Algebra includes Algebraic Expressions and Linear Equations. Measurements include Circles, Area, and Money; Geometry includes Geometrical Constructions, Coordinates and Graphs, Scale Drawing, and Common Solids.',
-    '9|Mathematics': 'Use the KICD Grade 9 Mathematics curriculum context where available. Do not invent a strand or learning outcome; if a specific outcome is unknown, say so and provide a general explanation.'
-  };
-  const base = known[`${g}|${subj}`] || '';
-  return [base, f ? `Requested CBE focus: ${f}` : ''].filter(Boolean).join('\\n');
+  return [
+    `Subject: ${subj || 'General'}`,
+    `Grade/Level: ${g || 'General'}`,
+    f ? `Requested focus: ${f}` : '',
+    'For Kenya CBE alignment, use the current official KICD CBE materials as the verification source. Do not invent official curriculum codes, strands, sub-strands or exact official wording.'
+  ].filter(Boolean).join('\n');
 }
 
 async function callGemini({ subject, grade, mode, focus, prompt, file, questionFile, workingFile, role, context }) {
@@ -1113,7 +1100,7 @@ This is a guidance assistant, not an account-management or payment-support agent
     parent_revision: 'Suggest practical revision activities based on supplied progress. Use a table with Topic/Area, Activity, Suggested Duration, and How to Check Understanding.',
     parent_report: 'Explain supplied performance information in plain language. Use a small table if it makes the report easier to understand, and clearly distinguish reported results from suggestions.',
     parent_study: 'Give practical study-support suggestions for home. Use a simple table with Goal, Activity, Suggested Routine, and Check-in Method where helpful.',
-    notes: 'Create clear, concise revision notes with headings, key points, examples and a short self-check section.',
+    notes: 'Create original, concise notes with headings, key points, examples and a short self-check section. Do not reproduce or closely paraphrase copyrighted textbooks, KICD curriculum documents, KNEC examination papers or publisher materials. Do not present the notes as official KICD/KNEC content. End with a short Verification & References section directing the user to the official KICD CBE materials and relevant official KNEC guidance for checking current requirements.',
     practice: 'Create practice questions appropriate to the selected subject and topic, followed by a separate answer key. Keep numbering clear.',
     summary: 'Summarize the requested topic using headings, concise bullet points, key terms, examples where useful, and a short self-check.',
     inquiry: 'Create an inquiry-based activity with a clear question, learning goal, learner steps, resources, expected evidence and reflection questions.',
@@ -1397,37 +1384,25 @@ app.get('/api/materials', requireAuth, async (req, res) => {
   }
 });
 
-app.post('/api/materials', requireRole('teacher','admin'), async (req, res) => {
+app.post('/api/materials', requireRole('teacher'), async (req, res) => {
   if (!databaseReady) return res.status(503).json({ error: 'Database is not ready.' });
   try {
-    const { title, subject, grade, strand, competency, topic, price, description, file,
-      sourceAuthority, materialType, academicYear, officialSourceUrl, rightsStatus, cbeStage } = req.body || {};
+    const { title, subject, grade, strand, competency, topic, price, description, file } = req.body || {};
     if (!title || !topic || !file?.data || !file?.name) return res.status(400).json({ error: 'Title, topic and a file are required.' });
-    const allowedAuthorities=['KICD','KNEC','Teacher/School','Tusome EduShelf'];
-    const allowedTypes=['curriculum_design','approved_course_material','approved_complementary','kjsea_sample','kjsea_past_paper','kjsea_rubric','practice_paper','teacher_resource','other'];
-    const allowedRights=['official_public_link','uploaded_with_permission','original_teacher_content','pending_review'];
-    const authority=allowedAuthorities.includes(String(sourceAuthority||''))?String(sourceAuthority):'Teacher/School';
-    const type=allowedTypes.includes(String(materialType||''))?String(materialType):'teacher_resource';
-    const rights=allowedRights.includes(String(rightsStatus||''))?String(rightsStatus):'pending_review';
-    let sourceUrl=null;
-    if(officialSourceUrl){ try{const u=new URL(String(officialSourceUrl)); if(!['http:','https:'].includes(u.protocol)) throw new Error('bad'); sourceUrl=u.toString().slice(0,1000);}catch{return res.status(400).json({error:'Official source URL must be a valid HTTP/HTTPS link.'})} }
-    if((authority==='KICD'||authority==='KNEC') && rights==='pending_review' && !sourceUrl) {
-      return res.status(400).json({error:'KICD/KNEC items need an official source URL or a rights status confirming upload permission.'});
-    }
     const { mimeType, buffer } = decodeDataUrl(file.data);
     if (!buffer.length) return res.status(400).json({ error: 'The uploaded file is empty.' });
     if (buffer.length > 12 * 1024 * 1024) return res.status(413).json({ error: 'Please keep each learning material below 12 MB.' });
     const id = `MAT-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
     const fileId = `FILE-${crypto.randomBytes(12).toString('hex')}`;
     await db.query('BEGIN');
-    await db.query(`INSERT INTO materials (id,title,subject,grade,strand,competency,topic,file_name,file_type,file_size,price,approval_status,description,teacher_email,file_id,source_authority,material_type,academic_year,official_source_url,rights_status,cbe_stage) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'pending',$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`, [id, String(title).trim(), subject || null, grade || null, strand || null, competency || null, topic || null, file.name, mimeType, buffer.length, Math.max(0, Number(price || 0)), description || null, req.user.email, fileId, authority, type, academicYear || null, sourceUrl, rights, cbeStage || null]);
+    await db.query(`INSERT INTO materials (id,title,subject,grade,strand,competency,topic,file_name,file_type,file_size,price,approval_status,description,teacher_email,file_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'pending',$12,$13,$14)`, [id, String(title).trim(), subject || null, grade || null, strand || null, competency || null, topic || null, file.name, mimeType, buffer.length, Math.max(0, Number(price || 0)), description || null, req.user.email, fileId]);
     await db.query(`INSERT INTO material_files (file_id,material_id,file_name,mime_type,file_size,file_data) VALUES ($1,$2,$3,$4,$5,$6)`, [fileId, id, file.name, mimeType, buffer.length, buffer]);
-    await db.query(`INSERT INTO material_versions(version_id,material_id,version_number,file_name,mime_type,file_size,file_data,metadata,created_by) VALUES($1,$2,1,$3,$4,$5,$6,$7,$8)`, [`VER-${crypto.randomBytes(10).toString('hex')}`,id,file.name,mimeType,buffer.length,buffer,JSON.stringify({title:String(title).trim(),subject,grade,topic,sourceAuthority:authority,materialType:type,academicYear:academicYear||null,officialSourceUrl:sourceUrl,rightsStatus:rights,cbeStage:cbeStage||null}),req.user.email]);
+    await db.query(`INSERT INTO material_versions(version_id,material_id,version_number,file_name,mime_type,file_size,file_data,metadata,created_by) VALUES($1,$2,1,$3,$4,$5,$6,$7,$8)`, [`VER-${crypto.randomBytes(10).toString('hex')}`,id,file.name,mimeType,buffer.length,buffer,JSON.stringify({title:String(title).trim(),subject,grade,topic}),req.user.email]);
     await db.query('COMMIT');
     void audit(req, 'material_upload', 'material', id, { title: String(title).trim(), fileName: file.name });
     void createNotification(req.user.email, 'Material submitted', `“${String(title).trim()}” was submitted for administrator review.`, 'info');
     void notifyAdmins('Material awaiting review', `A new material, “${String(title).trim()}”, was submitted by ${req.user.email}.`, 'review');
-    res.status(201).json({ ok: true, material: { id, title: String(title).trim(), subject, grade, strand, competency, topic, file: file.name, fileType: mimeType, fileSize: buffer.length, price: Math.max(0, Number(price || 0)), approvalStatus: 'pending', description, teacherEmail: req.user.email, fileId, sourceAuthority:authority, materialType:type, academicYear:academicYear||null, officialSourceUrl:sourceUrl, rightsStatus:rights, cbeStage:cbeStage||null } });
+    res.status(201).json({ ok: true, material: { id, title: String(title).trim(), subject, grade, strand, competency, topic, file: file.name, fileType: mimeType, fileSize: buffer.length, price: Math.max(0, Number(price || 0)), approvalStatus: 'pending', description, teacherEmail: req.user.email, fileId } });
   } catch (e) {
     try { await db.query('ROLLBACK'); } catch {}
     console.error('Material upload error:', e);
@@ -2632,19 +2607,6 @@ app.patch('/api/schools/communication/messages/:id/read', schoolCommunicationAcc
 
 
 
-// v70 — KICD/CBE + KNEC/KJSEA official source catalogue.
-app.get('/api/cbe-library/catalog', requireAuth, async (req,res)=>{
-  const resources=[
-    {id:'KICD-CBC-MATERIALS',title:'KICD CBC / CBE Materials',authority:'KICD',type:'Official catalogue',grade:'All levels',url:'https://kicd.ac.ke/cbc-materials/',description:'Official KICD hub for curriculum designs, approved course materials and approved complementary materials.'},
-    {id:'KICD-CURRICULUM-DESIGNS',title:'KICD Curriculum Designs',authority:'KICD',type:'Curriculum designs',grade:'Pre-Primary to Grade 12',url:'https://kicd.ac.ke/cbc-materials/curriculum-designs/',description:'Official curriculum design catalogue for regular and special-needs education.'},
-    {id:'KICD-APPROVED-COURSE-MATERIALS',title:'KICD Approved CBC Course Materials',authority:'KICD',type:'Approved course materials',grade:'CBC / Senior School',url:'https://kicd.ac.ke/cbc-materials/approved-cbc-course-materials/',description:'Official KICD page listing approved course-material documents.'},
-    {id:'KNEC-KJSEA-SAMPLES',title:'KJSEA Sample Papers, Rubrics & OMR Sheets',authority:'KNEC',type:'KJSEA sample papers',grade:'Grade 9',url:'https://www.knec.ac.ke/circular-on-accessing-kjsea-sample-paper/',description:'Official KNEC guidance for accessing KJSEA sample papers, rubrics and OMR answer sheets.'},
-    {id:'KNEC-CBA-PORTAL',title:'KNEC CBA Portal',authority:'KNEC',type:'Assessment portal',grade:'Grade 9',url:'https://cba.knec.ac.ke/',description:'KNEC portal referenced by the official KJSEA sample-paper circular; access may require assessment-centre credentials.'},
-    {id:'KNEC-KJSEA-TIMETABLE',title:'2026 KJSEA Timetable & Instructions',authority:'KNEC',type:'KJSEA instructions',grade:'Grade 9',url:'https://www.knec.ac.ke/timetables/',description:'Official KNEC timetable and instructions area, including 2026 KJSEA.'}
-  ];
-  res.json({ok:true,resources});
-});
-
 // v47 — Digital Library & Resource Centre (digital-only; no physical-book inventory)
 app.get('/api/digital-library', requireAuth, async (req,res)=>{
   if(!databaseReady) return res.status(503).json({error:'Database is not ready.'});
@@ -2659,7 +2621,7 @@ app.get('/api/digital-library', requireAuth, async (req,res)=>{
     if(schoolIds.length){ params.push(schoolIds); where+=` OR r.school_id = ANY($1)`; }
     where+=`)`;
     const links=await db.query(`SELECT r.resource_id AS "resourceId",r.title,r.resource_type AS "resourceType",r.url,r.description,r.subject,r.grade,r.strand,r.topic,r.school_id AS "schoolId",r.created_at AS "createdAt" FROM digital_resources r WHERE ${where} ORDER BY r.created_at DESC`,params);
-    const materials=await db.query(`SELECT id,title,subject,grade,strand,competency,topic,file_name AS file,"file_type" AS "fileType",file_size AS "fileSize",price,description,teacher_email AS "teacherEmail",source_authority AS "sourceAuthority",material_type AS "materialType",academic_year AS "academicYear",official_source_url AS "officialSourceUrl",rights_status AS "rightsStatus",cbe_stage AS "cbeStage",created_at AS "createdAt" FROM materials WHERE approval_status='approved' AND deleted_at IS NULL ORDER BY created_at DESC`);
+    const materials=await db.query(`SELECT id,title,subject,grade,strand,competency,topic,file_name AS file,"file_type" AS "fileType",file_size AS "fileSize",price,description,teacher_email AS "teacherEmail",created_at AS "createdAt" FROM materials WHERE approval_status='approved' AND deleted_at IS NULL ORDER BY created_at DESC`);
     const featured=materials.rows.slice(0,8).map(x=>({...x,kind:'material',resourceType:'Uploaded material',resourceId:x.id,url:null}));
     const rows=[...links.rows.map(x=>({...x,kind:'link'})),...featured];
     res.json({ok:true,resources:rows,counts:{total:rows.length,links:links.rowCount,uploaded:materials.rowCount}});

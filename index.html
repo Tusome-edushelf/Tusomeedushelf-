@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Tusome EduShelf - School Plan Dashboard v67</title>
+<title>Tusome EduShelf - Learning Materials</title>
 <style>
 *{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f5f7fb;color:#18212f}
 header{background:#173f8a;color:white;padding:16px 7%;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:5}
@@ -97,18 +97,22 @@ body.a11y-reduced-motion *,body.a11y-reduced-motion *::before,body.a11y-reduced-
 
 .personalized-shell{max-width:1150px;margin:0 auto;padding:20px}.personalized-hero{background:linear-gradient(135deg,#0f766e,#2563eb);color:#fff;border-radius:22px;padding:24px}.personalized-grid{display:grid;grid-template-columns:1fr 1.3fr;gap:16px;margin-top:16px}.personalized-card{background:#fff;border:1px solid #dbe5f0;border-radius:16px;padding:18px;box-shadow:0 8px 24px #173f8a10}.recommendation-card{border:1px solid #dbe5f0;border-radius:14px;padding:14px;margin-top:10px}.personalized-note{background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:12px}@media(max-width:800px){.personalized-grid{grid-template-columns:1fr}}
 
-/* v66 School Plan Dashboard persistent content centre */
-.school-dashboard-content{margin-top:16px}
-.school-module-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:14px}
-.school-module{border:1px solid #dce5f0;background:#fff;border-radius:15px;padding:16px;text-align:left;cursor:pointer;box-shadow:0 3px 12px #0000000a;transition:.15s}
-.school-module:hover{transform:translateY(-2px);box-shadow:0 7px 18px #173f8a18;border-color:#8db0e4}
-.school-module-icon{font-size:27px;display:block;margin-bottom:8px}.school-module b{display:block;color:#173f8a;font-size:14px}.school-module small{display:block;color:#687386;margin-top:4px;line-height:1.35}
-.school-content-columns{display:grid;grid-template-columns:1.2fr .8fr;gap:16px;margin-top:16px}
-.school-dashboard-list{margin:0;padding:0;list-style:none}.school-dashboard-list li{padding:11px 0;border-bottom:1px solid #e8edf3}.school-dashboard-list li:last-child{border-bottom:0}
-@media(max-width:900px){.school-module-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.school-content-columns{grid-template-columns:1fr}}
-@media(max-width:520px){.school-module-grid{grid-template-columns:1fr}}
-
-.school-auth-gate{background:linear-gradient(135deg,#f7fbff,#ffffff);border:2px solid #d8e6f7}.school-auth-actions{display:flex;gap:12px;flex-wrap:wrap}.school-auth-gate form{max-width:620px}.school-auth-gate .auth-switch{margin-top:12px}
+.tusome-ai-page .tai-hero{display:grid;grid-template-columns:1fr auto;gap:18px;align-items:center;margin-bottom:16px}
+.tusome-ai-page .tai-badge{display:inline-block;padding:6px 10px;border-radius:999px;background:#e8eefc;font-size:12px;font-weight:700}
+.tai-toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:12px;border-bottom:1px solid #e8ebf1}
+.tai-toolbar select,.tai-toolbar button{border:1px solid #d8deea;border-radius:10px;background:#fff;padding:9px 12px}
+.tai-chat{height:56vh;min-height:420px;overflow:auto;padding:16px;background:#fbfcfe}
+.tai-msg{max-width:86%;padding:12px 14px;margin:10px 0;border-radius:14px;line-height:1.55;white-space:pre-wrap;word-break:break-word}
+.tai-user{margin-left:auto;background:#eaf0ff}
+.tai-assistant{background:#f0f2f6}
+.tai-meta{font-size:11px;opacity:.6;margin-bottom:5px;font-weight:700}
+.tai-composer{display:grid;grid-template-columns:1fr auto;gap:10px;padding:12px;border-top:1px solid #e8ebf1}
+.tai-composer textarea{width:100%;resize:none;min-height:70px;border:1px solid #d8deea;border-radius:12px;padding:12px;font:inherit}
+.tai-actions{display:flex;gap:8px;flex-wrap:wrap;padding:0 12px 12px}
+.tai-file-name{font-size:12px;opacity:.7;align-self:center}
+.tai-tests{display:flex;gap:7px;flex-wrap:wrap;padding:12px;border-top:1px solid #e8ebf1}
+.tai-tests button{border:1px solid #d8deea;background:#fff;border-radius:9px;padding:8px;cursor:pointer}
+@media(max-width:650px){.tusome-ai-page .tai-hero{grid-template-columns:1fr}.tai-chat{height:62vh}.tai-msg{max-width:94%}.tai-composer{grid-template-columns:1fr}.tai-composer .btn{width:100%}}
 </style>
 </style>
 
@@ -135,7 +139,7 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
 .home-v54 .hero-copy{position:absolute;inset:0;display:flex;justify-content:center;align-items:flex-start;padding:55px 5.5%;background:linear-gradient(90deg,rgba(8,60,125,.94) 0%,rgba(8,60,125,.78) 38%,rgba(8,60,125,.08) 70%,rgba(8,60,125,.05) 100%);color:#fff}
 .home-v54 .hero-copy h1{color:#fff;font-size:48px;max-width:560px;margin:8px 0 12px}.home-v54 .hero-copy h1 span{color:#ffd34d}.home-v54 .hero-copy p{color:#fff;max-width:470px;font-size:18px}.home-v54 .hero-badges{margin:0 0 4px}.home-v54 .hero-badge{background:transparent;border:0;color:#8fd3ff;padding:0;font-size:16px}.home-v54 .hero-actions .btn.primary{background:#ffd02f;color:#173f8a;border-radius:28px;padding:13px 22px}.home-v54 .hero-actions .btn.light,.home-v54 .hero-actions .btn:not(.primary){display:none}
 .home-v54 .hero-copy:after{content:'Better\A Learning\A Brighter\A Futures';white-space:pre;position:absolute;right:6%;top:62px;color:#fff;font-size:34px;font-weight:800;line-height:1.15;font-style:italic;text-align:center;text-shadow:0 2px 6px #173f8a55}
-.home-feature-wrap{padding:24px 4% 0}.home-feature-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:20px}.home-feature{border-radius:18px;padding:28px 24px 24px;text-align:center;min-height:255px;border:1px solid #dce7f3;box-shadow:0 5px 18px rgba(23,63,138,.08);display:flex;flex-direction:column;align-items:center;justify-content:center}.home-feature.teacher{background:#f8f1ff}.home-feature.learner{background:#effbf2}.home-feature.materials{background:#eef7ff}.home-feature .icon{font-size:48px;margin-bottom:12px}.home-feature h3{color:#173f8a;font-size:25px;margin:4px 0 8px}.home-feature p{color:#36516f;line-height:1.5;max-width:330px}.home-feature .btn{border-radius:24px;padding:12px 26px;margin-top:10px}.home-feature.teacher .btn{background:#6d28d9;color:#fff}.home-feature.learner .btn{background:#16a34a;color:#fff}.home-feature.school{background:#fff8e8}.home-feature.school .btn{background:#b7791f;color:#fff}.home-feature.materials .btn{background:#1267d8;color:#fff}
+.home-feature-wrap{padding:24px 4% 0}.home-feature-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}.home-feature{border-radius:18px;padding:28px 24px 24px;text-align:center;min-height:255px;border:1px solid #dce7f3;box-shadow:0 5px 18px rgba(23,63,138,.08);display:flex;flex-direction:column;align-items:center;justify-content:center}.home-feature.teacher{background:#f8f1ff}.home-feature.learner{background:#effbf2}.home-feature.materials{background:#eef7ff}.home-feature .icon{font-size:48px;margin-bottom:12px}.home-feature h3{color:#173f8a;font-size:25px;margin:4px 0 8px}.home-feature p{color:#36516f;line-height:1.5;max-width:330px}.home-feature .btn{border-radius:24px;padding:12px 26px;margin-top:10px}.home-feature.teacher .btn{background:#6d28d9;color:#fff}.home-feature.learner .btn{background:#16a34a;color:#fff}.home-feature.materials .btn{background:#1267d8;color:#fff}
 .home-quick{padding:24px 4% 0}.home-quick h2{color:#173f8a;margin:0 0 12px;font-size:25px}.home-quick-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}.home-quick-card{background:#f7fbff;border:1px solid #cfe1f5;border-radius:13px;padding:16px;text-align:left;cursor:pointer;color:#173f8a;display:flex;align-items:center;gap:11px;min-height:76px}.home-quick-card:hover{box-shadow:0 6px 16px #173f8a18;transform:translateY(-1px)}.home-quick-card .qicon{font-size:27px}.home-quick-card b{display:block}.home-quick-card small{color:#60738c}
 .home-ai-v54{margin:22px 4% 0;background:#eaf6ff;border:1px solid #c9e3fb;border-radius:18px;padding:22px;box-shadow:none}.home-ai-v54 .home-ai-head h2{color:#173f8a}.home-ai-v54 .home-ai-form{max-width:760px}.home-ai-v54 .home-ai-form textarea{background:#fff;border-radius:12px}.home-ai-v54 .home-ai-note{color:#53677f}.home-footer-v54{margin-top:24px;background:#073d7d;color:#fff;padding:24px 6%;display:flex;justify-content:space-between;gap:20px;align-items:center}.home-footer-v54 .verify{max-width:700px;line-height:1.5}.home-footer-v54 .slogan{font-size:24px;font-weight:800;font-style:italic;text-align:center}.premium-trial-card{border:1px solid #cfe0ff;border-radius:16px;padding:18px 20px;margin:18px 0;background:linear-gradient(135deg,#eef7ff,#f7f1ff);display:flex;justify-content:space-between;align-items:center;gap:15px;flex-wrap:wrap}.premium-trial-card h3{margin:0 0 5px;color:#173f8a}.premium-trial-card p{margin:0;color:#53677f}.premium-trial-card .trial-status{font-weight:700;color:#166534}.premium-trial-card .btn{border-radius:22px}@media(max-width:700px){.premium-trial-card{align-items:flex-start;flex-direction:column}}.home-plus-card{border-radius:16px;padding:18px 20px;margin:18px 0;background:linear-gradient(135deg,#f7f1ff,#eef5ff);border:1px solid #d8c8f6;display:flex;justify-content:space-between;align-items:center;gap:15px;flex-wrap:wrap}.home-plus-card h3{margin:0 0 5px;color:#5b21b6}.home-plus-card p{margin:0;color:#596b82}.home-plus-card .btn{background:#6d28d9;color:#fff;border-radius:22px}
 @media(max-width:900px){.home-v54 .hero-copy:after{font-size:26px;right:3%}.home-feature-grid{grid-template-columns:1fr}.home-quick-grid{grid-template-columns:repeat(2,1fr)}.home-footer-v54{flex-direction:column;text-align:center}}
@@ -148,8 +152,8 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
 <header>
   <div class="logo">Tusome <span>EduShelf</span></div>
   <nav>
-    <button onclick="show('home')">Home</button>
-    <button class="nav-auth" onclick="show('help')">❓ Help</button><button id="notificationNav" class="nav-auth nav-notify" onclick="show('notifications')" aria-label="Notifications">🔔 <span id="notificationNavCount" class="notify-count" aria-live="polite">0</span></button><button id="schoolDashboardNav" class="nav-auth" onclick="show('schoolDashboard')" style="display:none">🏫 School Dashboard</button><button class="nav-auth" onclick="show('account')">👤 Account</button><button class="nav-auth a11y-toggle" onclick="toggleAccessibilityPanel()" aria-expanded="false" aria-controls="accessibilityPanel">⚙️ Accessibility</button>
+    <button onclick="show('home')">Home</button><button class="nav-auth" onclick="show('tusomeAI')">🤖 Tusome AI</button>
+    <button class="nav-auth" onclick="show('help')">❓ Help</button><button id="notificationNav" class="nav-auth nav-notify" onclick="show('notifications')" aria-label="Notifications">🔔 <span id="notificationNavCount" class="notify-count" aria-live="polite">0</span></button><button class="nav-auth" onclick="show('account')">👤 Account</button><button class="nav-auth a11y-toggle" onclick="toggleAccessibilityPanel()" aria-expanded="false" aria-controls="accessibilityPanel">⚙️ Accessibility</button>
     <button class="nav-auth" onclick="show('login')">Sign In</button>
     <button class="nav-auth nav-signup" onclick="show('signup')">Sign Up</button>
   </nav>
@@ -183,7 +187,6 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
       <div class="home-feature-grid">
         <div class="home-feature teacher"><div class="icon">👩🏽‍🏫</div><h3>For Teachers</h3><p>Create lesson plans, find resources, manage classes and support learner progress.</p><button class="btn" onclick="show('teacher')">Teacher Dashboard →</button></div>
         <div class="home-feature learner"><div class="icon">🎓</div><h3>For Learners</h3><p>Access learning materials, complete activities, track progress and build achievements.</p><button class="btn" onclick="show('learner')">Learner Dashboard →</button></div>
-        <div class="home-feature school"><div class="icon">🏫</div><h3>For Schools</h3><p>Manage your school, teachers, learners, classes, attendance, timetable, fees, exams and communication.</p><button class="btn" onclick="openSchoolDashboard()">School Dashboard →</button></div>
         <div class="home-feature materials"><div class="icon">📖</div><h3>Learning Materials</h3><p>Access notes, exercises, past papers, videos and other approved digital resources.</p><button class="btn" onclick="show('digitalLibrary')">Explore Materials →</button></div>
       </div>
     </div>
@@ -195,6 +198,7 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
         <button class="home-quick-card" onclick="show('digitalLibrary')"><span class="qicon">📄</span><span><b>Past Papers</b><small>Practice & improve</small></span></button>
         <button class="home-quick-card" onclick="show('digitalLibrary')"><span class="qicon">▶️</span><span><b>Videos</b><small>Learn with visuals</small></span></button>
         <button class="home-quick-card" onclick="show('practice')"><span class="qicon">✅</span><span><b>Exercises</b><small>Test your knowledge</small></span></button>
+        <button class="home-quick-card" onclick="show('tusomeAI')"><span class="qicon">🤖</span><span><b>Tusome AI</b><small>General AI assistant</small></span></button>
         <button class="home-quick-card" onclick="show('digitalLibrary')"><span class="qicon">⬇️</span><span><b>Resources</b><small>Extra learning files</small></span></button>
       </div>
     </div>
@@ -564,6 +568,52 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
   </div>
 </section>
 
+<section id="tusomeAI" class="page tusome-ai-page">
+  <div class="tai-hero">
+    <div>
+      <span class="tai-badge">SEPARATE AI ENGINE</span>
+      <h2 style="margin:8px 0 4px">🤖 Tusome AI</h2>
+      <p class="small" style="margin:0">Your standalone Tusome AI assistant — separate from the EduShelf Academic AI.</p>
+    </div>
+    <div id="tusomeAIStatus" class="notice" style="margin:0">Checking Tusome AI…</div>
+  </div>
+  <div class="notice"><b>What this AI does:</b> general questions, learning, mathematics, science, coding, reasoning, writing, research-style analysis and brainstorming. It is intentionally independent from the existing role-specific EduShelf AI.</div>
+  <div class="card" style="padding:0;overflow:hidden">
+    <div class="tai-toolbar">
+      <label>Mode
+        <select id="tusomeAIMode">
+          <option value="general">General</option><option value="learn">Learn</option><option value="reason">Reason</option><option value="code">Code</option><option value="creative">Creative</option><option value="research">Research</option>
+        </select>
+      </label>
+      <label>Thinking
+        <select id="tusomeAIThinking"><option value="low">Fast</option><option value="medium" selected>Balanced</option><option value="high">Deep</option></select>
+      </label>
+      <button class="btn" type="button" onclick="clearTusomeAIChat()">New Chat</button>
+    </div>
+    <div id="tusomeAIChat" class="tai-chat" aria-live="polite">
+      <div class="tai-msg tai-assistant"><div class="tai-meta">Tusome AI</div>Hello! I’m Tusome AI. Ask me a general question, give me a problem to solve, ask for code, or upload a supported file for analysis.</div>
+    </div>
+    <div class="tai-actions">
+      <label class="btn" style="cursor:pointer">📎 Attach file
+        <input id="tusomeAIFile" type="file" hidden accept="application/pdf,image/png,image/jpeg,image/webp,image/heic,image/heif,text/plain,text/csv,application/json,text/markdown">
+      </label>
+      <span id="tusomeAIFileName" class="tai-file-name">No file selected</span>
+      <button class="btn" type="button" onclick="clearTusomeAIFile()">Remove file</button>
+    </div>
+    <form class="tai-composer" onsubmit="sendTusomeAI(event)">
+      <textarea id="tusomeAIPrompt" maxlength="12000" placeholder="Ask Tusome AI anything…"></textarea>
+      <button id="tusomeAISend" class="btn primary" type="submit">➤ Send</button>
+    </form>
+    <div class="tai-tests">
+      <button type="button" onclick="setTusomeAITest('Explain photosynthesis simply, then give a more advanced explanation.')">Science test</button>
+      <button type="button" onclick="setTusomeAITest('Solve 3x² - 7x - 6 = 0 and verify both roots.')">Math test</button>
+      <button type="button" onclick="setTusomeAITest('Write a small JavaScript function that removes duplicate values from an array.')">Code test</button>
+      <button type="button" onclick="setTusomeAITest('A train travels 180 km in 2 hours 15 minutes. What is its average speed in km/h? Show the check.')">Reasoning test</button>
+    </div>
+  </div>
+  <div class="small" style="margin-top:10px">Do not upload passwords, payment PINs, API keys or other private credentials.</div>
+</section>
+
 
 <section id="cbe" class="page">
   <div class="topline">
@@ -719,7 +769,7 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
     <button class="teacher-quick-card" onclick="document.getElementById('teacherUploadsSection')?.scrollIntoView({behavior:'smooth',block:'start'})"><span>📚</span><b>My Materials</b><small>Open your recent uploads.</small></button>
     <button class="teacher-quick-card" onclick="setTeacherFocusGoal()"><span>🎯</span><b>Teaching Goal</b><small id="teacherGoalQuick">Set your focus for this period.</small></button>
     <button class="teacher-quick-card" onclick="show('membership')"><span>👑</span><b>Teacher Plus</b><small>Premium teacher tools and features.</small></button>
-    <button class="teacher-quick-card" onclick="show('fees')"><span>💰</span><b>School Fees</b><small>Fee charges, balances and payment records.</small></button>
+    <button class="teacher-quick-card" onclick="show('schoolManagement')"><span>🏫</span><b>School Management</b><small>Classes, members and shared resources.</small></button><button class="teacher-quick-card" onclick="show('fees')"><span>💰</span><b>School Fees</b><small>Fee charges, balances and payment records.</small></button>
     <button class="teacher-quick-card" onclick="show('attendance')"><span>✅</span><b>Attendance</b><small>Mark today's class attendance.</small></button>
     <button class="teacher-quick-card" onclick="show('digitalLibrary')"><span>📚</span><b>Digital Library</b><small>Curate useful digital resources.</small></button><button class="teacher-quick-card" onclick="show('timetable')"><span>🗓️</span><b>Timetable</b><small>View your school teaching schedule.</small></button>
   </div>
@@ -744,99 +794,11 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
 
 
 
-<section id="schoolDashboard" class="page">
-  <div class="topline"><div><h2>🏫 School Plan Dashboard</h2><p>Manage your school plan, school workspace, teachers, learners, classes and shared learning resources.</p></div><button class="btn" onclick="loadSchoolManagement()">↻ Refresh</button></div>
+<section id="schoolManagement" class="page">
+  <div class="topline"><div><h2>🏫 School Management</h2><p>Manage an active school workspace, classes, teachers, learners and shared learning resources.</p></div><button class="btn" onclick="loadSchoolManagement()">↻ Refresh</button></div>
   <div class="notice"><b>School privacy:</b> Only authorised school members should access school records. Keep learner information to what the school needs for education and administration.</div>
-  <div class="card" id="schoolAccessPanel" style="margin-top:14px;border:2px solid #1d4ed8;background:linear-gradient(135deg,#eff6ff,#ffffff);padding:22px">
-    <div class="topline" style="margin:0 0 14px"><div><h3 style="margin:0">🏫 School Account Access</h3><p class="small" style="margin-top:6px">Sign in to an existing school administrator account or create a new school account.</p></div></div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px">
-      <div class="card" style="margin:0;box-shadow:none;border:1px solid #bfdbfe">
-        <h3>🔐 School Sign In</h3><p class="small">Already have a school account? Sign in and open your School Plan Dashboard.</p>
-        <button class="btn primary" type="button" onclick="openSchoolSignIn()">Sign In to School Dashboard →</button>
-      </div>
-      <div class="card" style="margin:0;box-shadow:none;border:1px solid #bfdbfe">
-        <h3>➕ Create School Account</h3><p class="small">New school? Create the administrator account and school workspace.</p>
-        <button class="btn" type="button" onclick="openSchoolRegister()">Create School Account →</button>
-      </div>
-    </div>
-  </div>
-  <div id="schoolAuthGate" class="card school-auth-gate" style="margin-top:14px;display:block">
-    <div class="topline" style="margin:0 0 14px"><div><h3>🏫 Access your School Dashboard</h3><p class="small">School administrators can sign in to an existing school account or create a new school account here.</p></div></div>
-    <div class="school-auth-actions">
-      <button class="btn primary" type="button" onclick="openSchoolSignIn()">🔐 School Sign In</button>
-      <button class="btn" type="button" onclick="openSchoolRegister()">➕ Create School Account</button>
-    </div>
-    <div id="schoolAuthMessage" class="small" style="margin-top:12px"></div>
-    <div id="schoolSignInBox" class="card" style="margin-top:14px;display:none;box-shadow:none;border:1px solid #dbe5f2">
-      <h3>🔐 School Sign In</h3>
-      <form onsubmit="schoolSignIn(event)">
-        <label>School administrator email<input id="schoolSignInEmail" type="email" required autocomplete="email" placeholder="school@example.com"></label>
-        <label>Password<input id="schoolSignInPassword" type="password" required autocomplete="current-password" placeholder="Your password"></label>
-        <button class="btn primary" type="submit">Sign In to School Dashboard</button>
-      </form>
-      <p class="auth-switch">Need a school account? <button type="button" onclick="openSchoolRegister()">Create School Account</button></p>
-    </div>
-    <div id="schoolRegisterBox" class="card" style="margin-top:14px;display:none;box-shadow:none;border:1px solid #dbe5f2">
-      <h3>➕ Create School Account</h3>
-      <p class="small">Create the school administrator account and school workspace in one step.</p>
-      <form onsubmit="schoolRegister(event)">
-        <label>School name<input id="schoolRegisterName" type="text" required maxlength="160" placeholder="e.g. Tusome Academy"></label>
-        <label>Administrator email<input id="schoolRegisterEmail" type="email" required maxlength="160" autocomplete="email" placeholder="admin@school.com"></label>
-        <label>Phone (optional)<input id="schoolRegisterPhone" type="tel" maxlength="40" autocomplete="tel" placeholder="07XXXXXXXX"></label>
-        <label>Password<input id="schoolRegisterPassword" type="password" required minlength="8" autocomplete="new-password" placeholder="At least 8 characters"></label>
-        <button class="btn primary" type="submit">Create School Account</button>
-      </form>
-      <p class="auth-switch">Already have a school account? <button type="button" onclick="openSchoolSignIn()">School Sign In</button></p>
-    </div>
-  </div>
-  <div id="schoolPlanCard" class="card" style="margin-top:14px"><div class="topline" style="margin:0"><div><h3>💼 School Plan</h3><p id="schoolPlanStatus" class="small">Loading school plan status…</p></div><span id="schoolPlanBadge" class="tag">Checking…</span></div></div>
-  <div id="schoolControlCentre" class="card school-dashboard-overview" style="margin-top:14px;display:block!important;visibility:visible!important" aria-label="School Control Centre">
-  <h3>🏫 School Control Centre</h3>
-  <p class="small">These are the school functions available directly from your School Plan Dashboard.</p>
-  <div class="cards" style="margin-top:14px">
-    <div class="card"><h3>👩🏽‍🏫 People</h3><p>Manage teachers, learners and parent/guardian links.</p></div>
-    <div class="card"><h3>🎓 Classes</h3><p>Create classes, assign teachers and organise learners.</p></div>
-    <div class="card"><h3>📅 Attendance</h3><p>Record, review and monitor learner attendance.</p></div>
-    <div class="card"><h3>🗓️ Timetable</h3><p>Build and publish class timetables and lesson schedules.</p></div>
-    <div class="card"><h3>💰 Fees</h3><p>Manage fee charges, payments and learner balances.</p></div>
-    <div class="card"><h3>📝 Exams & Results</h3><p>Manage exams, marks, grades and report cards.</p></div>
-    <div class="card"><h3>💬 Communication</h3><p>Publish announcements and send authorised school messages.</p></div>
-    <div class="card"><h3>📚 Digital Library</h3><p>Access and share approved digital learning resources.</p></div>
-    <div class="card"><h3>🤖 School AI Support</h3><p>Get school planning and learning-support assistance.</p></div>
-  </div>
-</div>
-<div id="schoolManagementCentre" class="card school-dashboard-content" style="display:block!important;visibility:visible!important">
-    <div class="topline"><div><h3>🧭 School Management Centre</h3><p class="small">All school operations are collected here. Select a section below to open its full tools.</p></div></div>
-    <div class="school-module-grid">
-      <button class="school-module" onclick="document.getElementById('schoolWorkspace')?.scrollIntoView({behavior:'smooth'});"><span class="school-module-icon">🏫</span><b>School Management</b><small>School profile, members, classes and administration.</small></button>
-      <button class="school-module" onclick="show('attendance')"><span class="school-module-icon">✅</span><b>Attendance</b><small>Record and review learner attendance.</small></button>
-      <button class="school-module" onclick="show('timetable')"><span class="school-module-icon">🗓️</span><b>Timetable & Calendar</b><small>Lessons, periods, clashes and school dates.</small></button>
-      <button class="school-module" onclick="show('fees')"><span class="school-module-icon">💰</span><b>School Fees</b><small>Charges, payments and learner balances.</small></button>
-      <button class="school-module" onclick="show('exams')"><span class="school-module-icon">📝</span><b>Exams & Results</b><small>Exams, marks, grades and report cards.</small></button>
-      <button class="school-module" onclick="show('communication')"><span class="school-module-icon">💬</span><b>Communication</b><small>Announcements, messages and feedback.</small></button>
-      <button class="school-module" onclick="show('digitalLibrary')"><span class="school-module-icon">📚</span><b>Digital Library</b><small>Approved learning resources and online materials.</small></button>
-      <button class="school-module" onclick="openAIAssistant('school')"><span class="school-module-icon">🤖</span><b>School AI Support</b><small>Planning, school support and learning assistance.</small></button>
-    </div>
-    <div class="school-content-columns">
-      <div class="card" style="box-shadow:none;border:1px solid #e1e7f0"><h3>📋 What you can manage here</h3><ul class="school-dashboard-list"><li>👩🏽‍🏫 Teachers and learners</li><li>🎓 Classes, subjects and teacher allocations</li><li>👪 Parent/guardian links</li><li>📘 Assignments, submissions and gradebook</li><li>📅 Attendance, timetable and school calendar</li><li>💳 School fees and payment records</li><li>📊 Exams, marks and report cards</li><li>📢 School announcements and authorized messages</li><li>📚 Shared digital learning resources</li></ul></div>
-      <div class="card" style="box-shadow:none;border:1px solid #e1e7f0"><h3>⚡ Quick Actions</h3><p class="small">Common school administrator tasks.</p><button class="btn primary" onclick="document.getElementById('schoolClassName')?.focus();document.getElementById('schoolWorkspace')?.scrollIntoView({behavior:'smooth'})">＋ Create Class</button><button class="btn" onclick="document.getElementById('schoolInviteEmail')?.focus();document.getElementById('schoolWorkspace')?.scrollIntoView({behavior:'smooth'})">＋ Add Teacher/Learner</button><button class="btn" onclick="show('communication')">📢 Publish Announcement</button><button class="btn" onclick="show('attendance')">✅ Open Attendance</button></div>
-    </div>
-  </div>
-  <div id="schoolWorkspaceCard" class="card" style="margin-top:14px"><label>School workspace<select id="schoolWorkspaceSelect" onchange="loadSelectedSchool()"><option value="">Loading school access...</option></select></label><p id="schoolAccessStatus" class="small" style="margin-top:8px"></p></div>
-  <div id="schoolGlanceCard" class="card" style="margin-top:14px;border:2px solid #dce7f7;background:#f8fbff;display:block!important;visibility:visible!important">
-    <h3 style="margin-top:0;color:#173f8a">📌 School Dashboard at a Glance</h3>
-    <div class="cards" style="margin-top:12px">
-      <div class="card"><h3>👥 People</h3><p>Teachers, learners and parent/guardian links.</p></div>
-      <div class="card"><h3>🎓 Classes</h3><p>Classes, subjects and teacher allocations.</p></div>
-      <div class="card"><h3>📅 Attendance</h3><p>Daily attendance and school calendar.</p></div>
-      <div class="card"><h3>🗓️ Timetable</h3><p>Lessons, periods and schedules.</p></div>
-      <div class="card"><h3>💰 Fees</h3><p>Charges, payments and balances.</p></div>
-      <div class="card"><h3>📝 Exams</h3><p>Exams, marks, grades and report cards.</p></div>
-      <div class="card"><h3>💬 Communication</h3><p>Announcements and authorised messages.</p></div>
-      <div class="card"><h3>📚 Digital Library</h3><p>Approved digital learning resources.</p></div>
-    </div>
-  </div>
-  <div id="schoolWorkspace" style="display:block!important;visibility:visible!important">
+  <div class="card" style="margin-top:14px"><label>School workspace<select id="schoolWorkspaceSelect" onchange="loadSelectedSchool()"><option value="">Loading school access...</option></select></label><p id="schoolAccessStatus" class="small" style="margin-top:8px"></p></div>
+  <div id="schoolWorkspace" style="display:none">
     <div class="school-stat-grid" style="margin-top:16px"><div class="card"><h3>👥 Members</h3><p><b id="schoolMemberCount">0</b></p></div><div class="card"><h3>👩🏽‍🏫 Teachers</h3><p><b id="schoolTeacherCount">0</b></p></div><div class="card"><h3>🎓 Learners</h3><p><b id="schoolLearnerCount">0</b></p></div><div class="card"><h3>📚 Classes</h3><p><b id="schoolClassCount">0</b></p></div></div>
     <div class="school-grid" style="margin-top:16px">
       <div class="card"><h3>🏷️ Create Class</h3><label>Class name<input id="schoolClassName" maxlength="100" placeholder="Grade 7 Blue"></label><label>Grade<input id="schoolClassGrade" maxlength="40" placeholder="Grade 7"></label><label>Stream<input id="schoolClassStream" maxlength="40" placeholder="Blue"></label><label>Teacher email (optional)<input id="schoolClassTeacher" type="email" maxlength="160" placeholder="teacher@example.com"></label><button class="btn primary" style="margin-top:10px" onclick="createSchoolClass()">Create Class</button></div>
@@ -925,7 +887,7 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
 </section>
 
 <section id="attendance" class="page">
-  <div class="topline"><div><h2>📅 Attendance & School Calendar</h2><p>Track learner attendance and keep important school dates in one place.</p></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" onclick="loadAttendance()">↻ Refresh</button><button class="btn" onclick="show(getSessionRole()==='parent'?'parent':getSessionRole()==='learner'?'learner':'schoolDashboard')">Back</button></div></div>
+  <div class="topline"><div><h2>📅 Attendance & School Calendar</h2><p>Track learner attendance and keep important school dates in one place.</p></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" onclick="loadAttendance()">↻ Refresh</button><button class="btn" onclick="show(getSessionRole()==='parent'?'parent':getSessionRole()==='learner'?'learner':'schoolManagement')">Back</button></div></div>
   <div class="notice"><b>Attendance note:</b> Attendance records are school records. Teachers and authorised school administrators enter or correct attendance; learners and parents can view records relevant to them.</div>
   <div id="attendanceTeacherPanel" class="card" style="margin-top:16px;display:none">
     <div class="topline"><div><h3>✅ Daily Register</h3><p class="small">Choose a date, review your assigned class learners and save attendance.</p></div><label style="max-width:190px">Date<input id="attendanceDate" type="date" onchange="loadAttendanceRegister()"></label></div>
@@ -1103,7 +1065,7 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
   </div>
   <div class="command-grid">
     <div class="card"><h3>⚠️ Needs Attention</h3><div id="commandAttention"><span class="small">Loading...</span></div></div>
-    <div class="card"><h3>🧭 Platform Shortcuts</h3><ul class="command-list"><li><button class="btn" onclick="show('communication')">💬 Communication Centre</button></li><li><button class="btn" onclick="adminTab('analytics')">📊 Platform Analytics</button></li><li><button class="btn" onclick="adminTab('backups')">🛡️ Backup & Recovery</button></li><li><button class="btn" onclick="show('schoolDashboard')">🏫 School Dashboard</button></li><li><button class="btn" onclick="show('digitalLibrary')">📚 Digital Library</button></li><li><button class="btn" onclick="openAIAssistant('admin')">🤖 Administrator AI</button></li></ul></div>
+    <div class="card"><h3>🧭 Platform Shortcuts</h3><ul class="command-list"><li><button class="btn" onclick="show('communication')">💬 Communication Centre</button></li><li><button class="btn" onclick="adminTab('analytics')">📊 Platform Analytics</button></li><li><button class="btn" onclick="adminTab('backups')">🛡️ Backup & Recovery</button></li><li><button class="btn" onclick="show('schoolManagement')">🏫 School Management</button></li><li><button class="btn" onclick="show('digitalLibrary')">📚 Digital Library</button></li><li><button class="btn" onclick="openAIAssistant('admin')">🤖 Administrator AI</button></li></ul></div>
   </div>
   <div class="admin-tabs">
     <button class="btn primary" onclick="adminTab('command')">🏠 Command Centre</button>
@@ -1739,10 +1701,6 @@ function navigateBack(fallback='home'){
   show(previous||fallback,true);
 }
 function show(id,skipHistory=false){
-  if(id==='schoolDashboard'){
-    openSchoolDashboard(skipHistory);
-    return;
-  }
   const active=document.querySelector('.page.active');
   const current=active?.id;
   if(!skipHistory && current && current!==id && current!=='login'){
@@ -1750,7 +1708,7 @@ function show(id,skipHistory=false){
     appPageHistory.push(current);
     if(appPageHistory.length>12)appPageHistory.shift();
   }
-  const protectedRoles={learner:'learner',teacher:'teacher',admin:'admin',communication:'user',account:'user',reader:'learner',practice:'learner',discussions:'learner',portfolio:'learner',community:'learner',membership:'user',schoolDashboard:'schoolAdmin',attendance:'user',exams:'user',fees:'user',timetable:'user',parent:'parent',digitalLibrary:'user'};
+  const protectedRoles={learner:'learner',teacher:'teacher',admin:'admin',communication:'user',account:'user',reader:'learner',practice:'learner',discussions:'learner',portfolio:'learner',community:'learner',membership:'user',schoolManagement:'user',attendance:'user',exams:'user',fees:'user',timetable:'user',parent:'parent',digitalLibrary:'user'};
   if(protectedRoles[id]){
     const role=getSessionRole();
     if(!role){show('login');return}
@@ -1769,7 +1727,7 @@ function show(id,skipHistory=false){
   const el=document.getElementById(id);if(el)el.classList.add('active');
   if(id==='teacher'){loadServerMaterials().then(renderTeacher);loadTeacherEarnings();loadTeacherAnalytics()}
   if(id==='membership'){loadMembership()} if(id==='digitalLibrary'){loadDigitalLibrary()}
-  if(id==='schoolDashboard'){loadSchoolManagement()} if(id==='timetable'){loadTimetable()} if(id==='attendance'){loadAttendance()} if(id==='exams'){loadExamsPage()} if(id==='fees'){loadFeesPage()}
+  if(id==='schoolManagement'){loadSchoolManagement()} if(id==='timetable'){loadTimetable()} if(id==='attendance'){loadAttendance()} if(id==='exams'){loadExamsPage()} if(id==='fees'){loadFeesPage()}
   if(id==='learner'){loadLearnerAssignments();loadLearnerGradebook();loadLearnerPortfolio()}
   if(id==='portfolio')loadLearnerPortfolio();
   if(id==='community')loadCommunity();
@@ -2010,50 +1968,29 @@ async function loadDashboardPremiumTrial(role){
   const button=document.getElementById(role==='learner'?'learnerTrialButton':'teacherTrialButton');
   if(!card)return;
   try{
-    const sRes=await fetch('/api/my/subscription',{credentials:'include'});
-    const d=await sRes.json();
-    if(!sRes.ok)throw new Error(d.error||'Could not load premium trial status.');
-    const active=(d.subscriptions||[]).find(x=>x.audience===role && x.status==='trial' && x.trialEndsAt && new Date(x.trialEndsAt)>new Date());
+    const [pRes,sRes]=await Promise.all([fetch('/api/plans',{credentials:'include'}),fetch('/api/my/subscription',{credentials:'include'})]);
+    const p=await pRes.json(), d=await sRes.json();
+    if(!pRes.ok||!sRes.ok)throw new Error('Could not load premium trial status.');
+    const plan=(p.plans||[]).find(x=>x.audience===role);
+    const active=(d.subscriptions||[]).find(x=>x.status==='trial' && x.trialEndsAt && new Date(x.trialEndsAt)>new Date());
     if(active){
-      card.style.display='flex';
-      text.textContent=`${active.name||'Premium'} is active until ${new Date(active.trialEndsAt).toLocaleString()}.`;
-      text.className='trial-status';
-      button.style.display='none';
-      return;
+      card.style.display='flex'; text.textContent=`${active.name||'Premium'} is active until ${new Date(active.trialEndsAt).toLocaleString()}.`; text.className='trial-status'; button.style.display='none'; return;
     }
-    if(d.trialAvailable){
-      card.style.display='flex';
-      text.textContent='Try premium features free for 2 days. No payment is required to start the trial.';
-      text.className='';
-      button.style.display='inline-flex';
-      button.disabled=false;
-      button.textContent='Start 2-Day Free Trial →';
-      return;
+    if(d.trialAvailable && plan){
+      card.style.display='flex'; text.textContent='Try premium features free for 2 days. No payment is required to start the trial.'; text.className=''; button.style.display='inline-flex'; return;
     }
     card.style.display='none';
-  }catch(e){
-    card.style.display='flex';
-    text.textContent=e.message||'Premium trial status could not be loaded.';
-    text.className='';
-    button.style.display='none';
-  }
+  }catch(e){card.style.display='none';}
 }
 
 async function startDashboardPremiumTrial(role){
   const planKey=role==='learner'?'learner_plus':'teacher_plus';
   if(!confirm(`Start your 2-day ${role} premium trial? No payment is required.`))return;
-  const button=document.getElementById(role==='learner'?'learnerTrialButton':'teacherTrialButton');
-  if(button){button.disabled=true;button.textContent='Starting trial...';}
   try{
     const r=await fetch('/api/subscriptions/trial',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({planKey})});
     const d=await r.json(); if(!r.ok)throw new Error(d.error||'Could not start the free trial.');
-    showToast?.('2-day premium trial started.','success');
-    await loadDashboardPremiumTrial(role);
-    if(typeof loadMembership==='function')await loadMembership();
-  }catch(e){
-    showToast?.(e.message,'error');
-    if(button){button.disabled=false;button.textContent='Start 2-Day Free Trial →';}
-  }
+    showToast?.('2-day premium trial started.','success'); loadDashboardPremiumTrial(role); if(typeof loadMembership==='function')loadMembership();
+  }catch(e){showToast?.(e.message,'error');}
 }
 
 async function loadMembership(){
@@ -2064,12 +2001,6 @@ async function loadMembership(){
     const subs=d.subscriptions||[], schools=d.schools||[];
     statusBox.innerHTML=subs.length?subs.slice(0,5).map(x=>`<div><b>${escapeHtml(x.name||x.planKey)}</b> — ${escapeHtml(x.status)} · ${escapeHtml(x.billingCycle||'')} · KES ${Number(x.amount||0).toFixed(2)}${x.endsAt?' · ends '+new Date(x.endsAt).toLocaleDateString():''}</div>`).join(''):'<b>No membership yet.</b> Choose a plan below.';
     if(schools.length) statusBox.innerHTML+=`<div style="margin-top:8px"><b>School:</b> ${schools.map(x=>escapeHtml(x.schoolName)+' ('+escapeHtml(x.status)+')').join(', ')}</div>`;
-    const role=getSessionRole();
-    const trialSub=subs.find(x=>x.audience===role&&x.status==='trial'&&x.trialEndsAt&&new Date(x.trialEndsAt)>new Date());
-    if(['learner','teacher'].includes(role)){
-      if(trialSub){ statusBox.innerHTML+=`<div class="premium-trial-card" style="margin-top:12px"><div><b>🎁 ${escapeHtml(trialSub.name||'Premium')} trial active</b><p class="trial-status">Active until ${new Date(trialSub.trialEndsAt).toLocaleString()}.</p></div></div>`; }
-      else if(d.trialAvailable){ statusBox.innerHTML+=`<div class="premium-trial-card" style="margin-top:12px"><div><b>🎁 2-Day Free Premium Trial</b><p>Start premium access without payment.</p></div><button class="btn primary" type="button" onclick="startDashboardPremiumTrial('${role}')">Start Free Trial →</button></div>`; }
-    }
     const schoolCard=document.querySelector('#membership .card:last-child'); if(schoolCard) schoolCard.style.display=['teacher','admin'].includes(getSessionRole())?'block':'none';
     plansBox.innerHTML=(p.plans||[]).filter(x=>x.audience!=='school').map(x=>`<div class="plan-card"><span class="market-badge">${x.audience==='learner'?'Learner':'Teacher'}</span><h3>${escapeHtml(x.name)}</h3><div class="plan-price">KES ${Number(x.priceMonthly||0).toFixed(0)} <small>/ month</small></div><div class="small">KES ${Number(x.priceYearly||0).toFixed(0)} / year</div><p>${escapeHtml(x.description||'')}</p><ul class="plan-features">${(x.features||[]).map(f=>`<li>${escapeHtml(f)}</li>`).join('')}</ul><div class="admin-action-row"><button class="btn primary" onclick="payMembership('${escapeHtml(x.planKey)}','monthly')">Pay Monthly</button><button class="btn" onclick="payMembership('${escapeHtml(x.planKey)}','yearly')">Pay Yearly</button></div></div>`).join('')||'<div class="notice">No active plans are configured.</div>';
     if(document.getElementById('schoolRequestEmail') && !document.getElementById('schoolRequestEmail').value) document.getElementById('schoolRequestEmail').value=localStorage.getItem('tusomeCurrentUser')||'';
@@ -2104,87 +2035,7 @@ async function setSchoolStatus(id,status){if(!confirm(`Set school status to ${st
 
 configureAIAssistant(getSessionRole()||'learner');
 let schoolWorkspaces=[]; let selectedSchoolId='';
-async function openSchoolDashboard(skipHistory=false){
-  const role=getSessionRole();
-  showPageDirect('schoolDashboard',skipHistory);
-  if(!role){showSchoolAuthGate('Please sign in with a school administrator account or create a school account to continue.');return}
-  if(role==='admin'){hideSchoolAuthGate();loadSchoolManagement();return}
-  try{
-    const r=await fetch('/api/schools/mine',{credentials:'include'}),d=await r.json();
-    if(!r.ok)throw new Error(d.error||'Could not verify school access.');
-    const isSchoolAdmin=(d.schools||[]).some(x=>x.memberRole==='admin'&&x.status!=='suspended');
-    if(!isSchoolAdmin){showSchoolAuthGate('This dashboard is for school administrator accounts. Sign in with a school account or create one below.');return}
-    hideSchoolAuthGate();loadSchoolManagement();
-  }catch(e){showSchoolAuthGate(e.message||'Please sign in or create a school account.')}
-}
-function showSchoolAuthGate(message=''){
-  const gate=document.getElementById('schoolAuthGate');if(gate)gate.style.display='block';
-  ['schoolControlCentre','schoolManagementCentre','schoolPlanCard','schoolWorkspaceCard','schoolGlanceCard'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none'});
-  const msg=document.getElementById('schoolAuthMessage');if(msg)msg.textContent=message;
-}
-function hideSchoolAuthGate(){
-  const gate=document.getElementById('schoolAuthGate');if(gate)gate.style.display='none';
-  ['schoolControlCentre','schoolManagementCentre','schoolPlanCard','schoolWorkspaceCard','schoolGlanceCard'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='block'});
-}
-function openSchoolSignIn(){
-  document.getElementById('schoolSignInBox').style.display='block';document.getElementById('schoolRegisterBox').style.display='none';document.getElementById('schoolSignInEmail')?.focus();
-}
-function openSchoolRegister(){
-  document.getElementById('schoolRegisterBox').style.display='block';document.getElementById('schoolSignInBox').style.display='none';document.getElementById('schoolRegisterName')?.focus();
-}
-async function schoolSignIn(e){
-  e.preventDefault();const form=e.target,button=form.querySelector('button[type="submit"]');button.disabled=true;button.textContent='Signing in...';
-  try{
-    const email=document.getElementById('schoolSignInEmail').value.trim(),password=document.getElementById('schoolSignInPassword').value;
-    const r=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({email,password,role:'school'})});
-    const d=await r.json();if(!r.ok)throw new Error(d.error||'School sign in failed.');
-    setSessionRole(d.user.role,d.user.email);form.reset();hideSchoolAuthGate();showPageDirect('schoolDashboard',true);loadSchoolManagement();showToast?.('School sign in successful.','success');
-  }catch(err){showToast?.(err.message,'error')}finally{button.disabled=false;button.textContent='Sign In to School Dashboard'}
-}
-async function schoolRegister(e){
-  e.preventDefault();const form=e.target,button=form.querySelector('button[type="submit"]');button.disabled=true;button.textContent='Creating school account...';
-  try{
-    const body={schoolName:document.getElementById('schoolRegisterName').value.trim(),email:document.getElementById('schoolRegisterEmail').value.trim(),phone:document.getElementById('schoolRegisterPhone').value.trim(),password:document.getElementById('schoolRegisterPassword').value};
-    const r=await fetch('/api/auth/school-register',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(body)});
-    const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not create the school account.');
-    setSessionRole(d.user.role,d.user.email);form.reset();hideSchoolAuthGate();showPageDirect('schoolDashboard',true);loadSchoolManagement();showToast?.('School account created successfully.','success');
-  }catch(err){showToast?.(err.message,'error')}finally{button.disabled=false;button.textContent='Create School Account'}
-}
-
-function showPageDirect(id,skipHistory=false){
-  const active=document.querySelector('.page.active');
-  const current=active?.id;
-  if(!skipHistory && current && current!==id && current!=='login'){
-    appPageHistory=appPageHistory.filter(x=>x!==id);appPageHistory.push(current);if(appPageHistory.length>12)appPageHistory.shift();
-  }
-  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
-  const el=document.getElementById(id);if(el)el.classList.add('active');
-  refreshNotificationBadge();
-}
-async function updateSchoolDashboardNav(){
-  const btn=document.getElementById('schoolDashboardNav');if(!btn)return;
-  btn.style.display='none';
-  const role=getSessionRole();
-  if(!role)return;
-  if(role==='admin'){btn.style.display='inline-block';return}
-  try{const r=await fetch('/api/schools/mine',{credentials:'include'});if(!r.ok)return;const d=await r.json();if((d.schools||[]).some(x=>x.memberRole==='admin'))btn.style.display='inline-block';}catch(_e){}
-}
-
-async function loadSchoolPlanStatus(){
-  const status=document.getElementById('schoolPlanStatus'),badge=document.getElementById('schoolPlanBadge');
-  if(!status||!badge)return;
-  try{
-    const r=await fetch('/api/my/subscription',{credentials:'include'}),d=await r.json();
-    if(!r.ok)throw new Error(d.error||'Could not load school plan status.');
-    const schoolSubs=(d.subscriptions||[]).filter(x=>x.audience==='school'&&x.schoolId);
-    const current=schoolSubs.find(x=>['active','trial','requested','pending_payment'].includes(x.status));
-    if(!current){status.textContent='No school plan subscription is currently linked to this workspace.';badge.textContent='No plan';return}
-    status.textContent=`${current.name||current.planKey} · ${current.status}${current.endsAt?' · Ends '+new Date(current.endsAt).toLocaleDateString():''}`;
-    badge.textContent=current.status==='active'?'Active':current.status.replace('_',' ');
-  }catch(e){status.textContent=e.message;badge.textContent='Unavailable'}
-}
-
-async function loadSchoolManagement(){loadSchoolPlanStatus();const sel=document.getElementById('schoolWorkspaceSelect');if(!sel)return;try{const r=await fetch('/api/schools/mine',{credentials:'include'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load school access.');schoolWorkspaces=d.schools||[];sel.innerHTML=schoolWorkspaces.length?schoolWorkspaces.map(x=>`<option value="${escapeHtml(x.schoolId)}">${escapeHtml(x.schoolName)} — ${escapeHtml(x.memberRole)}</option>`).join(''):'<option value="">No active school workspace</option>';if(!schoolWorkspaces.length){document.getElementById('schoolWorkspace').style.display='none';document.getElementById('schoolAccessStatus').textContent='No active school workspace is available. Request one from Premium Membership or ask your school administrator to add your account.';return}selectedSchoolId=selectedSchoolId&&schoolWorkspaces.some(x=>x.schoolId===selectedSchoolId)?selectedSchoolId:schoolWorkspaces[0].schoolId;sel.value=selectedSchoolId;loadSelectedSchool()}catch(e){sel.innerHTML='<option value="">Unable to load</option>';showToast?.(e.message,'error')}}
+async function loadSchoolManagement(){const sel=document.getElementById('schoolWorkspaceSelect');if(!sel)return;try{const r=await fetch('/api/schools/mine',{credentials:'include'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load school access.');schoolWorkspaces=d.schools||[];sel.innerHTML=schoolWorkspaces.length?schoolWorkspaces.map(x=>`<option value="${escapeHtml(x.schoolId)}">${escapeHtml(x.schoolName)} — ${escapeHtml(x.memberRole)}</option>`).join(''):'<option value="">No active school workspace</option>';if(!schoolWorkspaces.length){document.getElementById('schoolWorkspace').style.display='none';document.getElementById('schoolAccessStatus').textContent='No active school workspace is available. Request one from Premium Membership or ask your school administrator to add your account.';return}selectedSchoolId=selectedSchoolId&&schoolWorkspaces.some(x=>x.schoolId===selectedSchoolId)?selectedSchoolId:schoolWorkspaces[0].schoolId;sel.value=selectedSchoolId;loadSelectedSchool()}catch(e){sel.innerHTML='<option value="">Unable to load</option>';showToast?.(e.message,'error')}}
 async function loadSelectedSchool(){const sel=document.getElementById('schoolWorkspaceSelect');selectedSchoolId=sel?.value||selectedSchoolId;if(!selectedSchoolId)return;try{const r=await fetch('/api/schools/dashboard?schoolId='+encodeURIComponent(selectedSchoolId),{credentials:'include'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load school dashboard.');document.getElementById('schoolWorkspace').style.display='block';document.getElementById('schoolAccessStatus').textContent=`${d.school.schoolName} · ${d.school.memberRole}`;document.getElementById('schoolMemberCount').textContent=d.counts.members;document.getElementById('schoolTeacherCount').textContent=d.counts.teachers;document.getElementById('schoolLearnerCount').textContent=d.counts.learners;document.getElementById('schoolClassCount').textContent=d.counts.classes;window.schoolData=d;renderSchoolManagement(d);loadAcademicManagement()}catch(e){document.getElementById('schoolWorkspace').style.display='none';showToast?.(e.message,'error')}}
 function renderSchoolManagement(d){const classes=d.classes||[],members=d.members||[],materials=d.materials||[];const cls=document.getElementById('schoolClassesTable');cls.innerHTML=classes.length?classes.map(c=>`<tr><td>${escapeHtml(c.className)}</td><td>${escapeHtml(c.grade||'—')}</td><td>${escapeHtml(c.stream||'—')}</td><td>${c.learnerCount||0}</td><td>${d.school.memberRole==='admin'||getSessionRole()==='admin'?`<button class="btn" onclick="deleteSchoolClass('${escapeHtml(c.classId)}')">Remove</button>`:'—'}</td></tr>`).join(''):'<tr><td colspan="5">No classes yet.</td></tr>';const mt=document.getElementById('schoolMembersTable');mt.innerHTML=members.length?members.map(m=>`<tr><td>${escapeHtml(m.email)}</td><td>${escapeHtml(m.memberRole)}</td><td>${escapeHtml(m.status)}</td><td>${(d.school.memberRole==='admin'||getSessionRole()==='admin')&&m.email!==getSessionUserEmail()?`<button class="btn" onclick="suspendSchoolMember('${encodeURIComponent(m.email)}')">Suspend</button>`:'—'}</td></tr>`).join(''):'<tr><td colspan="4">No members yet.</td></tr>';const cs=document.getElementById('schoolInviteClass');if(cs)cs.innerHTML='<option value="">No class</option>'+classes.map(c=>`<option value="${escapeHtml(c.classId)}">${escapeHtml(c.className)}</option>`).join('');const pls=document.getElementById('schoolParentLearner');if(pls){const learners=members.filter(m=>m.memberRole==='learner'&&m.status==='active');pls.innerHTML='<option value="">Select learner</option>'+learners.map(m=>`<option value="${escapeHtml(m.email)}">${escapeHtml(m.email)}</option>`).join('');}loadSchoolParentLinks();const rr=document.getElementById('schoolResources');rr.innerHTML=materials.length?materials.map(m=>`<div class="school-resource"><b>${escapeHtml(m.title)}</b><div class="small">${escapeHtml(m.subject||'')} · ${escapeHtml(m.grade||'')} · ${escapeHtml(m.teacherEmail||'')}</div><button class="btn" style="margin-top:6px" onclick="openMaterialById('${escapeHtml(m.id)}')">Open</button></div>`).join(''):'<div class="notice">No approved learning resources yet.</div>';}
 function getSessionUserEmail(){return sessionStorage.getItem('tusomeCurrentUser')||localStorage.getItem('tusomeCurrentUser')||''}
@@ -2234,7 +2085,7 @@ async function deleteSchoolClass(id){if(!confirm('Remove this class?'))return;tr
 async function inviteSchoolMember(){const body={schoolId:selectedSchoolId,email:document.getElementById('schoolInviteEmail').value.trim(),memberRole:document.getElementById('schoolInviteRole').value,classId:document.getElementById('schoolInviteClass').value||null};if(!body.email)return showToast?.('Enter an email address.','error');try{const r=await fetch('/api/schools/invites',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(body)});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not add member.');showToast?.(d.message||'Member invitation recorded.','success');document.getElementById('schoolInviteEmail').value='';loadSelectedSchool()}catch(e){showToast?.(e.message,'error')}}
 async function suspendSchoolMember(email){if(!confirm('Suspend this school member?'))return;try{const r=await fetch('/api/schools/members/'+email,{method:'DELETE',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({schoolId:selectedSchoolId})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not suspend member.');loadSelectedSchool()}catch(e){showToast?.(e.message,'error')}}
 
-(async()=>{await loadServerMaterials();if(getSessionRole()==='learner'){await loadServerPurchases();await loadLearnerActivity()}populateMaterialFilters();populateMaterialFilters();renderMaterials();renderTeacher();renderAdmin();refreshProgress();checkAIStatus();if(getSessionRole()==='learner'){loadMarketplace();loadMembership();loadDashboardPremiumTrial('learner');loadLearnerAssignments();loadLearnerGradebook()} if(getSessionRole()==='teacher'){loadMembership();loadDashboardPremiumTrial('teacher')} if(getSessionRole()==='admin'){loadAdminMemberships();loadSchoolManagement()} if(getSessionRole()==='parent'){loadParentChildren()} updateSchoolDashboardNav()})();
+(async()=>{await loadServerMaterials();if(getSessionRole()==='learner'){await loadServerPurchases();await loadLearnerActivity()}populateMaterialFilters();populateMaterialFilters();renderMaterials();renderTeacher();renderAdmin();refreshProgress();checkAIStatus();if(getSessionRole()==='learner'){loadMarketplace();loadMembership();loadDashboardPremiumTrial('learner');loadLearnerAssignments();loadLearnerGradebook()} if(getSessionRole()==='teacher'){loadMembership();loadDashboardPremiumTrial('teacher');loadSchoolManagement()} if(getSessionRole()==='admin'){loadAdminMemberships();loadSchoolManagement()} if(getSessionRole()==='parent'){loadParentChildren()}})();
 </script>
 <button id="communicationLaunch" class="btn primary communication-launch" onclick="openCommunicationCentre()" style="position:fixed;right:18px;bottom:18px;z-index:20;border-radius:24px">💬 Communication Centre</button>
 <script>
@@ -2472,5 +2323,55 @@ async function addPortfolioItem(){
   try{const r=await fetch('/api/learner/portfolio',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(body)});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not save portfolio item.');document.getElementById('portfolioTitle').value='';document.getElementById('portfolioDescription').value='';document.getElementById('portfolioEvidenceUrl').value='';showToast?.('Portfolio item saved.','success');loadLearnerPortfolio();}catch(e){showToast?.(e.message,'error');}
 }
 async function deletePortfolioItem(id){if(!confirm('Delete this portfolio item?'))return;try{const r=await fetch('/api/learner/portfolio/'+encodeURIComponent(id),{method:'DELETE',credentials:'include'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not delete item.');loadLearnerPortfolio();}catch(e){showToast?.(e.message,'error');}}
+
+
+let tusomeAIHistory=[];
+function escapeTusomeAIText(value){return String(value||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function addTusomeAIMessage(role,text,meta=''){
+  const box=document.getElementById('tusomeAIChat'); if(!box)return null;
+  const d=document.createElement('div'); d.className='tai-msg '+(role==='user'?'tai-user':'tai-assistant');
+  d.innerHTML=(meta?'<div class="tai-meta">'+escapeTusomeAIText(meta)+'</div>':'')+escapeTusomeAIText(text);
+  box.appendChild(d); box.scrollTop=box.scrollHeight; return d;
+}
+function setTusomeAITest(text){const p=document.getElementById('tusomeAIPrompt');if(p){p.value=text;p.focus();}}
+function clearTusomeAIFile(){const f=document.getElementById('tusomeAIFile');if(f)f.value='';const n=document.getElementById('tusomeAIFileName');if(n)n.textContent='No file selected';}
+function clearTusomeAIChat(){tusomeAIHistory=[];const box=document.getElementById('tusomeAIChat');if(box)box.innerHTML='<div class="tai-msg tai-assistant"><div class="tai-meta">Tusome AI</div>New conversation started.</div>';clearTusomeAIFile();}
+async function readTusomeAIFile(file){
+  if(!file)return null;
+  if(file.size>10*1024*1024)throw new Error('Please keep the uploaded file below 10 MB.');
+  const data=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=()=>reject(new Error('Could not read the selected file.'));r.readAsDataURL(file)});
+  return {name:file.name,mimeType:file.type,data};
+}
+async function checkTusomeAIHealth(){
+  const el=document.getElementById('tusomeAIStatus'); if(!el)return;
+  try{const r=await fetch('/api/tusome-ai/health');const d=await r.json();el.textContent=d.configured?'● Tusome AI ready':'⚠ Tusome AI needs GEMINI_API_KEY';el.className=d.configured?'notice':'notice';}
+  catch(e){el.textContent='⚠ Tusome AI server unavailable';}
+}
+async function sendTusomeAI(e){
+  if(e&&e.preventDefault)e.preventDefault();
+  const promptEl=document.getElementById('tusomeAIPrompt'),button=document.getElementById('tusomeAISend'),fileEl=document.getElementById('tusomeAIFile');
+  const text=promptEl.value.trim(),file=fileEl?.files?.[0]||null;
+  if(!text&&!file){promptEl.focus();return;}
+  if(text.length>12000){showToast?.('Keep the message below 12,000 characters.','error');return;}
+  const mode=document.getElementById('tusomeAIMode').value,thinkingLevel=document.getElementById('tusomeAIThinking').value;
+  promptEl.value='';button.disabled=true;button.textContent='⏳ Thinking…';
+  if(text)addTusomeAIMessage('user',text,'You');
+  if(file)addTusomeAIMessage('user','📎 '+file.name,'Attachment');
+  const pending=addTusomeAIMessage('assistant','Thinking…','Tusome AI');
+  const old=tusomeAIHistory.slice();
+  if(text)tusomeAIHistory.push({role:'user',text});
+  try{
+    const uploaded=await readTusomeAIFile(file);
+    const res=await fetch('/api/tusome-ai/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:text,mode,thinkingLevel,history:old,file:uploaded})});
+    const data=await res.json(); if(!res.ok)throw new Error(data.error||'Tusome AI request failed.');
+    pending.innerHTML='<div class="tai-meta">Tusome AI • '+escapeTusomeAIText(data.model||'model')+'</div>'+escapeTusomeAIText(data.answer||'');
+    tusomeAIHistory.push({role:'assistant',text:data.answer||''});
+    clearTusomeAIFile();
+  }catch(err){pending.innerHTML='<div class="tai-meta">Tusome AI</div>'+escapeTusomeAIText('Error: '+err.message);if(text)tusomeAIHistory.pop();}
+  finally{button.disabled=false;button.textContent='➤ Send';}
+}
+document.getElementById('tusomeAIFile')?.addEventListener('change',e=>{const n=document.getElementById('tusomeAIFileName');n.textContent=e.target.files?.[0]?.name||'No file selected';});
+document.getElementById('tusomeAIPrompt')?.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendTusomeAI();}});
+checkTusomeAIHealth();
 </script>\n</body>
 </html>

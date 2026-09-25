@@ -200,6 +200,12 @@ async function initDatabase() {
     );
 
     ALTER TABLE materials ADD COLUMN IF NOT EXISTS file_id TEXT;
+    ALTER TABLE materials ADD COLUMN IF NOT EXISTS source_authority TEXT;
+    ALTER TABLE materials ADD COLUMN IF NOT EXISTS material_type TEXT;
+    ALTER TABLE materials ADD COLUMN IF NOT EXISTS academic_year TEXT;
+    ALTER TABLE materials ADD COLUMN IF NOT EXISTS official_source_url TEXT;
+    ALTER TABLE materials ADD COLUMN IF NOT EXISTS rights_status TEXT;
+    ALTER TABLE materials ADD COLUMN IF NOT EXISTS cbe_stage TEXT;
 
     CREATE INDEX IF NOT EXISTS idx_materials_approval_status ON materials (approval_status);
     CREATE INDEX IF NOT EXISTS idx_materials_teacher_email ON materials (teacher_email);
@@ -446,34 +452,6 @@ async function initDatabase() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
     CREATE INDEX IF NOT EXISTS idx_subscription_payments_sub ON subscription_payments(subscription_id, status);
-
-    CREATE TABLE IF NOT EXISTS ai_usage_monthly (
-      scope_type TEXT NOT NULL CHECK (scope_type IN ('user','school')),
-      scope_id TEXT NOT NULL,
-      month_start DATE NOT NULL,
-      units_used INTEGER NOT NULL DEFAULT 0 CHECK (units_used >= 0),
-      request_count INTEGER NOT NULL DEFAULT 0 CHECK (request_count >= 0),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      PRIMARY KEY (scope_type, scope_id, month_start)
-    );
-    CREATE TABLE IF NOT EXISTS ai_usage_events (
-      event_id TEXT PRIMARY KEY,
-      user_email TEXT NOT NULL,
-      role TEXT NOT NULL,
-      scope_type TEXT NOT NULL,
-      scope_id TEXT NOT NULL,
-      plan_key TEXT,
-      units INTEGER NOT NULL,
-      thinking_level TEXT NOT NULL,
-      study_mode BOOLEAN NOT NULL DEFAULT FALSE,
-      attachment_count INTEGER NOT NULL DEFAULT 0,
-      model TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-    CREATE INDEX IF NOT EXISTS idx_ai_usage_events_created ON ai_usage_events(created_at DESC);
-    CREATE INDEX IF NOT EXISTS idx_ai_usage_events_user ON ai_usage_events(user_email, created_at DESC);
-    CREATE INDEX IF NOT EXISTS idx_ai_usage_events_scope ON ai_usage_events(scope_type, scope_id, created_at DESC);
-
     CREATE TABLE IF NOT EXISTS schools (
       school_id TEXT PRIMARY KEY,
       school_name TEXT NOT NULL,
@@ -1419,25 +1397,37 @@ app.get('/api/materials', requireAuth, async (req, res) => {
   }
 });
 
-app.post('/api/materials', requireRole('teacher'), async (req, res) => {
+app.post('/api/materials', requireRole('teacher','admin'), async (req, res) => {
   if (!databaseReady) return res.status(503).json({ error: 'Database is not ready.' });
   try {
-    const { title, subject, grade, strand, competency, topic, price, description, file } = req.body || {};
+    const { title, subject, grade, strand, competency, topic, price, description, file,
+      sourceAuthority, materialType, academicYear, officialSourceUrl, rightsStatus, cbeStage } = req.body || {};
     if (!title || !topic || !file?.data || !file?.name) return res.status(400).json({ error: 'Title, topic and a file are required.' });
+    const allowedAuthorities=['KICD','KNEC','Teacher/School','Tusome EduShelf'];
+    const allowedTypes=['curriculum_design','approved_course_material','approved_complementary','kjsea_sample','kjsea_past_paper','kjsea_rubric','practice_paper','teacher_resource','other'];
+    const allowedRights=['official_public_link','uploaded_with_permission','original_teacher_content','pending_review'];
+    const authority=allowedAuthorities.includes(String(sourceAuthority||''))?String(sourceAuthority):'Teacher/School';
+    const type=allowedTypes.includes(String(materialType||''))?String(materialType):'teacher_resource';
+    const rights=allowedRights.includes(String(rightsStatus||''))?String(rightsStatus):'pending_review';
+    let sourceUrl=null;
+    if(officialSourceUrl){ try{const u=new URL(String(officialSourceUrl)); if(!['http:','https:'].includes(u.protocol)) throw new Error('bad'); sourceUrl=u.toString().slice(0,1000);}catch{return res.status(400).json({error:'Official source URL must be a valid HTTP/HTTPS link.'})} }
+    if((authority==='KICD'||authority==='KNEC') && rights==='pending_review' && !sourceUrl) {
+      return res.status(400).json({error:'KICD/KNEC items need an official source URL or a rights status confirming upload permission.'});
+    }
     const { mimeType, buffer } = decodeDataUrl(file.data);
     if (!buffer.length) return res.status(400).json({ error: 'The uploaded file is empty.' });
     if (buffer.length > 12 * 1024 * 1024) return res.status(413).json({ error: 'Please keep each learning material below 12 MB.' });
     const id = `MAT-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
     const fileId = `FILE-${crypto.randomBytes(12).toString('hex')}`;
     await db.query('BEGIN');
-    await db.query(`INSERT INTO materials (id,title,subject,grade,strand,competency,topic,file_name,file_type,file_size,price,approval_status,description,teacher_email,file_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'pending',$12,$13,$14)`, [id, String(title).trim(), subject || null, grade || null, strand || null, competency || null, topic || null, file.name, mimeType, buffer.length, Math.max(0, Number(price || 0)), description || null, req.user.email, fileId]);
+    await db.query(`INSERT INTO materials (id,title,subject,grade,strand,competency,topic,file_name,file_type,file_size,price,approval_status,description,teacher_email,file_id,source_authority,material_type,academic_year,official_source_url,rights_status,cbe_stage) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'pending',$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`, [id, String(title).trim(), subject || null, grade || null, strand || null, competency || null, topic || null, file.name, mimeType, buffer.length, Math.max(0, Number(price || 0)), description || null, req.user.email, fileId, authority, type, academicYear || null, sourceUrl, rights, cbeStage || null]);
     await db.query(`INSERT INTO material_files (file_id,material_id,file_name,mime_type,file_size,file_data) VALUES ($1,$2,$3,$4,$5,$6)`, [fileId, id, file.name, mimeType, buffer.length, buffer]);
-    await db.query(`INSERT INTO material_versions(version_id,material_id,version_number,file_name,mime_type,file_size,file_data,metadata,created_by) VALUES($1,$2,1,$3,$4,$5,$6,$7,$8)`, [`VER-${crypto.randomBytes(10).toString('hex')}`,id,file.name,mimeType,buffer.length,buffer,JSON.stringify({title:String(title).trim(),subject,grade,topic}),req.user.email]);
+    await db.query(`INSERT INTO material_versions(version_id,material_id,version_number,file_name,mime_type,file_size,file_data,metadata,created_by) VALUES($1,$2,1,$3,$4,$5,$6,$7,$8)`, [`VER-${crypto.randomBytes(10).toString('hex')}`,id,file.name,mimeType,buffer.length,buffer,JSON.stringify({title:String(title).trim(),subject,grade,topic,sourceAuthority:authority,materialType:type,academicYear:academicYear||null,officialSourceUrl:sourceUrl,rightsStatus:rights,cbeStage:cbeStage||null}),req.user.email]);
     await db.query('COMMIT');
     void audit(req, 'material_upload', 'material', id, { title: String(title).trim(), fileName: file.name });
     void createNotification(req.user.email, 'Material submitted', `“${String(title).trim()}” was submitted for administrator review.`, 'info');
     void notifyAdmins('Material awaiting review', `A new material, “${String(title).trim()}”, was submitted by ${req.user.email}.`, 'review');
-    res.status(201).json({ ok: true, material: { id, title: String(title).trim(), subject, grade, strand, competency, topic, file: file.name, fileType: mimeType, fileSize: buffer.length, price: Math.max(0, Number(price || 0)), approvalStatus: 'pending', description, teacherEmail: req.user.email, fileId } });
+    res.status(201).json({ ok: true, material: { id, title: String(title).trim(), subject, grade, strand, competency, topic, file: file.name, fileType: mimeType, fileSize: buffer.length, price: Math.max(0, Number(price || 0)), approvalStatus: 'pending', description, teacherEmail: req.user.email, fileId, sourceAuthority:authority, materialType:type, academicYear:academicYear||null, officialSourceUrl:sourceUrl, rightsStatus:rights, cbeStage:cbeStage||null } });
   } catch (e) {
     try { await db.query('ROLLBACK'); } catch {}
     console.error('Material upload error:', e);
@@ -1560,143 +1550,6 @@ app.put('/api/materials/:id/file', requireRole('teacher','admin'), async (req,re
     await db.query(`INSERT INTO material_versions(version_id,material_id,version_number,file_name,mime_type,file_size,file_data,metadata,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`,[`VER-${crypto.randomBytes(10).toString('hex')}`,req.params.id,version,name,mimeType,buffer.length,buffer,JSON.stringify({title:current.rows[0].title}),req.user.email]);
     await db.query('COMMIT'); void audit(req,'material_new_version','material',req.params.id,{version,fileName:name}); res.json({ok:true,version});
   } catch(e){try{await db.query('ROLLBACK')}catch{};res.status(500).json({error:'Could not create the new material version.'})}
-});
-
-// Tusome AI monetization: server-side monthly entitlements and usage accounting.
-const TUSOME_AI_PLANS = {
-  free: { label: 'Free', monthlyLimit: 10 },
-  learner_plus: { label: 'Learner Plus', monthlyLimit: 100 },
-  teacher_plus: { label: 'Teacher Plus', monthlyLimit: 250 },
-  school_starter: { label: 'School Starter', monthlyPerMember: 500 },
-  school_growth: { label: 'School Growth', monthlyPerMember: 1000 }
-};
-const TUSOME_AI_UNIT_COST = { fast: 1, medium: 2, deep: 4 };
-
-function tusomeAiMonthStart() {
-  const d = new Date();
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)).toISOString().slice(0,10);
-}
-
-function tusomeAiUnits({ thinkingLevel, attachmentCount }) {
-  const level = String(thinkingLevel || 'medium').toLowerCase();
-  const base = TUSOME_AI_UNIT_COST[level] || TUSOME_AI_UNIT_COST.medium;
-  return Math.min(12, base + Math.max(0, Number(attachmentCount || 0)) * 2);
-}
-
-async function getTusomeAiEntitlement(req) {
-  if (!databaseReady) throw new Error('Tusome AI billing requires PostgreSQL.');
-  if (req.user.role === 'admin') {
-    return { planKey:'admin', planName:'Administrator', scopeType:'user', scopeId:req.user.email, monthlyLimit:null, used:0, remaining:null, unlimited:true, schoolId:null, memberCount:0 };
-  }
-  const monthStart = tusomeAiMonthStart();
-  let planKey = 'free', planName = 'Free', scopeType = 'user', scopeId = req.user.email, monthlyLimit = TUSOME_AI_PLANS.free.monthlyLimit, schoolId = null, memberCount = 0;
-
-  const school = await db.query(`
-    SELECT sm.school_id AS "schoolId", s.plan_key AS "planKey", p.name,
-           (SELECT COUNT(*)::int FROM school_memberships sm2 WHERE sm2.school_id=sm.school_id AND sm2.status='active') AS "memberCount"
-    FROM school_memberships sm
-    JOIN subscriptions s ON s.school_id=sm.school_id AND s.status IN ('active','trial') AND COALESCE(s.ends_at,NOW())>NOW()
-    JOIN subscription_plans p ON p.plan_key=s.plan_key
-    WHERE sm.user_email=$1 AND sm.status='active' AND p.plan_key IN ('school_starter','school_growth')
-    ORDER BY s.ends_at DESC NULLS LAST LIMIT 1`, [req.user.email]);
-  if (school.rowCount) {
-    schoolId = school.rows[0].schoolId;
-    planKey = school.rows[0].planKey;
-    planName = school.rows[0].name;
-    scopeType = 'school';
-    scopeId = schoolId;
-    memberCount = Math.max(1, Number(school.rows[0].memberCount || 1));
-    monthlyLimit = (TUSOME_AI_PLANS[planKey]?.monthlyPerMember || 0) * memberCount;
-  } else {
-    const personal = await db.query(`
-      SELECT s.plan_key AS "planKey", p.name
-      FROM subscriptions s JOIN subscription_plans p ON p.plan_key=s.plan_key
-      WHERE s.user_email=$1 AND s.status IN ('active','trial') AND COALESCE(s.ends_at,NOW())>NOW()
-        AND p.audience=$2 AND p.plan_key IN ('learner_plus','teacher_plus')
-      ORDER BY s.ends_at DESC NULLS LAST LIMIT 1`, [req.user.email, req.user.role]);
-    if (personal.rowCount) {
-      planKey = personal.rows[0].planKey;
-      planName = personal.rows[0].name;
-      monthlyLimit = TUSOME_AI_PLANS[planKey]?.monthlyLimit || monthlyLimit;
-    }
-  }
-
-  const usage = await db.query(`SELECT units_used AS "unitsUsed", request_count AS "requestCount" FROM ai_usage_monthly WHERE scope_type=$1 AND scope_id=$2 AND month_start=$3`, [scopeType, scopeId, monthStart]);
-  const used = Number(usage.rows[0]?.unitsUsed || 0);
-  return { planKey, planName, scopeType, scopeId, monthlyLimit, used, remaining:Math.max(0, monthlyLimit-used), unlimited:false, schoolId, memberCount, monthStart };
-}
-
-app.get('/api/tusome-ai/entitlement', requireAuth, async (req,res)=>{
-  try { res.json({ok:true, entitlement:await getTusomeAiEntitlement(req)}); }
-  catch(e){ console.error('Tusome AI entitlement error:',e); res.status(503).json({error:e.message||'Could not load Tusome AI allowance.'}); }
-});
-
-app.get('/api/tusome-ai/health', async (_req,res)=>{
-  res.json({ok:true,configured:Boolean(process.env.GEMINI_API_KEY),model:process.env.GEMINI_MODEL||'gemini-3.8-flash'});
-});
-
-async function callTusomeGemini({ prompt, thinkingLevel, studyMode, history, files }) {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error('GEMINI_API_KEY is not configured on the server.');
-  const primaryModel = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
-  const fallbackModels = (process.env.GEMINI_FALLBACK_MODELS || 'gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash').split(',').map(x=>x.trim()).filter(Boolean);
-  const models=[...new Set([primaryModel,...fallbackModels])];
-  const level = ['fast','medium','deep'].includes(String(thinkingLevel)) ? String(thinkingLevel) : 'medium';
-  const levelGuide = {fast:'Answer efficiently with the essential reasoning.',medium:'Give balanced reasoning and a clear useful answer.',deep:'Use careful multi-step reasoning, checking calculations and assumptions before answering.'}[level];
-  const studyGuide = studyMode ? 'Study Mode is ON: teach step-by-step, ask the learner to think where appropriate, and avoid simply doing schoolwork without explanation.' : 'Study Mode is OFF: answer directly while still explaining important steps.';
-  const system = `You are Tusome AI, the dedicated general-purpose AI assistant inside Tusome EduShelf.\n${levelGuide}\n${studyGuide}\nBe clear, practical and accurate. For schoolwork, support learning rather than helping a learner bypass an assessment. Never request passwords, M-PESA PINs, API keys or other secrets. Do not claim access to private account data unless it is supplied in the conversation.\nIf files are supplied, use them as the primary source and say when something cannot be read clearly.`;
-  const parts=[];
-  const safeHistory=Array.isArray(history)?history.slice(-12):[];
-  if(safeHistory.length) parts.push({text:'CONVERSATION HISTORY:\n'+safeHistory.map(m=>`${String(m?.role||'user').toUpperCase()}: ${String(m?.text||'').slice(0,8000)}`).join('\n\n')});
-  const uploads=Array.isArray(files)?files.slice(0,5):[];
-  let totalBytes=0;
-  for(const f of uploads){
-    const mime=String(f?.mimeType||'application/octet-stream').toLowerCase();
-    const raw=String(f?.data||'').replace(/^data:[^;]+;base64,/,'');
-    if(!raw) continue;
-    const bytes=Math.floor(raw.length*3/4); totalBytes+=bytes;
-    if(totalBytes>20*1024*1024) throw new Error('The combined attachment limit is 20 MB.');
-    const label=String(f?.name||'attachment').slice(0,160);
-    if(['application/pdf','image/png','image/jpeg','image/webp','image/heic','image/heif'].includes(mime)){
-      parts.push({text:`--- FILE: ${label} ---`}); parts.push({inline_data:{mime_type:mime,data:raw}});
-    } else if(['text/plain','text/csv','application/json','text/markdown'].includes(mime) || /\.(txt|csv|json|md)$/i.test(label)){
-      let decoded=''; try{decoded=Buffer.from(raw,'base64').toString('utf8').slice(0,50000)}catch{decoded='[Could not decode this text file.]'}
-      parts.push({text:`--- FILE: ${label} ---\n${decoded}`});
-    } else throw new Error(`Unsupported file type for ${label}. Use PDF, image, TXT, CSV, JSON or Markdown.`);
-  }
-  parts.push({text:`${system}\n\nUSER MESSAGE:\n${String(prompt||'').slice(0,12000)}`});
-  const transient=new Set([408,429,500,502,503,504]); let lastError=null;
-  for(const model of models){
-    for(let attempt=0;attempt<=2;attempt++){
-      try{
-        const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,{method:'POST',headers:{'x-goog-api-key':apiKey,'Content-Type':'application/json'},body:JSON.stringify({contents:[{role:'user',parts}],generationConfig:{temperature:0.2,topP:0.9}})});
-        const raw=await r.text(); let d; try{d=JSON.parse(raw)}catch{throw new Error(`Gemini returned a non-JSON response (${r.status}).`)}
-        if(!r.ok){const e=new Error(d?.error?.message||`Gemini request failed (${r.status}).`);e.status=r.status;throw e}
-        const answer=(d.candidates||[]).flatMap(c=>c.content?.parts||[]).map(p=>p.text||'').join('\n').trim(); if(!answer)throw new Error('Gemini returned no text response.');
-        return {answer,model};
-      }catch(e){lastError=e;const transientError=transient.has(Number(e?.status||0))||/high demand|temporarily|unavailable|overloaded|rate limit|resource exhausted/i.test(e?.message||'');if(!transientError)throw e;if(attempt<2)await new Promise(r=>setTimeout(r,Math.min(8000,1200*(2**attempt))))}
-    }
-  }
-  throw new Error(`Gemini is temporarily busy. Please try again shortly. ${lastError?.message||''}`.trim());
-}
-
-app.post('/api/tusome-ai/chat', requireAuth, async (req,res)=>{
-  if(!databaseReady) return res.status(503).json({error:'Tusome AI paid usage requires PostgreSQL to be ready.'});
-  try{
-    const files=Array.isArray(req.body?.files)?req.body.files.slice(0,5):[];
-    const entitlement=await getTusomeAiEntitlement(req);
-    const units=tusomeAiUnits({thinkingLevel:req.body?.thinkingLevel,attachmentCount:files.length});
-    if(!entitlement.unlimited && entitlement.remaining<units){
-      return res.status(402).json({error:`Your ${entitlement.planName} Tusome AI allowance has ${entitlement.remaining} unit${entitlement.remaining===1?'':'s'} remaining, but this request needs ${units}. Upgrade or wait for your monthly allowance to reset.`,code:'AI_ALLOWANCE_EXHAUSTED',entitlement});
-    }
-    const result=await callTusomeGemini({prompt:req.body?.prompt,thinkingLevel:req.body?.thinkingLevel,studyMode:Boolean(req.body?.studyMode),history:req.body?.history,files});
-    if(!entitlement.unlimited){
-      const monthStart=entitlement.monthStart; const updated=await db.query(`INSERT INTO ai_usage_monthly(scope_type,scope_id,month_start,units_used,request_count,updated_at) VALUES($1,$2,$3,$4,1,NOW()) ON CONFLICT(scope_type,scope_id,month_start) DO UPDATE SET units_used=ai_usage_monthly.units_used+EXCLUDED.units_used,request_count=ai_usage_monthly.request_count+1,updated_at=NOW() RETURNING units_used AS "unitsUsed",request_count AS "requestCount"`,[entitlement.scopeType,entitlement.scopeId,monthStart,units]);
-      await db.query(`INSERT INTO ai_usage_events(event_id,user_email,role,scope_type,scope_id,plan_key,units,thinking_level,study_mode,attachment_count,model) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,['AIE-'+crypto.randomBytes(9).toString('hex'),req.user.email,req.user.role,entitlement.scopeType,entitlement.scopeId,entitlement.planKey,units,String(req.body?.thinkingLevel||'medium'),Boolean(req.body?.studyMode),files.length,result.model]);
-      const used=Number(updated.rows[0]?.unitsUsed||0); entitlement.used=used; entitlement.remaining=Math.max(0,entitlement.monthlyLimit-used);
-    }
-    res.json({ok:true,answer:result.answer,model:result.model,thinkingLevel:String(req.body?.thinkingLevel||'medium'),entitlement,unitsCharged:units});
-  }catch(e){console.error('Tusome AI error:',e);res.status(500).json({error:e.message||'Tusome AI request failed.'});}
 });
 
 // Public onboarding assistant: deliberately limited to general Tusome EduShelf guidance.
@@ -2239,17 +2092,6 @@ app.post('/api/schools/request', requireRole('teacher','admin'), async (req,res)
   }catch(e){console.error(e);res.status(500).json({error:'Could not create school request.'})}
 });
 
-app.get('/api/admin/tusome-ai/revenue', requireRole('admin'), async (_req,res)=>{
-  if(!databaseReady)return res.status(503).json({error:'Revenue reporting requires PostgreSQL.'});
-  try{
-    const usage=await db.query(`SELECT COALESCE(SUM(e.units),0)::int AS units,COUNT(*)::int AS requests FROM ai_usage_events e WHERE e.created_at>=date_trunc('month',NOW())`);
-    const usageByPlan=await db.query(`SELECT COALESCE(p.name,e.plan_key,'Free') AS "planName",COUNT(DISTINCT e.scope_id)::int AS scopes,COUNT(*)::int AS requests,COALESCE(SUM(e.units),0)::int AS units FROM ai_usage_events e LEFT JOIN subscription_plans p ON p.plan_key=e.plan_key WHERE e.created_at>=date_trunc('month',NOW()) GROUP BY COALESCE(p.name,e.plan_key,'Free') ORDER BY units DESC`);
-    const revenue=await db.query(`SELECT COALESCE(SUM(sp.paid_amount),0)::numeric AS revenue FROM subscription_payments sp WHERE sp.status='paid' AND sp.updated_at>=date_trunc('month',NOW())`);
-    const planRevenue=await db.query(`SELECT p.plan_key AS "planKey",p.name AS "planName",COALESCE(SUM(sp.paid_amount),0)::numeric AS revenue FROM subscription_payments sp JOIN subscriptions s ON s.subscription_id=sp.subscription_id JOIN subscription_plans p ON p.plan_key=s.plan_key WHERE sp.status='paid' AND sp.updated_at>=date_trunc('month',NOW()) GROUP BY p.plan_key,p.name ORDER BY revenue DESC`);
-    res.json({ok:true,summary:{units:Number(usage.rows[0]?.units||0),requests:Number(usage.rows[0]?.requests||0),membershipRevenue:Number(revenue.rows[0]?.revenue||0)},usageByPlan:usageByPlan.rows.map(x=>({...x,scopes:Number(x.scopes||0),requests:Number(x.requests||0),units:Number(x.units||0)})),planRevenue:planRevenue.rows.map(x=>({...x,revenue:Number(x.revenue||0)}))});
-  }catch(e){console.error('Tusome AI revenue error:',e);res.status(500).json({error:'Could not load Tusome AI revenue.'})}
-});
-
 app.get('/api/admin/subscriptions', requireRole('admin'), async (_req,res)=>{
   try{
     const subs=await db.query(`SELECT s.subscription_id AS "subscriptionId",s.user_email AS "userEmail",s.school_id AS "schoolId",sc.school_name AS "schoolName",s.plan_key AS "planKey",p.name,s.status,s.billing_cycle AS "billingCycle",s.amount,s.requested_at AS "requestedAt",s.starts_at AS "startsAt",s.ends_at AS "endsAt" FROM subscriptions s JOIN subscription_plans p ON p.plan_key=s.plan_key LEFT JOIN schools sc ON sc.school_id=s.school_id ORDER BY s.requested_at DESC LIMIT 200`);
@@ -2790,6 +2632,19 @@ app.patch('/api/schools/communication/messages/:id/read', schoolCommunicationAcc
 
 
 
+// v70 — KICD/CBE + KNEC/KJSEA official source catalogue.
+app.get('/api/cbe-library/catalog', requireAuth, async (req,res)=>{
+  const resources=[
+    {id:'KICD-CBC-MATERIALS',title:'KICD CBC / CBE Materials',authority:'KICD',type:'Official catalogue',grade:'All levels',url:'https://kicd.ac.ke/cbc-materials/',description:'Official KICD hub for curriculum designs, approved course materials and approved complementary materials.'},
+    {id:'KICD-CURRICULUM-DESIGNS',title:'KICD Curriculum Designs',authority:'KICD',type:'Curriculum designs',grade:'Pre-Primary to Grade 12',url:'https://kicd.ac.ke/cbc-materials/curriculum-designs/',description:'Official curriculum design catalogue for regular and special-needs education.'},
+    {id:'KICD-APPROVED-COURSE-MATERIALS',title:'KICD Approved CBC Course Materials',authority:'KICD',type:'Approved course materials',grade:'CBC / Senior School',url:'https://kicd.ac.ke/cbc-materials/approved-cbc-course-materials/',description:'Official KICD page listing approved course-material documents.'},
+    {id:'KNEC-KJSEA-SAMPLES',title:'KJSEA Sample Papers, Rubrics & OMR Sheets',authority:'KNEC',type:'KJSEA sample papers',grade:'Grade 9',url:'https://www.knec.ac.ke/circular-on-accessing-kjsea-sample-paper/',description:'Official KNEC guidance for accessing KJSEA sample papers, rubrics and OMR answer sheets.'},
+    {id:'KNEC-CBA-PORTAL',title:'KNEC CBA Portal',authority:'KNEC',type:'Assessment portal',grade:'Grade 9',url:'https://cba.knec.ac.ke/',description:'KNEC portal referenced by the official KJSEA sample-paper circular; access may require assessment-centre credentials.'},
+    {id:'KNEC-KJSEA-TIMETABLE',title:'2026 KJSEA Timetable & Instructions',authority:'KNEC',type:'KJSEA instructions',grade:'Grade 9',url:'https://www.knec.ac.ke/timetables/',description:'Official KNEC timetable and instructions area, including 2026 KJSEA.'}
+  ];
+  res.json({ok:true,resources});
+});
+
 // v47 — Digital Library & Resource Centre (digital-only; no physical-book inventory)
 app.get('/api/digital-library', requireAuth, async (req,res)=>{
   if(!databaseReady) return res.status(503).json({error:'Database is not ready.'});
@@ -2804,7 +2659,7 @@ app.get('/api/digital-library', requireAuth, async (req,res)=>{
     if(schoolIds.length){ params.push(schoolIds); where+=` OR r.school_id = ANY($1)`; }
     where+=`)`;
     const links=await db.query(`SELECT r.resource_id AS "resourceId",r.title,r.resource_type AS "resourceType",r.url,r.description,r.subject,r.grade,r.strand,r.topic,r.school_id AS "schoolId",r.created_at AS "createdAt" FROM digital_resources r WHERE ${where} ORDER BY r.created_at DESC`,params);
-    const materials=await db.query(`SELECT id,title,subject,grade,strand,competency,topic,file_name AS file,"file_type" AS "fileType",file_size AS "fileSize",price,description,teacher_email AS "teacherEmail",created_at AS "createdAt" FROM materials WHERE approval_status='approved' AND deleted_at IS NULL ORDER BY created_at DESC`);
+    const materials=await db.query(`SELECT id,title,subject,grade,strand,competency,topic,file_name AS file,"file_type" AS "fileType",file_size AS "fileSize",price,description,teacher_email AS "teacherEmail",source_authority AS "sourceAuthority",material_type AS "materialType",academic_year AS "academicYear",official_source_url AS "officialSourceUrl",rights_status AS "rightsStatus",cbe_stage AS "cbeStage",created_at AS "createdAt" FROM materials WHERE approval_status='approved' AND deleted_at IS NULL ORDER BY created_at DESC`);
     const featured=materials.rows.slice(0,8).map(x=>({...x,kind:'material',resourceType:'Uploaded material',resourceId:x.id,url:null}));
     const rows=[...links.rows.map(x=>({...x,kind:'link'})),...featured];
     res.json({ok:true,resources:rows,counts:{total:rows.length,links:links.rowCount,uploaded:materials.rowCount}});

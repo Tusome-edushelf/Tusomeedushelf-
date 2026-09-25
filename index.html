@@ -1936,13 +1936,28 @@ async function loadTusomeAIEntitlement(){
 }
 
 async function loadAdminAIRevenue(){
+  const set=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v};
+  const tb=document.getElementById('adminAIUsageTable');
   try{
-    const r=await fetch('/api/admin/tusome-ai/revenue',{credentials:'include'}),d=await r.json(); if(!r.ok)throw new Error(d.error||'Could not load AI revenue.');
-    const set=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v};
-    set('adminAIRequests',Number(d.summary?.requests||0).toLocaleString());set('adminAIUnits',Number(d.summary?.units||0).toLocaleString());set('adminAIRevenue','KES '+Number(d.summary?.membershipRevenue||0).toFixed(2));
+    const r=await fetch('/api/admin/tusome-ai/revenue',{credentials:'include',headers:{'Accept':'application/json'}});
+    const raw=await r.text();
+    let d=null;
+    try{d=raw?JSON.parse(raw):null}catch{
+      if(/<!doctype html|<html[\s>]/i.test(raw)){
+        throw new Error('The Render server is still running the older server.mjs. Deploy the updated server.mjs and restart the service.');
+      }
+      throw new Error('The AI revenue endpoint returned an invalid response.');
+    }
+    if(!r.ok)throw new Error(d?.error||`Could not load AI revenue (HTTP ${r.status}).`);
+    set('adminAIRequests',Number(d.summary?.requests||0).toLocaleString());
+    set('adminAIUnits',Number(d.summary?.units||0).toLocaleString());
+    set('adminAIRevenue','KES '+Number(d.summary?.membershipRevenue||0).toFixed(2));
     set('adminAIPlans',(d.planRevenue||[]).map(x=>`${x.planName}: KES ${Number(x.revenue||0).toFixed(0)}`).join(' • ')||'No paid AI membership revenue yet');
-    const tb=document.getElementById('adminAIUsageTable'); if(tb)tb.innerHTML=(d.usageByPlan||[]).length?(d.usageByPlan||[]).map(x=>`<tr><td>${escapeHtml(x.planName||x.planKey||'Free')}</td><td>${Number(x.scopes||0)}</td><td>${Number(x.requests||0)}</td><td>${Number(x.units||0)}</td></tr>`).join(''):'<tr><td colspan="4">No AI usage recorded this month.</td></tr>';
-  }catch(e){const tb=document.getElementById('adminAIUsageTable');if(tb)tb.innerHTML=`<tr><td colspan="4">${escapeHtml(e.message||'Could not load AI usage.')}</td></tr>`}
+    if(tb)tb.innerHTML=(d.usageByPlan||[]).length?(d.usageByPlan||[]).map(x=>`<tr><td>${escapeHtml(x.planName||x.planKey||'Free')}</td><td>${Number(x.scopes||0)}</td><td>${Number(x.requests||0)}</td><td>${Number(x.units||0)}</td></tr>`).join(''):'<tr><td colspan="4">No AI usage recorded this month.</td></tr>';
+  }catch(e){
+    set('adminAIPlans','Unavailable');
+    if(tb)tb.innerHTML=`<tr><td colspan="4">${escapeHtml(e.message||'Could not load AI usage.')}</td></tr>`;
+  }
 }
 
 async function restoreServerSession(){

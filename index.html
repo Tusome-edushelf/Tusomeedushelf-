@@ -149,7 +149,6 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
   <div class="logo">Tusome <span>EduShelf</span></div>
   <nav>
     <button onclick="show('home')">Home</button>
-    <a class="nav-auth" href="/tusome-ai" aria-label="Open separate Tusome AI">✨ Tusome AI</a>
     <button class="nav-auth" onclick="show('help')">❓ Help</button><button id="notificationNav" class="nav-auth nav-notify" onclick="show('notifications')" aria-label="Notifications">🔔 <span id="notificationNavCount" class="notify-count" aria-live="polite">0</span></button><button id="schoolDashboardNav" class="nav-auth" onclick="show('schoolDashboard')" style="display:none">🏫 School Dashboard</button><button class="nav-auth" onclick="show('account')">👤 Account</button><button class="nav-auth a11y-toggle" onclick="toggleAccessibilityPanel()" aria-expanded="false" aria-controls="accessibilityPanel">⚙️ Accessibility</button>
     <button class="nav-auth" onclick="show('login')">Sign In</button>
     <button class="nav-auth nav-signup" onclick="show('signup')">Sign Up</button>
@@ -298,7 +297,7 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
     <div class="card"><h3>📘 Mathematics</h3><p>12 materials</p></div>
     <div class="card"><h3>🧬 Biology</h3><p>8 materials</p></div>
     <div class="card"><h3>📖 English</h3><p>10 materials</p></div>
-    <div class="card"><h3>🤖 AI Assistant</h3><p>Ask questions, create notes, practise and get study support.</p><button class="btn primary" onclick="openAIAssistant('learner')">Open AI Assistant</button></div>
+    <div class="card"><h3>🤖 AI Assistant</h3><p>Ask questions, create notes, practise and get study support.</p><button class="btn primary" onclick="openAIAssistant('learner')">Open AI Assistant</button><button class="btn" style="margin-top:8px" onclick="openTusomeAI()">✨ Open Tusome AI</button></div>
   </div>
   <div class="progress-grid" style="margin-top:18px">
     <div class="card"><h3>▶️ Continue Learning</h3><div id="continueLearning"><p>Open a material to start building your learning history.</p></div></div>
@@ -729,7 +728,7 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
     <div class="card"><h3>👁 Views</h3><p><b id="teacherViewStat">128</b> learner views</p></div>
     <div class="card"><h3>📚 Subjects</h3><p><b id="teacherSubjectStat">3</b> subjects</p></div>
     <div class="card"><h3>💰 Earnings</h3><p><b id="teacherBalance">KES 0.00</b> available</p><small id="teacherRevenueRate">Teacher share: 80%</small></div>
-    <div class="card"><h3>🤖 AI Assistant</h3><p>Create lesson plans, assessments, notes and learning activities.</p><button class="btn primary" onclick="openAIAssistant('teacher')">Open AI Assistant</button></div>
+    <div class="card"><h3>🤖 AI Assistant</h3><p>Create lesson plans, assessments, notes and learning activities.</p><button class="btn primary" onclick="openAIAssistant('teacher')">Open AI Assistant</button><button class="btn" style="margin-top:8px" onclick="openTusomeAI()">✨ Open Tusome AI</button></div>
   </div>
   <div id="teacherGoalSection" class="card teacher-goal-card" style="margin-top:22px"><div><span class="teacher-eyebrow">MY TEACHING GOAL</span><h3 id="teacherGoalTitle">No teaching goal set yet.</h3><p id="teacherGoalHint" class="small">Choose one clear focus so the dashboard reminds you what you want to improve.</p></div><button class="btn" onclick="setTeacherFocusGoal()">Set Goal</button></div>
   <div id="teacherAnalyticsSection" class="card teacher-section-card" style="margin-top:22px"><h3>📊 Material Analytics</h3><div id="teacherAnalyticsPanel"><p>Loading analytics...</p></div></div>
@@ -1088,7 +1087,7 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
 <section id="admin" class="page">
   <div class="topline"><div><h2>🛡️ Administrator Control Center</h2><p>Central control for approvals, users, AI-generated notes, pricing, reports, transactions and platform revenue.</p></div><button class="btn primary" onclick="adminRefreshAll()">Refresh</button></div>
   <div class="admin-command">
-    <div class="command-hero"><h3>👋 Admin Command Centre</h3><p>One place to see what needs attention, jump to common tasks and monitor the platform. Use the detailed tabs below when you need deeper records.</p><div class="admin-action-row" style="margin-top:12px"><button class="btn light" onclick="adminTab('analytics')">Open Full Analytics</button><button class="btn light" onclick="openAIAssistant('admin')">Ask Admin AI</button></div></div>
+    <div class="command-hero"><h3>👋 Admin Command Centre</h3><p>One place to see what needs attention, jump to common tasks and monitor the platform. Use the detailed tabs below when you need deeper records.</p><div class="admin-action-row" style="margin-top:12px"><button class="btn light" onclick="adminTab('analytics')">Open Full Analytics</button><button class="btn light" onclick="openAIAssistant('admin')">Ask Admin AI</button><button class="btn light" onclick="openTusomeAI()">✨ Tusome AI</button></div></div>
     <div class="command-kpis">
       <div class="command-kpi">📚 Materials<b id="commandMaterials">0</b></div>
       <div class="command-kpi">⏳ Pending Review<b id="commandPending">0</b></div>
@@ -1813,6 +1812,7 @@ function configureAIAssistant(dashboard){
   prompt.placeholder=dashboard==='teacher'?'Example: Create a Grade 8 Mathematics lesson on linear equations...':dashboard==='admin'?'Example: Summarize materials awaiting approval and recent payment activity...':dashboard==='parent'?'Example: Explain this learner\'s recent progress and suggest revision support...':'Example: Explain linear functions and give me two examples.';
   document.getElementById('aiResult').style.display='none';
 }
+function openTusomeAI(){ window.location.href='/tusome-ai.html'; }
 function openAIAssistant(dashboard){
   aiReturnDashboard=dashboard||getSessionRole()||'learner';
   sessionStorage.setItem('tusomeAIReturnDashboard',aiReturnDashboard);

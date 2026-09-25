@@ -150,6 +150,7 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
   <nav>
     <button onclick="show('home')">Home</button>
     <button class="nav-auth" onclick="show('help')">❓ Help</button><button id="notificationNav" class="nav-auth nav-notify" onclick="show('notifications')" aria-label="Notifications">🔔 <span id="notificationNavCount" class="notify-count" aria-live="polite">0</span></button><button id="schoolDashboardNav" class="nav-auth" onclick="show('schoolDashboard')" style="display:none">🏫 School Dashboard</button><button class="nav-auth" onclick="show('account')">👤 Account</button><button class="nav-auth a11y-toggle" onclick="toggleAccessibilityPanel()" aria-expanded="false" aria-controls="accessibilityPanel">⚙️ Accessibility</button>
+    <button class="nav-auth" type="button" onclick="openTusomeAI()">✨ Tusome AI</button><button class="nav-auth" type="button" onclick="show('notes')">📝 Notes Generator</button>
     <button class="nav-auth" onclick="show('login')">Sign In</button>
     <button class="nav-auth nav-signup" onclick="show('signup')">Sign Up</button>
   </nav>
@@ -566,7 +567,8 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
 
 
 <section id="notes" class="page">
-  <div class="topline"><div><h2>📝 Detailed CBC Notes Generator</h2><p>Select the grade and learning area first. EduShelf will then show only verified strands and the exact sub-strands mapped to the selected strand.</p></div><button class="btn" onclick="show('ai')">Open AI Assistant</button></div>
+  <div class="topline"><div><h2>📝 Detailed CBC Notes Generator</h2><p>Select the grade and learning area first. EduShelf will then show only verified strands and the exact sub-strands mapped to the selected strand.</p></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" type="button" onclick="openTusomeAI()">✨ Open Tusome AI</button><button class="btn" type="button" onclick="show('ai')">🤖 AI Study Assistant</button></div></div>
+  <div class="card" style="margin:12px 0;max-width:900px"><b>✨ Tusome AI</b><p class="small">Tusome AI is separate from the Notes Generator and keeps its own monthly usage allowance.</p><button class="btn primary" type="button" onclick="openTusomeAI()">Open Tusome AI</button></div>
   <div class="notice"><b>Curriculum accuracy:</b> Strand and sub-strand choices are driven by a verified curriculum registry. If a grade/learning-area combination has not yet been verified from the current official curriculum design, EduShelf will not invent a strand or sub-strand.</div>
   <form onsubmit="generateNotes(event)" style="max-width:900px">
     <div class="cards">
@@ -1924,6 +1926,17 @@ function refreshProgress(){
   const p=document.getElementById('progressActivity');if(p)p.innerHTML=logs.length?logs.slice(0,10).map(x=>`<div class="material"><div>📝 ${escHtml(x.action)}</div><small>${escHtml(x.time)}</small></div>`).join(''):'<p>No learning activity yet.</p>';
   const pa=document.getElementById('parentActivity');if(pa)pa.textContent=views+' material view(s) recorded.';const pai=document.getElementById('parentAI');if(pai)pai.textContent=ai+' AI-assisted study session(s) recorded.';const pp=document.getElementById('parentPractice');if(pp)pp.textContent=practice+' practice/assessment action(s) recorded.';
 }
+async function openTusomeAI(){
+  try{
+    const r=await fetch('/api/auth/me',{credentials:'include'});
+    if(!r.ok){show('login');showToast?.('Please sign in to use Tusome AI.','error');return;}
+    window.location.href='/tusome-ai.html';
+  }catch{show('login');showToast?.('Please sign in to use Tusome AI.','error')}
+}
+async function loadTusomeAIEntitlement(){
+  const box=document.getElementById('tusomeAIEntitlementBox'); if(!box)return;
+  try{const r=await fetch('/api/tusome-ai/entitlement',{credentials:'include'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load AI allowance.');const e=d.entitlement;box.innerHTML=e.unlimited?'<b>Administrator access:</b> Unlimited internal Tusome AI usage.':`<b>${escHtml(e.planName)}</b> • ${e.remaining} / ${e.monthlyLimit} AI units remaining this month${e.scopeType==='school'?` • Shared school pool for ${e.memberCount} active member${e.memberCount===1?'':'s'}.`:''}`;}catch(e){box.textContent=e.message||'Could not load AI allowance.'}
+}
 async function restoreServerSession(){
   try{
     const r=await fetch('/api/auth/me',{credentials:'include'});
@@ -1942,6 +1955,7 @@ function closeTeacherCustomizer(){document.getElementById('teacherCustomizer')?.
 function setTeacherFocusGoal(){const current=localStorage.getItem('tusomeTeacherGoal')||'';const goal=prompt('What is your main teaching goal? Example: Prepare stronger formative assessments',current);if(goal===null)return;const clean=goal.trim().slice(0,180);if(clean){localStorage.setItem('tusomeTeacherGoal',clean);applyTeacherPrefs();showToast?.('Teaching goal saved.','success')}else{localStorage.removeItem('tusomeTeacherGoal');applyTeacherPrefs();showToast?.('Teaching goal cleared.','info')}}
 function initTeacherPersonalization(){applyTeacherPrefs()}
 initTeacherPersonalization();
+initNotesGenerator();
 restoreServerSession();
 
 const practiceBank=[

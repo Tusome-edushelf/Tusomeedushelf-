@@ -446,6 +446,34 @@ async function initDatabase() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
     CREATE INDEX IF NOT EXISTS idx_subscription_payments_sub ON subscription_payments(subscription_id, status);
+
+    CREATE TABLE IF NOT EXISTS ai_usage_monthly (
+      scope_type TEXT NOT NULL CHECK (scope_type IN ('user','school')),
+      scope_id TEXT NOT NULL,
+      month_start DATE NOT NULL,
+      units_used INTEGER NOT NULL DEFAULT 0 CHECK (units_used >= 0),
+      request_count INTEGER NOT NULL DEFAULT 0 CHECK (request_count >= 0),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (scope_type, scope_id, month_start)
+    );
+    CREATE TABLE IF NOT EXISTS ai_usage_events (
+      event_id TEXT PRIMARY KEY,
+      user_email TEXT NOT NULL,
+      role TEXT NOT NULL,
+      scope_type TEXT NOT NULL,
+      scope_id TEXT NOT NULL,
+      plan_key TEXT,
+      units INTEGER NOT NULL,
+      thinking_level TEXT NOT NULL,
+      study_mode BOOLEAN NOT NULL DEFAULT FALSE,
+      attachment_count INTEGER NOT NULL DEFAULT 0,
+      model TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_ai_usage_events_created ON ai_usage_events(created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_ai_usage_events_user ON ai_usage_events(user_email, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_ai_usage_events_scope ON ai_usage_events(scope_type, scope_id, created_at DESC);
+
     CREATE TABLE IF NOT EXISTS schools (
       school_id TEXT PRIMARY KEY,
       school_name TEXT NOT NULL,
@@ -1107,7 +1135,7 @@ This is a guidance assistant, not an account-management or payment-support agent
     parent_revision: 'Suggest practical revision activities based on supplied progress. Use a table with Topic/Area, Activity, Suggested Duration, and How to Check Understanding.',
     parent_report: 'Explain supplied performance information in plain language. Use a small table if it makes the report easier to understand, and clearly distinguish reported results from suggestions.',
     parent_study: 'Give practical study-support suggestions for home. Use a simple table with Goal, Activity, Suggested Routine, and Check-in Method where helpful.',
-    notes: 'Create substantially detailed ORIGINAL CBC-aligned notes. Treat the supplied grade, learning area, strand and sub-strand as the authoritative curriculum anchor supplied by the application. Never replace the strand/sub-strand with the learning-area name, never invent a different strand/sub-strand, and do not reproduce or closely paraphrase KICD, KNEC, publisher or textbook wording. Structure the response with: curriculum anchor; original learning intentions; key vocabulary; detailed concept explanation; step-by-step worked examples; real-life applications; learner activities; key inquiry questions; suggested core competencies, values and PCIs clearly labelled as suggestions; common misconceptions; differentiated practice; at least 8 assessment questions with answers/marking guidance; revision checklist; and Verification & Reference with the supplied official source URL. If the supplied curriculum mapping is absent or uncertain, say so rather than inventing it.',
+    notes: 'Create clear, concise revision notes with headings, key points, examples and a short self-check section.',
     practice: 'Create practice questions appropriate to the selected subject and topic, followed by a separate answer key. Keep numbering clear.',
     summary: 'Summarize the requested topic using headings, concise bullet points, key terms, examples where useful, and a short self-check.',
     inquiry: 'Create an inquiry-based activity with a clear question, learning goal, learner steps, resources, expected evidence and reflection questions.',
@@ -1533,6 +1561,144 @@ app.put('/api/materials/:id/file', requireRole('teacher','admin'), async (req,re
     await db.query('COMMIT'); void audit(req,'material_new_version','material',req.params.id,{version,fileName:name}); res.json({ok:true,version});
   } catch(e){try{await db.query('ROLLBACK')}catch{};res.status(500).json({error:'Could not create the new material version.'})}
 });
+
+// Tusome AI monetization: server-side monthly entitlements and usage accounting.
+const TUSOME_AI_PLANS = {
+  free: { label: 'Free', monthlyLimit: 10 },
+  learner_plus: { label: 'Learner Plus', monthlyLimit: 100 },
+  teacher_plus: { label: 'Teacher Plus', monthlyLimit: 250 },
+  school_starter: { label: 'School Starter', monthlyPerMember: 500 },
+  school_growth: { label: 'School Growth', monthlyPerMember: 1000 }
+};
+const TUSOME_AI_UNIT_COST = { fast: 1, medium: 2, deep: 4 };
+
+function tusomeAiMonthStart() {
+  const d = new Date();
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)).toISOString().slice(0,10);
+}
+
+function tusomeAiUnits({ thinkingLevel, attachmentCount }) {
+  const level = String(thinkingLevel || 'medium').toLowerCase();
+  const base = TUSOME_AI_UNIT_COST[level] || TUSOME_AI_UNIT_COST.medium;
+  return Math.min(12, base + Math.max(0, Number(attachmentCount || 0)) * 2);
+}
+
+async function getTusomeAiEntitlement(req) {
+  if (!databaseReady) throw new Error('Tusome AI billing requires PostgreSQL.');
+  if (req.user.role === 'admin') {
+    return { planKey:'admin', planName:'Administrator', scopeType:'user', scopeId:req.user.email, monthlyLimit:null, used:0, remaining:null, unlimited:true, schoolId:null, memberCount:0 };
+  }
+  const monthStart = tusomeAiMonthStart();
+  let planKey = 'free', planName = 'Free', scopeType = 'user', scopeId = req.user.email, monthlyLimit = TUSOME_AI_PLANS.free.monthlyLimit, schoolId = null, memberCount = 0;
+
+  const school = await db.query(`
+    SELECT sm.school_id AS "schoolId", s.plan_key AS "planKey", p.name,
+           (SELECT COUNT(*)::int FROM school_memberships sm2 WHERE sm2.school_id=sm.school_id AND sm2.status='active') AS "memberCount"
+    FROM school_memberships sm
+    JOIN subscriptions s ON s.school_id=sm.school_id AND s.status IN ('active','trial') AND COALESCE(s.ends_at,NOW())>NOW()
+    JOIN subscription_plans p ON p.plan_key=s.plan_key
+    WHERE sm.user_email=$1 AND sm.status='active' AND p.plan_key IN ('school_starter','school_growth')
+    ORDER BY s.ends_at DESC NULLS LAST LIMIT 1`, [req.user.email]);
+  if (school.rowCount) {
+    schoolId = school.rows[0].schoolId;
+    planKey = school.rows[0].planKey;
+    planName = school.rows[0].name;
+    scopeType = 'school';
+    scopeId = schoolId;
+    memberCount = Math.max(1, Number(school.rows[0].memberCount || 1));
+    monthlyLimit = (TUSOME_AI_PLANS[planKey]?.monthlyPerMember || 0) * memberCount;
+  } else {
+    const personal = await db.query(`
+      SELECT s.plan_key AS "planKey", p.name
+      FROM subscriptions s JOIN subscription_plans p ON p.plan_key=s.plan_key
+      WHERE s.user_email=$1 AND s.status IN ('active','trial') AND COALESCE(s.ends_at,NOW())>NOW()
+        AND p.audience=$2 AND p.plan_key IN ('learner_plus','teacher_plus')
+      ORDER BY s.ends_at DESC NULLS LAST LIMIT 1`, [req.user.email, req.user.role]);
+    if (personal.rowCount) {
+      planKey = personal.rows[0].planKey;
+      planName = personal.rows[0].name;
+      monthlyLimit = TUSOME_AI_PLANS[planKey]?.monthlyLimit || monthlyLimit;
+    }
+  }
+
+  const usage = await db.query(`SELECT units_used AS "unitsUsed", request_count AS "requestCount" FROM ai_usage_monthly WHERE scope_type=$1 AND scope_id=$2 AND month_start=$3`, [scopeType, scopeId, monthStart]);
+  const used = Number(usage.rows[0]?.unitsUsed || 0);
+  return { planKey, planName, scopeType, scopeId, monthlyLimit, used, remaining:Math.max(0, monthlyLimit-used), unlimited:false, schoolId, memberCount, monthStart };
+}
+
+app.get('/api/tusome-ai/entitlement', requireAuth, async (req,res)=>{
+  try { res.json({ok:true, entitlement:await getTusomeAiEntitlement(req)}); }
+  catch(e){ console.error('Tusome AI entitlement error:',e); res.status(503).json({error:e.message||'Could not load Tusome AI allowance.'}); }
+});
+
+app.get('/api/tusome-ai/health', async (_req,res)=>{
+  res.json({ok:true,configured:Boolean(process.env.GEMINI_API_KEY),model:process.env.GEMINI_MODEL||'gemini-3.8-flash'});
+});
+
+async function callTusomeGemini({ prompt, thinkingLevel, studyMode, history, files }) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error('GEMINI_API_KEY is not configured on the server.');
+  const primaryModel = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
+  const fallbackModels = (process.env.GEMINI_FALLBACK_MODELS || 'gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash').split(',').map(x=>x.trim()).filter(Boolean);
+  const models=[...new Set([primaryModel,...fallbackModels])];
+  const level = ['fast','medium','deep'].includes(String(thinkingLevel)) ? String(thinkingLevel) : 'medium';
+  const levelGuide = {fast:'Answer efficiently with the essential reasoning.',medium:'Give balanced reasoning and a clear useful answer.',deep:'Use careful multi-step reasoning, checking calculations and assumptions before answering.'}[level];
+  const studyGuide = studyMode ? 'Study Mode is ON: teach step-by-step, ask the learner to think where appropriate, and avoid simply doing schoolwork without explanation.' : 'Study Mode is OFF: answer directly while still explaining important steps.';
+  const system = `You are Tusome AI, the dedicated general-purpose AI assistant inside Tusome EduShelf.\n${levelGuide}\n${studyGuide}\nBe clear, practical and accurate. For schoolwork, support learning rather than helping a learner bypass an assessment. Never request passwords, M-PESA PINs, API keys or other secrets. Do not claim access to private account data unless it is supplied in the conversation.\nIf files are supplied, use them as the primary source and say when something cannot be read clearly.`;
+  const parts=[];
+  const safeHistory=Array.isArray(history)?history.slice(-12):[];
+  if(safeHistory.length) parts.push({text:'CONVERSATION HISTORY:\n'+safeHistory.map(m=>`${String(m?.role||'user').toUpperCase()}: ${String(m?.text||'').slice(0,8000)}`).join('\n\n')});
+  const uploads=Array.isArray(files)?files.slice(0,5):[];
+  let totalBytes=0;
+  for(const f of uploads){
+    const mime=String(f?.mimeType||'application/octet-stream').toLowerCase();
+    const raw=String(f?.data||'').replace(/^data:[^;]+;base64,/,'');
+    if(!raw) continue;
+    const bytes=Math.floor(raw.length*3/4); totalBytes+=bytes;
+    if(totalBytes>20*1024*1024) throw new Error('The combined attachment limit is 20 MB.');
+    const label=String(f?.name||'attachment').slice(0,160);
+    if(['application/pdf','image/png','image/jpeg','image/webp','image/heic','image/heif'].includes(mime)){
+      parts.push({text:`--- FILE: ${label} ---`}); parts.push({inline_data:{mime_type:mime,data:raw}});
+    } else if(['text/plain','text/csv','application/json','text/markdown'].includes(mime) || /\.(txt|csv|json|md)$/i.test(label)){
+      let decoded=''; try{decoded=Buffer.from(raw,'base64').toString('utf8').slice(0,50000)}catch{decoded='[Could not decode this text file.]'}
+      parts.push({text:`--- FILE: ${label} ---\n${decoded}`});
+    } else throw new Error(`Unsupported file type for ${label}. Use PDF, image, TXT, CSV, JSON or Markdown.`);
+  }
+  parts.push({text:`${system}\n\nUSER MESSAGE:\n${String(prompt||'').slice(0,12000)}`});
+  const transient=new Set([408,429,500,502,503,504]); let lastError=null;
+  for(const model of models){
+    for(let attempt=0;attempt<=2;attempt++){
+      try{
+        const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,{method:'POST',headers:{'x-goog-api-key':apiKey,'Content-Type':'application/json'},body:JSON.stringify({contents:[{role:'user',parts}],generationConfig:{temperature:0.2,topP:0.9}})});
+        const raw=await r.text(); let d; try{d=JSON.parse(raw)}catch{throw new Error(`Gemini returned a non-JSON response (${r.status}).`)}
+        if(!r.ok){const e=new Error(d?.error?.message||`Gemini request failed (${r.status}).`);e.status=r.status;throw e}
+        const answer=(d.candidates||[]).flatMap(c=>c.content?.parts||[]).map(p=>p.text||'').join('\n').trim(); if(!answer)throw new Error('Gemini returned no text response.');
+        return {answer,model};
+      }catch(e){lastError=e;const transientError=transient.has(Number(e?.status||0))||/high demand|temporarily|unavailable|overloaded|rate limit|resource exhausted/i.test(e?.message||'');if(!transientError)throw e;if(attempt<2)await new Promise(r=>setTimeout(r,Math.min(8000,1200*(2**attempt))))}
+    }
+  }
+  throw new Error(`Gemini is temporarily busy. Please try again shortly. ${lastError?.message||''}`.trim());
+}
+
+app.post('/api/tusome-ai/chat', requireAuth, async (req,res)=>{
+  if(!databaseReady) return res.status(503).json({error:'Tusome AI paid usage requires PostgreSQL to be ready.'});
+  try{
+    const files=Array.isArray(req.body?.files)?req.body.files.slice(0,5):[];
+    const entitlement=await getTusomeAiEntitlement(req);
+    const units=tusomeAiUnits({thinkingLevel:req.body?.thinkingLevel,attachmentCount:files.length});
+    if(!entitlement.unlimited && entitlement.remaining<units){
+      return res.status(402).json({error:`Your ${entitlement.planName} Tusome AI allowance has ${entitlement.remaining} unit${entitlement.remaining===1?'':'s'} remaining, but this request needs ${units}. Upgrade or wait for your monthly allowance to reset.`,code:'AI_ALLOWANCE_EXHAUSTED',entitlement});
+    }
+    const result=await callTusomeGemini({prompt:req.body?.prompt,thinkingLevel:req.body?.thinkingLevel,studyMode:Boolean(req.body?.studyMode),history:req.body?.history,files});
+    if(!entitlement.unlimited){
+      const monthStart=entitlement.monthStart; const updated=await db.query(`INSERT INTO ai_usage_monthly(scope_type,scope_id,month_start,units_used,request_count,updated_at) VALUES($1,$2,$3,$4,1,NOW()) ON CONFLICT(scope_type,scope_id,month_start) DO UPDATE SET units_used=ai_usage_monthly.units_used+EXCLUDED.units_used,request_count=ai_usage_monthly.request_count+1,updated_at=NOW() RETURNING units_used AS "unitsUsed",request_count AS "requestCount"`,[entitlement.scopeType,entitlement.scopeId,monthStart,units]);
+      await db.query(`INSERT INTO ai_usage_events(event_id,user_email,role,scope_type,scope_id,plan_key,units,thinking_level,study_mode,attachment_count,model) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,['AIE-'+crypto.randomBytes(9).toString('hex'),req.user.email,req.user.role,entitlement.scopeType,entitlement.scopeId,entitlement.planKey,units,String(req.body?.thinkingLevel||'medium'),Boolean(req.body?.studyMode),files.length,result.model]);
+      const used=Number(updated.rows[0]?.unitsUsed||0); entitlement.used=used; entitlement.remaining=Math.max(0,entitlement.monthlyLimit-used);
+    }
+    res.json({ok:true,answer:result.answer,model:result.model,thinkingLevel:String(req.body?.thinkingLevel||'medium'),entitlement,unitsCharged:units});
+  }catch(e){console.error('Tusome AI error:',e);res.status(500).json({error:e.message||'Tusome AI request failed.'});}
+});
+
 
 // Public onboarding assistant: deliberately limited to general Tusome EduShelf guidance.
 const homeAIRate = new Map();

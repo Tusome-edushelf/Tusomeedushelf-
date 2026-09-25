@@ -96,23 +96,6 @@ body.a11y-reduced-motion *,body.a11y-reduced-motion *::before,body.a11y-reduced-
 .timetable-shell{max-width:1200px;margin:0 auto;padding:20px}.timetable-hero{background:linear-gradient(135deg,#0f766e,#2563eb);color:#fff;border-radius:22px;padding:24px;box-shadow:0 14px 32px #0f766e22}.timetable-grid{display:grid;grid-template-columns:repeat(7,minmax(150px,1fr));gap:8px;overflow:auto;margin-top:16px}.tt-day{min-width:150px}.tt-day h4{margin:0 0 8px;text-align:center;padding:10px;border-radius:10px;background:#eef6ff}.tt-slot{min-height:92px;border:1px solid #dbe5f0;border-radius:12px;padding:8px;background:#fff;margin-bottom:8px}.tt-slot.break{background:#f8fafc}.tt-slot b{display:block;color:#173f8a}.tt-form-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.tt-admin-grid{display:grid;grid-template-columns:1fr 1.6fr;gap:16px}.tt-table-wrap{overflow:auto}.tt-table-wrap table{min-width:760px}@media(max-width:900px){.tt-form-grid{grid-template-columns:1fr 1fr}.tt-admin-grid{grid-template-columns:1fr}}@media(max-width:560px){.tt-form-grid{grid-template-columns:1fr}}
 
 .personalized-shell{max-width:1150px;margin:0 auto;padding:20px}.personalized-hero{background:linear-gradient(135deg,#0f766e,#2563eb);color:#fff;border-radius:22px;padding:24px}.personalized-grid{display:grid;grid-template-columns:1fr 1.3fr;gap:16px;margin-top:16px}.personalized-card{background:#fff;border:1px solid #dbe5f0;border-radius:16px;padding:18px;box-shadow:0 8px 24px #173f8a10}.recommendation-card{border:1px solid #dbe5f0;border-radius:14px;padding:14px;margin-top:10px}.personalized-note{background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:12px}@media(max-width:800px){.personalized-grid{grid-template-columns:1fr}}
-
-.tusome-ai-page .tai-hero{display:grid;grid-template-columns:1fr auto;gap:18px;align-items:center;margin-bottom:16px}
-.tusome-ai-page .tai-badge{display:inline-block;padding:6px 10px;border-radius:999px;background:#e8eefc;font-size:12px;font-weight:700}
-.tai-toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:12px;border-bottom:1px solid #e8ebf1}
-.tai-toolbar select,.tai-toolbar button{border:1px solid #d8deea;border-radius:10px;background:#fff;padding:9px 12px}
-.tai-chat{height:56vh;min-height:420px;overflow:auto;padding:16px;background:#fbfcfe}
-.tai-msg{max-width:86%;padding:12px 14px;margin:10px 0;border-radius:14px;line-height:1.55;white-space:pre-wrap;word-break:break-word}
-.tai-user{margin-left:auto;background:#eaf0ff}
-.tai-assistant{background:#f0f2f6}
-.tai-meta{font-size:11px;opacity:.6;margin-bottom:5px;font-weight:700}
-.tai-composer{display:grid;grid-template-columns:1fr auto;gap:10px;padding:12px;border-top:1px solid #e8ebf1}
-.tai-composer textarea{width:100%;resize:none;min-height:70px;border:1px solid #d8deea;border-radius:12px;padding:12px;font:inherit}
-.tai-actions{display:flex;gap:8px;flex-wrap:wrap;padding:0 12px 12px}
-.tai-file-name{font-size:12px;opacity:.7;align-self:center}
-.tai-tests{display:flex;gap:7px;flex-wrap:wrap;padding:12px;border-top:1px solid #e8ebf1}
-.tai-tests button{border:1px solid #d8deea;background:#fff;border-radius:9px;padding:8px;cursor:pointer}
-@media(max-width:650px){.tusome-ai-page .tai-hero{grid-template-columns:1fr}.tai-chat{height:62vh}.tai-msg{max-width:94%}.tai-composer{grid-template-columns:1fr}.tai-composer .btn{width:100%}}
 </style>
 </style>
 
@@ -152,7 +135,8 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
 <header>
   <div class="logo">Tusome <span>EduShelf</span></div>
   <nav>
-    <button onclick="show('home')">Home</button><button class="nav-auth" onclick="show('tusomeAI')">🤖 Tusome AI</button>
+    <button onclick="show('home')">Home</button>
+    <button class="nav-auth" onclick="openTusomeAI()">🤖 Tusome AI</button>
     <button class="nav-auth" onclick="show('help')">❓ Help</button><button id="notificationNav" class="nav-auth nav-notify" onclick="show('notifications')" aria-label="Notifications">🔔 <span id="notificationNavCount" class="notify-count" aria-live="polite">0</span></button><button class="nav-auth" onclick="show('account')">👤 Account</button><button class="nav-auth a11y-toggle" onclick="toggleAccessibilityPanel()" aria-expanded="false" aria-controls="accessibilityPanel">⚙️ Accessibility</button>
     <button class="nav-auth" onclick="show('login')">Sign In</button>
     <button class="nav-auth nav-signup" onclick="show('signup')">Sign Up</button>
@@ -188,6 +172,7 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
         <div class="home-feature teacher"><div class="icon">👩🏽‍🏫</div><h3>For Teachers</h3><p>Create lesson plans, find resources, manage classes and support learner progress.</p><button class="btn" onclick="show('teacher')">Teacher Dashboard →</button></div>
         <div class="home-feature learner"><div class="icon">🎓</div><h3>For Learners</h3><p>Access learning materials, complete activities, track progress and build achievements.</p><button class="btn" onclick="show('learner')">Learner Dashboard →</button></div>
         <div class="home-feature materials"><div class="icon">📖</div><h3>Learning Materials</h3><p>Access notes, exercises, past papers, videos and other approved digital resources.</p><button class="btn" onclick="show('digitalLibrary')">Explore Materials →</button></div>
+        <div class="home-feature" style="background:#f3f0ff"><div class="icon">🤖</div><h3>Tusome AI</h3><p>Use the separate general-purpose Tusome AI for learning, coding, reasoning, writing and research.</p><button class="btn" style="background:#5b21b6;color:#fff" onclick="openTusomeAI()">Open Tusome AI →</button></div>
       </div>
     </div>
 
@@ -198,7 +183,6 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
         <button class="home-quick-card" onclick="show('digitalLibrary')"><span class="qicon">📄</span><span><b>Past Papers</b><small>Practice & improve</small></span></button>
         <button class="home-quick-card" onclick="show('digitalLibrary')"><span class="qicon">▶️</span><span><b>Videos</b><small>Learn with visuals</small></span></button>
         <button class="home-quick-card" onclick="show('practice')"><span class="qicon">✅</span><span><b>Exercises</b><small>Test your knowledge</small></span></button>
-        <button class="home-quick-card" onclick="show('tusomeAI')"><span class="qicon">🤖</span><span><b>Tusome AI</b><small>General AI assistant</small></span></button>
         <button class="home-quick-card" onclick="show('digitalLibrary')"><span class="qicon">⬇️</span><span><b>Resources</b><small>Extra learning files</small></span></button>
       </div>
     </div>
@@ -566,52 +550,6 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
     <div id="aiAnswer" class="ai-answer"></div>
     <button class="btn" onclick="copyAI()">Copy Response</button>
   </div>
-</section>
-
-<section id="tusomeAI" class="page tusome-ai-page">
-  <div class="tai-hero">
-    <div>
-      <span class="tai-badge">SEPARATE AI ENGINE</span>
-      <h2 style="margin:8px 0 4px">🤖 Tusome AI</h2>
-      <p class="small" style="margin:0">Your standalone Tusome AI assistant — separate from the EduShelf Academic AI.</p>
-    </div>
-    <div id="tusomeAIStatus" class="notice" style="margin:0">Checking Tusome AI…</div>
-  </div>
-  <div class="notice"><b>What this AI does:</b> general questions, learning, mathematics, science, coding, reasoning, writing, research-style analysis and brainstorming. It is intentionally independent from the existing role-specific EduShelf AI.</div>
-  <div class="card" style="padding:0;overflow:hidden">
-    <div class="tai-toolbar">
-      <label>Mode
-        <select id="tusomeAIMode">
-          <option value="general">General</option><option value="learn">Learn</option><option value="reason">Reason</option><option value="code">Code</option><option value="creative">Creative</option><option value="research">Research</option>
-        </select>
-      </label>
-      <label>Thinking
-        <select id="tusomeAIThinking"><option value="low">Fast</option><option value="medium" selected>Balanced</option><option value="high">Deep</option></select>
-      </label>
-      <button class="btn" type="button" onclick="clearTusomeAIChat()">New Chat</button>
-    </div>
-    <div id="tusomeAIChat" class="tai-chat" aria-live="polite">
-      <div class="tai-msg tai-assistant"><div class="tai-meta">Tusome AI</div>Hello! I’m Tusome AI. Ask me a general question, give me a problem to solve, ask for code, or upload a supported file for analysis.</div>
-    </div>
-    <div class="tai-actions">
-      <label class="btn" style="cursor:pointer">📎 Attach file
-        <input id="tusomeAIFile" type="file" hidden accept="application/pdf,image/png,image/jpeg,image/webp,image/heic,image/heif,text/plain,text/csv,application/json,text/markdown">
-      </label>
-      <span id="tusomeAIFileName" class="tai-file-name">No file selected</span>
-      <button class="btn" type="button" onclick="clearTusomeAIFile()">Remove file</button>
-    </div>
-    <form class="tai-composer" onsubmit="sendTusomeAI(event)">
-      <textarea id="tusomeAIPrompt" maxlength="12000" placeholder="Ask Tusome AI anything…"></textarea>
-      <button id="tusomeAISend" class="btn primary" type="submit">➤ Send</button>
-    </form>
-    <div class="tai-tests">
-      <button type="button" onclick="setTusomeAITest('Explain photosynthesis simply, then give a more advanced explanation.')">Science test</button>
-      <button type="button" onclick="setTusomeAITest('Solve 3x² - 7x - 6 = 0 and verify both roots.')">Math test</button>
-      <button type="button" onclick="setTusomeAITest('Write a small JavaScript function that removes duplicate values from an array.')">Code test</button>
-      <button type="button" onclick="setTusomeAITest('A train travels 180 km in 2 hours 15 minutes. What is its average speed in km/h? Show the check.')">Reasoning test</button>
-    </div>
-  </div>
-  <div class="small" style="margin-top:10px">Do not upload passwords, payment PINs, API keys or other private credentials.</div>
 </section>
 
 
@@ -1770,6 +1708,8 @@ function configureAIAssistant(dashboard){
   prompt.placeholder=dashboard==='teacher'?'Example: Create a Grade 8 Mathematics lesson on linear equations...':dashboard==='admin'?'Example: Summarize materials awaiting approval and recent payment activity...':dashboard==='parent'?'Example: Explain this learner\'s recent progress and suggest revision support...':'Example: Explain linear functions and give me two examples.';
   document.getElementById('aiResult').style.display='none';
 }
+function openTusomeAI(){ window.location.href='/tusome-ai'; }
+
 function openAIAssistant(dashboard){
   aiReturnDashboard=dashboard||getSessionRole()||'learner';
   sessionStorage.setItem('tusomeAIReturnDashboard',aiReturnDashboard);
@@ -2323,55 +2263,5 @@ async function addPortfolioItem(){
   try{const r=await fetch('/api/learner/portfolio',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(body)});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not save portfolio item.');document.getElementById('portfolioTitle').value='';document.getElementById('portfolioDescription').value='';document.getElementById('portfolioEvidenceUrl').value='';showToast?.('Portfolio item saved.','success');loadLearnerPortfolio();}catch(e){showToast?.(e.message,'error');}
 }
 async function deletePortfolioItem(id){if(!confirm('Delete this portfolio item?'))return;try{const r=await fetch('/api/learner/portfolio/'+encodeURIComponent(id),{method:'DELETE',credentials:'include'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not delete item.');loadLearnerPortfolio();}catch(e){showToast?.(e.message,'error');}}
-
-
-let tusomeAIHistory=[];
-function escapeTusomeAIText(value){return String(value||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-function addTusomeAIMessage(role,text,meta=''){
-  const box=document.getElementById('tusomeAIChat'); if(!box)return null;
-  const d=document.createElement('div'); d.className='tai-msg '+(role==='user'?'tai-user':'tai-assistant');
-  d.innerHTML=(meta?'<div class="tai-meta">'+escapeTusomeAIText(meta)+'</div>':'')+escapeTusomeAIText(text);
-  box.appendChild(d); box.scrollTop=box.scrollHeight; return d;
-}
-function setTusomeAITest(text){const p=document.getElementById('tusomeAIPrompt');if(p){p.value=text;p.focus();}}
-function clearTusomeAIFile(){const f=document.getElementById('tusomeAIFile');if(f)f.value='';const n=document.getElementById('tusomeAIFileName');if(n)n.textContent='No file selected';}
-function clearTusomeAIChat(){tusomeAIHistory=[];const box=document.getElementById('tusomeAIChat');if(box)box.innerHTML='<div class="tai-msg tai-assistant"><div class="tai-meta">Tusome AI</div>New conversation started.</div>';clearTusomeAIFile();}
-async function readTusomeAIFile(file){
-  if(!file)return null;
-  if(file.size>10*1024*1024)throw new Error('Please keep the uploaded file below 10 MB.');
-  const data=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=()=>reject(new Error('Could not read the selected file.'));r.readAsDataURL(file)});
-  return {name:file.name,mimeType:file.type,data};
-}
-async function checkTusomeAIHealth(){
-  const el=document.getElementById('tusomeAIStatus'); if(!el)return;
-  try{const r=await fetch('/api/tusome-ai/health');const d=await r.json();el.textContent=d.configured?'● Tusome AI ready':'⚠ Tusome AI needs GEMINI_API_KEY';el.className=d.configured?'notice':'notice';}
-  catch(e){el.textContent='⚠ Tusome AI server unavailable';}
-}
-async function sendTusomeAI(e){
-  if(e&&e.preventDefault)e.preventDefault();
-  const promptEl=document.getElementById('tusomeAIPrompt'),button=document.getElementById('tusomeAISend'),fileEl=document.getElementById('tusomeAIFile');
-  const text=promptEl.value.trim(),file=fileEl?.files?.[0]||null;
-  if(!text&&!file){promptEl.focus();return;}
-  if(text.length>12000){showToast?.('Keep the message below 12,000 characters.','error');return;}
-  const mode=document.getElementById('tusomeAIMode').value,thinkingLevel=document.getElementById('tusomeAIThinking').value;
-  promptEl.value='';button.disabled=true;button.textContent='⏳ Thinking…';
-  if(text)addTusomeAIMessage('user',text,'You');
-  if(file)addTusomeAIMessage('user','📎 '+file.name,'Attachment');
-  const pending=addTusomeAIMessage('assistant','Thinking…','Tusome AI');
-  const old=tusomeAIHistory.slice();
-  if(text)tusomeAIHistory.push({role:'user',text});
-  try{
-    const uploaded=await readTusomeAIFile(file);
-    const res=await fetch('/api/tusome-ai/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:text,mode,thinkingLevel,history:old,file:uploaded})});
-    const data=await res.json(); if(!res.ok)throw new Error(data.error||'Tusome AI request failed.');
-    pending.innerHTML='<div class="tai-meta">Tusome AI • '+escapeTusomeAIText(data.model||'model')+'</div>'+escapeTusomeAIText(data.answer||'');
-    tusomeAIHistory.push({role:'assistant',text:data.answer||''});
-    clearTusomeAIFile();
-  }catch(err){pending.innerHTML='<div class="tai-meta">Tusome AI</div>'+escapeTusomeAIText('Error: '+err.message);if(text)tusomeAIHistory.pop();}
-  finally{button.disabled=false;button.textContent='➤ Send';}
-}
-document.getElementById('tusomeAIFile')?.addEventListener('change',e=>{const n=document.getElementById('tusomeAIFileName');n.textContent=e.target.files?.[0]?.name||'No file selected';});
-document.getElementById('tusomeAIPrompt')?.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendTusomeAI();}});
-checkTusomeAIHealth();
 </script>\n</body>
 </html>

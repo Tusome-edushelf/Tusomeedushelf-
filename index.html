@@ -150,8 +150,6 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
   <nav>
     <button onclick="show('home')">Home</button>
     <button class="nav-auth" onclick="show('help')">❓ Help</button><button id="notificationNav" class="nav-auth nav-notify" onclick="show('notifications')" aria-label="Notifications">🔔 <span id="notificationNavCount" class="notify-count" aria-live="polite">0</span></button><button id="schoolDashboardNav" class="nav-auth" onclick="show('schoolDashboard')" style="display:none">🏫 School Dashboard</button><button class="nav-auth" onclick="show('account')">👤 Account</button><button class="nav-auth a11y-toggle" onclick="toggleAccessibilityPanel()" aria-expanded="false" aria-controls="accessibilityPanel">⚙️ Accessibility</button>
-    <button class="nav-auth" type="button" onclick="openTusomeAI()">✨ Tusome AI</button>
-    <button class="nav-auth" type="button" onclick="show('notes')">📝 Notes Generator</button>
     <button class="nav-auth" onclick="show('login')">Sign In</button>
     <button class="nav-auth nav-signup" onclick="show('signup')">Sign Up</button>
   </nav>
@@ -568,46 +566,24 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
 
 
 <section id="notes" class="page">
-  <div class="topline">
-    <div><h2>📝 CBE Notes Generator</h2><p>Create original study and teaching notes from your own topic, prompt or material.</p></div>
-    <button class="btn primary" type="button" onclick="openTusomeAI()">✨ Open Tusome AI</button>
-  </div>
-  <div class="notice">
-    <b>How this works:</b> EduShelf generates original notes. It does not host or reproduce KICD curriculum designs, textbooks or KNEC papers. Use the official references below to verify curriculum alignment and terminology.
-  </div>
-  <div class="cards">
-    <div class="card">
-      <h3>📚 Generate Notes</h3>
-      <form id="notesForm" onsubmit="generateNotes(event)">
-        <label>Subject / Learning Area</label>
-        <select id="notesSubject" onchange="updateNotesStrands()"><option>Mathematics</option><option>English</option><option>Kiswahili</option><option>Integrated Science</option><option>Biology</option><option>Chemistry</option><option>Physics</option><option>Agriculture</option><option>Social Studies</option><option>Pre-Technical Studies</option><option>Creative Arts & Sports</option><option>Business Studies</option><option>Geography</option><option>History & Citizenship</option><option>Computer Studies</option><option>ICT</option><option>Home Science</option></select>
-        <label>Grade / Level</label>
-        <select id="notesGrade" onchange="updateNotesStrands()"><option>Grade 1</option><option>Grade 2</option><option>Grade 3</option><option>Grade 4</option><option>Grade 5</option><option>Grade 6</option><option>Grade 7</option><option>Grade 8</option><option>Grade 9</option><option>Grade 10</option><option>Grade 11</option><option>Grade 12</option></select>
-        <label>Strand</label>
-        <select id="notesStrand" required onchange="updateNotesSubstrands()"><option value="">Select a strand</option></select>
-        <label>Sub-strand</label>
-        <select id="notesSubstrand" required><option value="">Select a sub-strand</option></select>
-        <div id="notesStructureHint" class="small" style="margin:6px 0 12px">Select a grade, learning area, strand and sub-strand. The generator will use these as the CBC structure for the notes.</div>
-        <label>Topic / focus within the sub-strand</label>
-        <input id="notesTopic" required placeholder="e.g. Solving linear equations, separation of mixtures, paragraph writing">
-        <label>What should the notes include?</label>
-        <textarea id="notesPrompt" rows="5" placeholder="Add key points, examples, revision questions, vocabulary, practical activities, learner misconceptions, or your own teacher notes."></textarea>
-        <label>Note style</label>
-        <select id="notesStyle"><option value="revision">Revision notes</option><option value="teacher">Teacher lesson notes</option><option value="learner">Learner-friendly notes</option><option value="exam">Exam preparation notes</option></select>
-        <button class="btn primary" type="submit">📝 Generate Notes</button>
-      </form>
-      <div id="notesResult" class="card" style="display:none;margin-top:16px"><h3>Generated Notes</h3><div id="notesAnswer" class="ai-answer"></div></div>
+  <div class="topline"><div><h2>📝 Detailed CBC Notes Generator</h2><p>Select the grade and learning area first. EduShelf will then show only verified strands and the exact sub-strands mapped to the selected strand.</p></div><button class="btn" onclick="show('ai')">Open AI Assistant</button></div>
+  <div class="notice"><b>Curriculum accuracy:</b> Strand and sub-strand choices are driven by a verified curriculum registry. If a grade/learning-area combination has not yet been verified from the current official curriculum design, EduShelf will not invent a strand or sub-strand.</div>
+  <form onsubmit="generateNotes(event)" style="max-width:900px">
+    <div class="cards">
+      <div class="card"><label>Grade</label><select id="notesGrade" onchange="updateNotesLearningAreas()"><option value="">Select grade</option><option>Grade 7</option></select></div>
+      <div class="card"><label>Learning Area</label><select id="notesSubject" onchange="updateNotesStrands()" disabled><option value="">Select learning area</option></select></div>
     </div>
-    <div class="card">
-      <h3>🔗 Official Reference Sources</h3>
-      <p class="small">These links take you to official sources. EduShelf does not copy their documents into its library.</p>
-      <p><a href="https://kicd.ac.ke/cbc-materials/" target="_blank" rel="noopener noreferrer">KICD — CBC Materials</a></p>
-      <p><a href="https://kicd.ac.ke/cbc-materials/curriculum-designs/" target="_blank" rel="noopener noreferrer">KICD — Curriculum Designs</a></p>
-      <p><a href="https://kicd.ac.ke/media-centre/downloads/" target="_blank" rel="noopener noreferrer">KICD — Downloads & Standards</a></p>
-      <p><a href="https://www.knec.ac.ke/circular-on-accessing-kjsea-sample-paper/" target="_blank" rel="noopener noreferrer">KNEC — KJSEA Sample Paper Guidance</a></p>
-      <div class="notice" style="margin-top:14px"><b>Reference rule:</b> Generated notes are original study support. For exact official wording, current learning outcomes, assessment requirements or examination material, follow the official source and verify before use.</div>
+    <div class="cards" style="margin-top:12px">
+      <div class="card"><label>Strand</label><select id="notesStrand" onchange="updateNotesSubstrands()" disabled><option value="">Select strand</option></select></div>
+      <div class="card"><label>Sub-strand</label><select id="notesSubstrand" disabled><option value="">Select sub-strand</option></select></div>
     </div>
-  </div>
+    <label>Topic / focus (optional)</label><input id="notesTopic" placeholder="e.g. place value, factors, angles...">
+    <label>Note style</label><select id="notesStyle"><option value="learner">Detailed learner notes</option><option value="teacher">Teacher preparation notes</option><option value="revision">Exam/revision notes</option></select>
+    <label>Extra instructions</label><textarea id="notesExtra" rows="4" placeholder="Add examples, local context, difficulty level, assessment emphasis, etc."></textarea>
+    <button class="btn primary" type="submit">✨ Generate Detailed CBC Notes</button>
+  </form>
+  <div id="notesResult" class="card" style="display:none;max-width:900px;margin:20px auto"><h3>Generated Notes</h3><div id="notesAnswer" class="ai-answer"></div><button class="btn" type="button" onclick="copyGeneratedNotes()">Copy Notes</button></div>
+  <div class="card" style="max-width:900px;margin:20px auto"><h3>Official verification sources</h3><p>Use the current KICD curriculum design as the authoritative source for the selected grade and learning area. EduShelf generates original explanatory notes rather than copying curriculum documents.</p><p><a href="https://kicd.ac.ke/cbc-materials/curriculum-designs/" target="_blank" rel="noopener">KICD Curriculum Designs</a></p></div>
 </section>
 
 <section id="lesson" class="page">
@@ -688,7 +664,6 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
   <div class="notice"><b>Payment safety:</b> If you are under 18, use only a parent/guardian or other authorized adult's payment method with their permission. Never enter an M-PESA PIN into Tusome EduShelf.</div>
   <div class="card" style="margin-top:14px"><h3>📱 Membership payment number</h3><label>Authorized M-PESA number<input id="membershipPhone" inputmode="tel" autocomplete="tel" maxlength="16" placeholder="07XXXXXXXX"></label><p class="small">The server sends the M-PESA prompt to this number. Tusome EduShelf never asks for your M-PESA PIN.</p></div>
   <div id="membershipStatus" class="membership-status">Loading membership status…</div>
-  <div class="card" style="margin-top:14px"><div class="topline" style="margin:0"><div><h3>✨ Tusome AI Usage</h3><p class="small">Your separate Tusome AI allowance is enforced on the server and resets monthly.</p></div><button class="btn" type="button" onclick="loadTusomeAIEntitlement()">↻ Refresh</button></div><div id="tusomeAIEntitlementBox" class="small" style="margin-top:10px">Loading AI allowance…</div><button class="btn primary" type="button" style="margin-top:10px" onclick="openTusomeAI()">Open Tusome AI</button></div>
   <div class="membership-grid" id="membershipPlans" style="margin-top:18px"></div>
   <div class="card" style="margin-top:18px"><h3>🏫 School Plans</h3><p>Schools can request a school workspace with teacher and learner management, shared resources and analytics.</p><div class="school-panel"><label>School name<input id="schoolRequestName" maxlength="160" placeholder="School name"></label><label>Contact email<input id="schoolRequestEmail" type="email" maxlength="160" placeholder="school@example.com"></label><label>Contact phone (optional)<input id="schoolRequestPhone" maxlength="40" placeholder="Optional"></label><label>Plan<select id="schoolRequestPlan"><option value="school_starter">School Starter</option><option value="school_growth">School Growth</option></select></label></div><button class="btn primary" style="margin-top:12px" onclick="requestSchoolPlan()">Request School Plan</button><p class="small" style="margin-top:8px">A school plan request does not charge the account. An authorized administrator handles activation and payment arrangements.</p></div>
 </section>
@@ -1156,8 +1131,6 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
 
   <div id="adminMemberships" class="admin-panel" style="display:none">
     <div class="cards"><div class="card"><h3>👑 Requests</h3><p><b id="adminSubRequests">0</b></p></div><div class="card"><h3>✅ Active Memberships</h3><p><b id="adminSubActive">0</b></p></div><div class="card"><h3>🏫 Schools</h3><p><b id="adminSchoolCount">0</b></p></div></div>
-    <div class="cards" style="margin-top:16px"><div class="card"><h3>✨ AI Requests This Month</h3><p><b id="adminAIRequests">0</b></p></div><div class="card"><h3>⚡ AI Units Used</h3><p><b id="adminAIUnits">0</b></p></div><div class="card"><h3>💰 AI Membership Revenue</h3><p><b id="adminAIRevenue">KES 0.00</b></p></div><div class="card"><h3>📊 AI Revenue Plans</h3><p id="adminAIPlans">Loading…</p></div></div>
-    <div class="card" style="margin-top:16px"><h3>✨ Tusome AI Usage by Plan</h3><div class="table-like"><table><thead><tr><th>Plan</th><th>Users/Scopes</th><th>Requests</th><th>Units</th></tr></thead><tbody id="adminAIUsageTable"><tr><td colspan="4">Loading…</td></tr></tbody></table></div></div>
     <div class="card" style="margin-top:16px"><h3>Membership Requests</h3><p class="small">Activate only after the organization's authorized payment/account checks are complete.</p><div class="table-like"><table><thead><tr><th>Date</th><th>Account/School</th><th>Plan</th><th>Amount</th><th>Status</th><th>Action</th></tr></thead><tbody id="adminSubscriptionsTable"></tbody></table></div></div>
     <div class="card" style="margin-top:16px"><h3>🏫 School Workspaces</h3><div class="table-like"><table><thead><tr><th>School</th><th>Contact</th><th>Members</th><th>Status</th><th>Action</th></tr></thead><tbody id="adminSchoolsTable"></tbody></table></div></div>
   </div>
@@ -1785,6 +1758,7 @@ function show(id,skipHistory=false){
   if(id==='notifications')renderNotifications(); else refreshNotificationBadge(); if(id==='account')loadAccountProfile();
   if(id==='progress')refreshProgress(); if(id==='parent')loadParentChildren();
   if(id==='payments')renderPayments();
+  
   updatePublicUi();
   window.scrollTo(0,0);
 }
@@ -1869,6 +1843,64 @@ async function loadAccountProfile(){try{const r=await fetch('/api/account/profil
 async function saveAccountProfile(){try{const body={displayName:document.getElementById('accountDisplayName').value,avatarUrl:document.getElementById('accountAvatarUrl').value,notificationPreferences:{platform:document.getElementById('prefPlatform').checked,email:document.getElementById('prefEmail').checked}};const r=await fetch('/api/account/profile',{method:'PATCH',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(body)});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not save profile.');alert('Account settings saved.');loadAccountProfile()}catch(e){alert(e.message)}}
 async function changeAccountPassword(){const notice=document.getElementById('passwordNotice');try{const r=await fetch('/api/account/password',{method:'PATCH',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({currentPassword:document.getElementById('currentPassword').value,newPassword:document.getElementById('newPassword').value})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not change password.');notice.textContent='Password changed successfully.';showToast('Password changed successfully.','success');document.getElementById('currentPassword').value='';document.getElementById('newPassword').value='';}catch(e){notice.textContent=friendlyError(e,'Could not change your password.');showToast(notice.textContent,'error')}}
 async function askAI(e){e.preventDefault();const subject=document.getElementById('aiSubject').value,grade=document.getElementById('aiGrade').value,mode=document.getElementById('aiMode').value,focus=document.getElementById('cbeFocus').value,enteredPrompt=document.getElementById('aiPrompt').value.trim(),qFile=document.getElementById('aiQuestionFile')?.files?.[0],wFile=document.getElementById('aiWorkingFile')?.files?.[0],box=document.getElementById('aiResult'),answer=document.getElementById('aiAnswer'),button=e.target.querySelector('button[type="submit"]');const defaultPrompts={lesson:'Create a lesson plan for the selected subject and grade. Include objectives, learning activities, resources, differentiation and assessment.',scheme:'Create a structured scheme of work for the selected subject and grade, with sequence, topics, outcomes, activities, resources and assessment checkpoints.',assessment:'Create an assessment for the selected subject and grade with clear questions/tasks and marking guidance.',rubric:'Create a four-level rubric with observable criteria for the selected subject and grade.',differentiated:'Create differentiated activities for learners needing support, learners at expected level and learners ready for extension.',remediation:'Create remedial activities for likely learning gaps in the selected topic.',enrichment:'Create enrichment activities that deepen understanding of the selected topic.',admin_summary:'Summarize the current platform activity from the supplied dashboard data.',moderation:'Review the supplied material information for moderation concerns and items requiring human review.',duplicate:'Identify likely duplicate or highly similar materials from the supplied material list.',admin_reports:'Prepare a concise report on uploads, users and payments from the supplied dashboard data.',approval_queue:'Identify materials currently waiting for approval from the supplied dashboard data.',parent_progress:'Summarize the learner progress from the supplied progress data.',parent_revision:'Suggest revision activities based on the learner progress data.',parent_report:'Explain the learner performance information in simple language.',parent_study:'Suggest practical study-support ideas based on the learner progress data.'};const prompt=enteredPrompt||defaultPrompts[mode]||'';if(!prompt&&!qFile&&!wFile){alert('Enter a question or upload a question paper first.');return}if(mode==='mark'&&!qFile&&!wFile){alert('For Mark My Work, upload your question paper and/or your working.');return}button.disabled=true;button.textContent='⏳ Gemini is working...';answer.textContent='Gemini is preparing your response...';box.style.display='block';try{const readFile=async(file)=>{if(!file)return null;if(file.size>12*1024*1024)throw new Error('Please keep each uploaded file below 12 MB.');const dataUrl=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error('Could not read the selected file.'));reader.readAsDataURL(file)});return{name:file.name,mimeType:file.type,data:dataUrl}};const [questionFile,workingFile]=await Promise.all([readFile(qFile),readFile(wFile)]);const res=await fetch('/api/ai',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({subject,grade,mode,focus,prompt,file:questionFile,questionFile,workingFile,role:aiReturnDashboard,context:await buildAIContext(aiReturnDashboard,mode)})});const data=await res.json();if(!res.ok)throw new Error(data.error||'The Gemini service could not respond.');renderAIResponse(answer,data.answer);if(mode==='mark')saveMarkAttempt(subject,grade,prompt,data.answer);logActivity('Used Gemini AI Study Assistant: '+mode+' / '+subject+' / '+grade);logNotification('Gemini response generated for '+subject+' ('+grade+').');refreshProgress();renderNotifications()}catch(err){answer.textContent='Sorry, Gemini could not respond.\n\n'+err.message;checkAIStatus()}finally{button.disabled=false;button.textContent='✨ Ask AI'}}
+const CBC_NOTES_REGISTRY = {
+  'Grade 7': {
+    'Mathematics': {
+      source:'https://kicd.ac.ke/wp-content/uploads/2024/06/Mathematics-Grade-7-Design-Formated-April-2024.pdf',
+      strands:[
+        {name:'1.0 Numbers',sub:['1.1 Whole Numbers','1.2 Factors','1.3 Fractions','1.4 Decimals','1.5 Squares and Square Roots']},
+        {name:'2.0 Algebra',sub:['2.1 Algebraic Expressions','2.2 Linear Equations','2.3 Linear Inequalities']},
+        {name:'3.0 Measurements',sub:['3.1 Pythagorean Relationship','3.2 Length','3.3 Area','3.4 Volume and Capacity','3.5 Time, Distance and Speed','3.6 Temperature','3.7 Money']},
+        {name:'4.0 Geometry',sub:['4.1 Angles','4.2 Geometrical Constructions']},
+        {name:'5.0 Data Handling and Probability',sub:['5.1 Data Handling']}
+      ]
+    },
+    'Christian Religious Education (CRE)': {
+      source:'https://kicd.ac.ke/wp-content/uploads/2024/06/CRE-Grade-7-Design-Formatted-April-2024.pdf',
+      strands:[
+        {name:'1.0 Overview of Christian Religious Education',sub:['1.1 Importance of Learning CRE']},
+        {name:'2.0 Creation',sub:['2.1 Accounts of Creation','2.2 Responsibility over Animals, Fish and Birds','2.3 Responsibility over Plants','2.4 Use and Misuse of God’s Creation']},
+        {name:'3.0 The Bible',sub:['3.1 Functions of the Bible','3.2 Divisions of the Bible','3.3 Bible Translation','3.4 Leadership in the Bible: Moses']},
+        {name:'4.0 The Early Life of Jesus Christ',sub:['4.1 Background to the Birth of Jesus Christ']}
+      ]
+    }
+  }
+};
+function initNotesGenerator(){updateNotesLearningAreas();}
+function updateNotesLearningAreas(){const g=document.getElementById('notesGrade'),s=document.getElementById('notesSubject');if(!g||!s)return;const data=CBC_NOTES_REGISTRY[g.value]||{};s.innerHTML='<option value="">Select learning area</option>'+Object.keys(data).map(x=>`<option>${escapeHtml(x)}</option>`).join('');s.disabled=!Object.keys(data).length;updateNotesStrands();}
+function updateNotesStrands(){const g=document.getElementById('notesGrade'),s=document.getElementById('notesSubject'),st=document.getElementById('notesStrand'),ss=document.getElementById('notesSubstrand');if(!st||!ss)return;const item=(CBC_NOTES_REGISTRY[g?.value]||{})[s?.value];st.innerHTML='<option value="">Select strand</option>'+(item?.strands||[]).map(x=>`<option value="${escapeHtml(x.name)}">${escapeHtml(x.name)}</option>`).join('');st.disabled=!item;ss.innerHTML='<option value="">Select sub-strand</option>';ss.disabled=true;}
+function updateNotesSubstrands(){const g=document.getElementById('notesGrade'),s=document.getElementById('notesSubject'),st=document.getElementById('notesStrand'),ss=document.getElementById('notesSubstrand');const item=(CBC_NOTES_REGISTRY[g?.value]||{})[s?.value];const strand=item?.strands?.find(x=>x.name===st?.value);ss.innerHTML='<option value="">Select sub-strand</option>'+(strand?.sub||[]).map(x=>`<option>${escapeHtml(x)}</option>`).join('');ss.disabled=!strand;}
+async function generateNotes(e){e.preventDefault();const g=document.getElementById('notesGrade')?.value,s=document.getElementById('notesSubject')?.value,st=document.getElementById('notesStrand')?.value,ss=document.getElementById('notesSubstrand')?.value,topic=document.getElementById('notesTopic')?.value.trim(),style=document.getElementById('notesStyle')?.value,extra=document.getElementById('notesExtra')?.value.trim();if(!g||!s||!st||!ss){alert('Select Grade, Learning Area, Strand and Sub-strand first.');return;}const item=CBC_NOTES_REGISTRY[g]?.[s];const result=document.getElementById('notesResult'),answer=document.getElementById('notesAnswer');result.style.display='block';answer.innerHTML='<p>Generating detailed CBC-aligned notes…</p>';const prompt=`Create substantially detailed ORIGINAL CBC-aligned study notes for ${g} — ${s}.\nVerified Strand: ${st}\nVerified Sub-strand: ${ss}\n${topic?'Topic/focus: '+topic:''}\nStyle: ${style}\nExtra instructions: ${extra||'None'}\n\nUse the selected strand and sub-strand as the curriculum anchor. Do not substitute the learning area name for the strand, and do not invent another strand/sub-strand. Structure the notes with: title, curriculum anchor, learning intentions (original wording), key vocabulary, detailed concept explanation, step-by-step examples, real-life/application examples, learner activities, key inquiry questions, relevant core competencies/values/PCIs (label them as suggested, not official quotations), common misconceptions, differentiated practice, at least 8 assessment questions with answers/marking guidance, and a concise revision checklist. Do not reproduce or closely paraphrase copyrighted KICD/KNEC/publisher text. End with Verification & Reference and identify the official KICD design URL as the source to check.`;try{const r=await fetch('/api/ai',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({subject:s,grade:g,mode:'notes',focus:`${st} / ${ss}`,prompt,context:`Verified curriculum source: ${item.source}\nVerified strand: ${st}\nVerified sub-strand: ${ss}`})});const raw=await r.text();if(raw.trim().startsWith('<'))throw new Error('The server returned HTML instead of JSON. Deploy the updated index.html and server.mjs together.');const d=JSON.parse(raw);if(!r.ok)throw new Error(d.error||'Could not generate notes.');answer.innerHTML=renderAIResponse(d.answer||d.text||'No response returned.');}catch(err){answer.innerHTML=`<div class="notice">${escapeHtml(err.message)}</div>`}}
+function copyGeneratedNotes(){const el=document.getElementById('notesAnswer');if(el)navigator.clipboard?.writeText(el.innerText||el.textContent||'');}
+
+async function loadCurriculumCatalogue(){const box=document.getElementById('curriculumCatalogue');if(!box)return;box.textContent='Loading curriculum records...';try{const grade=document.getElementById('catGrade').value,subject=document.getElementById('catSubject').value;const r=await fetch('/api/curriculum?'+new URLSearchParams({grade,subject}));const data=await r.json();box.innerHTML=data.records.length?data.records.map(x=>`<div class="material"><div><b>${x.grade} • ${x.subject}</b><br><span class="tag">${x.strand}</span> <span class="tag">${x.substrand}</span><br><small>${(x.learningOutcomes||[]).join(' • ')||'Structure record — exact learning outcomes not yet imported for this entry.'}</small></div><span class="tag">${(x.learningOutcomes||[]).length} outcomes</span></div>`).join(''):'<p>No imported record matches this selection yet.</p>'}catch(e){box.textContent='Start the EduShelf server to load curriculum records.'}}
+document.getElementById('aiMode')?.addEventListener('change',()=>{const mode=document.getElementById('aiMode').value;const hint=document.getElementById('aiFileHint');if(hint){hint.innerHTML=mode==='mark'?'Upload the <b>question paper</b> in the first slot and <b>your working</b> in the second slot. Gemini will compare them and mark each step.':'Use the <b>Question Paper</b> slot for a paper you want Gemini to solve. The <b>Your Working</b> slot is for Mark My Work.';}});
+
+async function runGeneratedAI(subject,grade,mode,focus,prompt,resultBox,answerBox,extraContext=''){resultBox.style.display='block';answerBox.textContent='Generating...';try{const res=await fetch('/api/ai',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({subject,grade,mode,focus,prompt,role:aiReturnDashboard,context:extraContext})});const data=await res.json();if(!res.ok)throw new Error(data.error||'AI request failed.');renderAIResponse(answerBox,data.answer);logActivity('Generated '+mode+' / '+subject+' / '+grade);logNotification('New AI '+mode+' generated for '+subject+' ('+grade+').');refreshProgress()}catch(err){answerBox.textContent='Sorry, the AI service is unavailable.\n\n'+err.message}}
+function generateLesson(e){e.preventDefault();runGeneratedAI(document.getElementById('lessonSubject').value,document.getElementById('lessonGrade').value,'lesson','Learning Outcome / Strand / Sub-strand',`Create a ${document.getElementById('lessonDuration').value} lesson plan for ${document.getElementById('lessonStrand').value}. Topic/learning outcome: ${document.getElementById('lessonTopic').value}. Include objectives, key inquiry question, learning experiences, resources, competencies, values, PCIs, differentiation and assessment.`,document.getElementById('lessonResult'),document.getElementById('lessonAnswer'))}
+function generateAssessment(e){e.preventDefault();runGeneratedAI(document.getElementById('assessmentSubject').value,document.getElementById('assessmentGrade').value,'assessment','Assessment / Rubric',`Create a ${document.getElementById('assessmentType').value} assessment for ${document.getElementById('assessmentStrand').value}. Topic/outcome: ${document.getElementById('assessmentTopic').value}. Include instructions, tasks/questions, marking guidance and a 4-level rubric with observable criteria.`,document.getElementById('assessmentResult'),document.getElementById('assessmentAnswer'))}
+async function checkMaterialQuality(){
+  const file=document.getElementById('file')?.files?.[0];
+  const box=document.getElementById('materialQualityResult'),answer=document.getElementById('materialQualityAnswer');
+  if(!file){alert('Select the material file first.');return}
+  if(file.size>12*1024*1024){alert('Please keep the material below 12 MB.');return}
+  const allowed=['application/pdf','image/png','image/jpeg','image/webp','image/heic','image/heif'];
+  if(!allowed.includes(file.type)){answer.textContent='For the AI quality check, please use a PDF or supported image. You can still submit DOC/DOCX/PPT/PPTX for normal admin review.';box.style.display='block';return}
+  const data=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=()=>reject(new Error('Could not read the material.'));r.readAsDataURL(file)});
+  box.style.display='block';answer.textContent='Checking material quality...';
+  try{const res=await fetch('/api/ai',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({role:'teacher',mode:'material_quality',subject:document.getElementById('subject').value,grade:document.getElementById('grade').value,focus:document.getElementById('strand').value,prompt:`Review this proposed learning material before submission. Title: ${document.getElementById('title').value}. Topic: ${document.getElementById('topic').value}. Competency: ${document.getElementById('competency').value}. Description: ${document.getElementById('desc').value}`,file:{name:file.name,mimeType:file.type,data}})});const d=await res.json();if(!res.ok)throw new Error(d.error||'Quality check failed.');renderAIResponse(answer,d.answer);logActivity('Used AI material quality checker: '+document.getElementById('title').value)}catch(e){answer.textContent='Quality check failed.\n\n'+e.message}}
+function escHtml(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+function getMarkAttempts(){try{return JSON.parse(localStorage.getItem('tusomeMarkAttempts')||'[]')}catch{return[]}}
+function saveMarkAttempt(subject,grade,prompt,answer){
+  const text=String(answer||''); if(!text)return;
+  const matches=[...text.matchAll(/(?:score|marks?|percentage|percent)\s*[:\-]?\s*(\d+(?:\.\d+)?)\s*(?:\/\s*(\d+(?:\.\d+)?))?\s*%?/ig)];
+  let score=null;
+  for(const m of matches){const a=Number(m[1]),b=m[2]?Number(m[2]):null;if(b&&b>0&&a<=b){score=Math.round(a/b*100);break}if(a>=0&&a<=100){score=Math.round(a);break}}
+  const q=[...text.matchAll(/(?:question|q(?:uestion)?\.?)\s*(\d+)/ig)].map(m=>Number(m[1])).filter(n=>n>0);
+  const attempts=getMarkAttempts();
+  attempts.unshift({id:Date.now(),subject,grade,topic:(prompt||'General').slice(0,90),score,questions:[...new Set(q)].length||1,time:new Date().toISOString(),key:`${subject}|${prompt||'General'}`});
+  localStorage.setItem('tusomeMarkAttempts',JSON.stringify(attempts.slice(0,100)));
+}
 function progressScoreClass(score){return score>=80?'score-good':score>=50?'score-mid':'score-low'}
 function formatAgo(iso){const d=new Date(iso),mins=Math.floor(Math.max(0,Date.now()-d.getTime())/60000);if(mins<1)return'Just now';if(mins<60)return mins+' min ago';const h=Math.floor(mins/60);if(h<24)return h+' hr ago';const days=Math.floor(h/24);return days+' day'+(days===1?'':'s')+' ago'}
 function refreshProgress(){
@@ -1892,162 +1924,13 @@ function refreshProgress(){
   const p=document.getElementById('progressActivity');if(p)p.innerHTML=logs.length?logs.slice(0,10).map(x=>`<div class="material"><div>📝 ${escHtml(x.action)}</div><small>${escHtml(x.time)}</small></div>`).join(''):'<p>No learning activity yet.</p>';
   const pa=document.getElementById('parentActivity');if(pa)pa.textContent=views+' material view(s) recorded.';const pai=document.getElementById('parentAI');if(pai)pai.textContent=ai+' AI-assisted study session(s) recorded.';const pp=document.getElementById('parentPractice');if(pp)pp.textContent=practice+' practice/assessment action(s) recorded.';
 }
-const CBC_NOTES_STRUCTURE = {
-  'Grade 7|Mathematics': {
-    'Numbers': ['Integers','Fractions, Decimals and Percentages','Indices and Logarithms'],
-    'Algebra': ['Algebraic Expressions','Linear Equations','Linear Inequalities'],
-    'Measurements': ['Pythagorean Relationship','Length','Area','Volume and Capacity','Time','Distance and Speed','Temperature','Money'],
-    'Geometry': ['Angles and Plane Figures','Geometrical Constructions','Transformation'],
-    'Data Handling and Probability': ['Data Collection and Representation','Measures of Central Tendency','Probability']
-  },
-  'Grade 8|Mathematics': {
-    'Numbers': ['Squares and Square Roots','Cubes and Cube Roots','Rates, Ratios and Proportion'],
-    'Algebra': ['Algebraic Expressions','Linear Equations','Sequences and Patterns'],
-    'Measurements': ['Circles','Area','Money'],
-    'Geometry': ['Geometrical Constructions','Coordinates and Graphs','Scale Drawing','Common Solids'],
-    'Data Handling and Probability': ['Data Representation','Measures of Central Tendency','Probability']
-  },
-  'Grade 9|Mathematics': {
-    'Numbers': ['Number Systems','Approximation and Estimation','Financial Mathematics'],
-    'Algebra': ['Algebraic Expressions','Linear Equations and Inequalities','Sequences and Patterns'],
-    'Measurements': ['Area and Volume','Rates and Proportions','Time and Work'],
-    'Geometry': ['Coordinates and Graphs','Geometrical Constructions','Similarity and Enlargement'],
-    'Data Handling and Probability': ['Data Representation and Interpretation','Measures of Central Tendency','Probability']
-  },
-  'Grade 7|Integrated Science': {
-    'Scientific Investigation': ['Introduction to Integrated Science','Laboratory Safety','Basic Science Skills','Laboratory Apparatus and Instruments'],
-    'Mixtures, Elements and Compounds': ['Mixtures','Acids, Bases and Indicators','Solid-Liquid Mixture Separation and Water Purification'],
-    'Living Things and their Environment': ['Reproduction in Human Beings','Human Excretory System','Healthy Living'],
-    'Force and Energy': ['Electrical Energy','Magnetism','Force and its Effects']
-  }
-};
-const CBC_GENERAL_STRANDS = {
-  'Grade 1':['Mathematics','English','Kiswahili','Environmental Activities','Creative Activities'],
-  'Grade 2':['Mathematics','English','Kiswahili','Environmental Activities','Creative Activities'],
-  'Grade 3':['Mathematics','English','Kiswahili','Environmental Activities','Creative Activities'],
-  'Grade 4':['English','Kiswahili','Mathematics','Science and Technology','Social Studies','Agriculture','Creative Arts'],
-  'Grade 5':['English','Kiswahili','Mathematics','Science and Technology','Social Studies','Agriculture','Creative Arts'],
-  'Grade 6':['English','Kiswahili','Mathematics','Science and Technology','Social Studies','Agriculture','Creative Arts'],
-  'Grade 8':['English','Kiswahili','Integrated Science','Mathematics','Social Studies','Pre-Technical Studies','Creative Arts & Sports'],
-  'Grade 9':['English','Kiswahili','Integrated Science','Mathematics','Social Studies','Pre-Technical Studies','Creative Arts & Sports'],
-  'Grade 10':['Languages','Humanities','Pure Sciences','Applied Sciences','Arts & Sports','Technical Studies','Religious Education']
-};
-function notesKey(){return `${document.getElementById('notesGrade')?.value||''}|${document.getElementById('notesSubject')?.value||''}`}
-function updateNotesStrands(){
-  const grade=document.getElementById('notesGrade').value, subject=document.getElementById('notesSubject').value;
-  const strand=document.getElementById('notesStrand'), sub=document.getElementById('notesSubstrand'), hint=document.getElementById('notesStructureHint');
-  const data=CBC_NOTES_STRUCTURE[`${grade}|${subject}`];
-  strand.innerHTML='<option value="">Select a strand</option>';
-  if(data){Object.keys(data).forEach(x=>{const o=document.createElement('option');o.value=x;o.textContent=x;strand.appendChild(o)});hint.textContent='This grade/learning-area combination has a built-in CBC strand/sub-strand map. The notes will be generated against the selected structure.';}
-  else {hint.textContent='A full built-in strand map is not embedded for this combination. Use the official KICD curriculum design to verify the selected structure, or choose Custom below.';const general=CBC_GENERAL_STRANDS[grade]||[];general.forEach(x=>{const o=document.createElement('option');o.value=x;o.textContent=x;strand.appendChild(o)});const c=document.createElement('option');c.value='Custom / official KICD strand';c.textContent='Custom / official KICD strand';strand.appendChild(c)}
-  sub.innerHTML='<option value="">Select a sub-strand</option><option value="Custom / official KICD sub-strand">Custom / official KICD sub-strand</option>';
-}
-function updateNotesSubstrands(){
-  const data=CBC_NOTES_STRUCTURE[notesKey()]||{}; const selected=document.getElementById('notesStrand').value; const sub=document.getElementById('notesSubstrand');
-  sub.innerHTML='<option value="">Select a sub-strand</option>';
-  (data[selected]||[]).forEach(x=>{const o=document.createElement('option');o.value=x;o.textContent=x;sub.appendChild(o)});
-  const c=document.createElement('option');c.value='Custom / official KICD sub-strand';c.textContent='Custom / official KICD sub-strand';sub.appendChild(c);
-}
-function initNotesStructure(){updateNotesStrands();}
-
-async function generateNotes(e){
-  e.preventDefault();
-  const subject=document.getElementById('notesSubject').value;
-  const grade=document.getElementById('notesGrade').value;
-  const strand=document.getElementById('notesStrand').value;
-  const substrand=document.getElementById('notesSubstrand').value;
-  const topic=document.getElementById('notesTopic').value.trim();
-  const extra=document.getElementById('notesPrompt').value.trim();
-  const style=document.getElementById('notesStyle').value;
-  const box=document.getElementById('notesResult'); const answer=document.getElementById('notesAnswer');
-  const button=e.target.querySelector('button[type="submit"]');
-  if(!strand||!substrand||!topic){showToast?.('Select the strand and sub-strand, then enter the topic/focus.','error');return;}
-  button.disabled=true; button.textContent='⏳ Generating detailed CBC notes...'; box.style.display='block'; answer.textContent='Building detailed notes from the selected CBC structure...';
-  const styleText={revision:'detailed revision notes',teacher:'detailed teacher notes',learner:'detailed learner-friendly notes',exam:'detailed exam-preparation notes'}[style]||'detailed study notes';
-  const prompt=`Create ${styleText} for ${subject}, ${grade}. CBC STRUCTURE SELECTED: Strand: ${strand}. Sub-strand: ${substrand}. Topic/focus: ${topic}. ${extra?`Additional user instructions/material: ${extra}`:''}
-
-The notes must be substantially detailed and organised around the selected strand and sub-strand. Treat the strand/sub-strand names as curriculum alignment metadata, not as permission to reproduce official curriculum text. Do not reproduce, quote or closely paraphrase copyrighted KICD curriculum designs, textbooks, publisher materials, KNEC papers or other protected documents. Do not claim the output is an official KICD/KNEC document.
-
-Use this exact output structure:
-1. Title and CBC placement (Grade, Learning Area, Strand, Sub-strand, Topic)
-2. Learning intention / what the learner is expected to understand
-3. Detailed learning outcomes — write original, measurable outcomes appropriate to the selected sub-strand
-4. Key vocabulary and meanings
-5. Detailed concept notes — explain each major concept step-by-step; define terms; show relationships; include formulas or rules where relevant
-6. Worked examples / illustrations — give several original examples and explain each step
-7. Practical or real-life application — connect the concept to everyday Kenyan learner contexts where appropriate
-8. Learning activities — individual, pair/group or practical activities suitable for the grade
-9. Key inquiry questions
-10. Core competencies that can be developed and how they appear in the activities
-11. Relevant values and pertinent/contemporary issues, only where genuinely relevant
-12. Common misconceptions / mistakes and corrections
-13. Assessment — at least 8 varied questions/tasks moving from recall to application and reasoning, followed by a separate answer guide
-14. Quick revision summary — concise bullet points
-15. Verification & References — tell the user to verify exact official wording and current curriculum alignment against the official KICD curriculum design; provide the official KICD CBC materials/curriculum-designs reference rather than reproducing it.
-
-If the exact official strand/sub-strand terminology cannot be confidently verified from the information provided, do not invent official wording. Clearly mark any uncertain alignment and tell the user to verify it against the current KICD design.`;
-  try{
-    const res=await fetch('/api/ai',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},credentials:'include',body:JSON.stringify({subject,grade,mode:'notes',focus:`CBC Strand: ${strand}; Sub-strand: ${substrand}; Topic: ${topic}`,prompt,role:getSessionRole()||'learner',cbc:{strand,substrand,topic}})});
-    const raw=await res.text(); let d; try{d=raw?JSON.parse(raw):{}}catch{throw new Error(/<!doctype html|<html/i.test(raw)?'The server returned an HTML page. Deploy the current server.mjs and restart Render.':'The notes service returned an invalid response.')}
-    if(!res.ok)throw new Error(d.error||`Could not generate notes (HTTP ${res.status}).`);
-    renderAIResponse(answer,d.answer||'No notes were generated.');
-  }catch(err){answer.textContent=err.message||'Could not generate notes.';showToast?.(err.message||'Could not generate notes.','error')}
-  finally{button.disabled=false;button.textContent='📝 Generate Detailed CBC Notes';}
-}
-
-
-if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',initNotesStructure);}else{initNotesStructure();}
-
-async function openTusomeAI(){
-  try{
-    const r=await fetch('/api/auth/me',{credentials:'include'});
-    if(!r.ok){show('login');showToast?.('Please sign in to use Tusome AI.','error');return;}
-    window.location.href='/tusome-ai.html';
-  }catch{show('login');showToast?.('Please sign in to use Tusome AI.','error')}
-}
-async function loadTusomeAIEntitlement(){
-  const box=document.getElementById('tusomeAIEntitlementBox'); if(!box)return;
-  try{
-    const r=await fetch('/api/tusome-ai/entitlement',{credentials:'include'}); const d=await r.json();
-    if(!r.ok)throw new Error(d.error||'Could not load AI allowance.');
-    const e=d.entitlement;
-    box.innerHTML=e.unlimited?'<b>Administrator access:</b> Unlimited internal Tusome AI usage.':`<b>${escHtml(e.planName)}</b> • ${e.remaining} / ${e.monthlyLimit} AI units remaining this month${e.scopeType==='school'?` • Shared school pool for ${e.memberCount} active member${e.memberCount===1?'':'s'}.`:''}`;
-  }catch(e){box.textContent=e.message||'Could not load AI allowance.'}
-}
-
-async function loadAdminAIRevenue(){
-  const set=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v};
-  const tb=document.getElementById('adminAIUsageTable');
-  try{
-    const r=await fetch('/api/admin/tusome-ai/revenue',{credentials:'include',headers:{'Accept':'application/json'}});
-    const raw=await r.text();
-    let d=null;
-    try{d=raw?JSON.parse(raw):null}catch{
-      if(/<!doctype html|<html[\s>]/i.test(raw)){
-        throw new Error('The Render server is still running the older server.mjs. Deploy the updated server.mjs and restart the service.');
-      }
-      throw new Error('The AI revenue endpoint returned an invalid response.');
-    }
-    if(!r.ok)throw new Error(d?.error||`Could not load AI revenue (HTTP ${r.status}).`);
-    set('adminAIRequests',Number(d.summary?.requests||0).toLocaleString());
-    set('adminAIUnits',Number(d.summary?.units||0).toLocaleString());
-    set('adminAIRevenue','KES '+Number(d.summary?.membershipRevenue||0).toFixed(2));
-    set('adminAIPlans',(d.planRevenue||[]).map(x=>`${x.planName}: KES ${Number(x.revenue||0).toFixed(0)}`).join(' • ')||'No paid AI membership revenue yet');
-    if(tb)tb.innerHTML=(d.usageByPlan||[]).length?(d.usageByPlan||[]).map(x=>`<tr><td>${escapeHtml(x.planName||x.planKey||'Free')}</td><td>${Number(x.scopes||0)}</td><td>${Number(x.requests||0)}</td><td>${Number(x.units||0)}</td></tr>`).join(''):'<tr><td colspan="4">No AI usage recorded this month.</td></tr>';
-  }catch(e){
-    set('adminAIPlans','Unavailable');
-    if(tb)tb.innerHTML=`<tr><td colspan="4">${escapeHtml(e.message||'Could not load AI usage.')}</td></tr>`;
-  }
-}
-
 async function restoreServerSession(){
   try{
     const r=await fetch('/api/auth/me',{credentials:'include'});
-    if(r.ok){const d=await r.json();setSessionRole(d.user.role,d.user.email);if(d.user.role==='learner')await loadServerPurchases();await loadTusomeAIEntitlement();if(d.user.role==='admin')await loadAdminAIRevenue()}
+    if(r.ok){const d=await r.json();setSessionRole(d.user.role,d.user.email);if(d.user.role==='learner')await loadServerPurchases()}
     else{sessionStorage.removeItem('tusomeLoggedIn');sessionStorage.removeItem('tusomeRole');sessionStorage.removeItem('tusomeCurrentUser')}
   }catch{}
   updatePublicUi();
-  const params=new URLSearchParams(location.search);if(params.get('openMembership')==='1'){show('membership');loadMembership();history.replaceState({},'',location.pathname)}
 }
 
 function getTeacherPrefs(){try{return JSON.parse(localStorage.getItem('tusomeTeacherDashboardPrefs')||'null')||{analytics:true,earnings:true,uploads:true,goal:true}}catch{return {analytics:true,earnings:true,uploads:true,goal:true}}}
@@ -2225,7 +2108,7 @@ async function pollMembershipPayment(checkoutRequestId){
 }
 async function requestMembership(planKey,billingCycle){return payMembership(planKey,billingCycle)}
 async function requestSchoolPlan(){const schoolName=document.getElementById('schoolRequestName')?.value.trim(),contactEmail=document.getElementById('schoolRequestEmail')?.value.trim(),contactPhone=document.getElementById('schoolRequestPhone')?.value.trim(),planKey=document.getElementById('schoolRequestPlan')?.value||'school_starter';if(!schoolName){showToast?.('Enter the school name.','error');return}if(!confirm('Submit this school plan request? It does not charge the account.'))return;try{const r=await fetch('/api/schools/request',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({schoolName,contactEmail,contactPhone,planKey})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Request failed.');showToast?.('School plan request submitted.','success');loadMembership()}catch(e){showToast?.(e.message,'error')}}
-async function loadAdminMemberships(){loadAdminAIRevenue();try{const r=await fetch('/api/admin/subscriptions',{credentials:'include'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load memberships.');const subs=d.subscriptions||[], schools=d.schools||[];document.getElementById('adminSubRequests').textContent=subs.filter(x=>['requested','pending_payment'].includes(x.status)).length;document.getElementById('adminSubActive').textContent=subs.filter(x=>x.status==='active').length;document.getElementById('adminSchoolCount').textContent=schools.length;const tb=document.getElementById('adminSubscriptionsTable');tb.innerHTML=subs.length?subs.map(x=>`<tr><td>${new Date(x.requestedAt).toLocaleString()}</td><td>${escapeHtml(x.schoolName||x.userEmail||'—')}</td><td>${escapeHtml(x.name||x.planKey)}</td><td>KES ${Number(x.amount||0).toFixed(2)}</td><td>${escapeHtml(x.status)}</td><td>${['requested','pending_payment'].includes(x.status)?`<button class="btn" onclick="setSubscriptionStatus('${escapeHtml(x.subscriptionId)}','active')">Activate 30d</button> <button class="btn" onclick="setSubscriptionStatus('${escapeHtml(x.subscriptionId)}','rejected')">Reject</button>`:'—'}</td></tr>`).join(''):'<tr><td colspan="6">No membership requests.</td></tr>';const sb=document.getElementById('adminSchoolsTable');sb.innerHTML=schools.length?schools.map(x=>`<tr><td>${escapeHtml(x.schoolName)}</td><td>${escapeHtml(x.contactEmail||'—')}<br>${escapeHtml(x.contactPhone||'')}</td><td>${x.memberCount}</td><td>${escapeHtml(x.status)}</td><td>${x.status==='pending'?`<button class="btn" onclick="setSchoolStatus('${escapeHtml(x.schoolId)}','active')">Activate</button>`:x.status==='active'?`<button class="btn" onclick="setSchoolStatus('${escapeHtml(x.schoolId)}','suspended')">Suspend</button>`:`<button class="btn" onclick="setSchoolStatus('${escapeHtml(x.schoolId)}','active')">Reactivate</button>`}</td></tr>`).join(''):'<tr><td colspan="5">No school requests.</td></tr>'}catch(e){showToast?.(e.message,'error')}}
+async function loadAdminMemberships(){try{const r=await fetch('/api/admin/subscriptions',{credentials:'include'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load memberships.');const subs=d.subscriptions||[], schools=d.schools||[];document.getElementById('adminSubRequests').textContent=subs.filter(x=>['requested','pending_payment'].includes(x.status)).length;document.getElementById('adminSubActive').textContent=subs.filter(x=>x.status==='active').length;document.getElementById('adminSchoolCount').textContent=schools.length;const tb=document.getElementById('adminSubscriptionsTable');tb.innerHTML=subs.length?subs.map(x=>`<tr><td>${new Date(x.requestedAt).toLocaleString()}</td><td>${escapeHtml(x.schoolName||x.userEmail||'—')}</td><td>${escapeHtml(x.name||x.planKey)}</td><td>KES ${Number(x.amount||0).toFixed(2)}</td><td>${escapeHtml(x.status)}</td><td>${['requested','pending_payment'].includes(x.status)?`<button class="btn" onclick="setSubscriptionStatus('${escapeHtml(x.subscriptionId)}','active')">Activate 30d</button> <button class="btn" onclick="setSubscriptionStatus('${escapeHtml(x.subscriptionId)}','rejected')">Reject</button>`:'—'}</td></tr>`).join(''):'<tr><td colspan="6">No membership requests.</td></tr>';const sb=document.getElementById('adminSchoolsTable');sb.innerHTML=schools.length?schools.map(x=>`<tr><td>${escapeHtml(x.schoolName)}</td><td>${escapeHtml(x.contactEmail||'—')}<br>${escapeHtml(x.contactPhone||'')}</td><td>${x.memberCount}</td><td>${escapeHtml(x.status)}</td><td>${x.status==='pending'?`<button class="btn" onclick="setSchoolStatus('${escapeHtml(x.schoolId)}','active')">Activate</button>`:x.status==='active'?`<button class="btn" onclick="setSchoolStatus('${escapeHtml(x.schoolId)}','suspended')">Suspend</button>`:`<button class="btn" onclick="setSchoolStatus('${escapeHtml(x.schoolId)}','active')">Reactivate</button>`}</td></tr>`).join(''):'<tr><td colspan="5">No school requests.</td></tr>'}catch(e){showToast?.(e.message,'error')}}
 async function setSubscriptionStatus(id,status){if(!confirm(status==='active'?'Activate this membership for 30 days?':`Set membership to ${status}?`))return;try{const r=await fetch('/api/admin/subscriptions/'+encodeURIComponent(id)+'/status',{method:'PATCH',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({status,days:30})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Update failed.');loadAdminMemberships()}catch(e){showToast?.(e.message,'error')}}
 async function setSchoolStatus(id,status){if(!confirm(`Set school status to ${status}?`))return;try{const r=await fetch('/api/admin/schools/'+encodeURIComponent(id)+'/status',{method:'PATCH',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({status})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Update failed.');loadAdminMemberships()}catch(e){showToast?.(e.message,'error')}}
 

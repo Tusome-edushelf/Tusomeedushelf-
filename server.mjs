@@ -683,6 +683,14 @@ async function initDatabase() {
 
   const defaultTeacherRevenue = Math.min(100, Math.max(0, Number(process.env.TEACHER_REVENUE_PERCENT || 80)));
   await db.query(`INSERT INTO platform_settings(setting_key,setting_value) VALUES ('teacher_revenue_percentage',$1),('platform_revenue_percentage',$2) ON CONFLICT(setting_key) DO NOTHING`, [String(defaultTeacherRevenue), String(100-defaultTeacherRevenue)]);
+  const curriculumSeeds = [
+    ['7|Mathematics','KICD Grade 7 Mathematics includes Numbers, Algebra, Measurements, Geometry, and Data Handling and Probability.'],
+    ['8|Mathematics','KICD Grade 8 Mathematics includes Numbers, Algebra, Measurements, Geometry, and Data Handling and Probability.'],
+    ['9|Mathematics','Use the KICD Grade 9 Mathematics curriculum context where available; verify specific strands and learning outcomes before publication.']
+  ];
+  for (const [k,v] of curriculumSeeds) await db.query(`INSERT INTO curriculum_data(curriculum_key,curriculum_value) VALUES($1,$2) ON CONFLICT(curriculum_key) DO NOTHING`,[k,v]);
+
+
   // Seed/update the three current demo accounts from Render environment variables.
   const adminEmail = String(process.env.ADMIN_EMAIL || 'admin@edushelf.com').trim().toLowerCase();
   const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
@@ -939,12 +947,13 @@ function curriculumContext(subject, grade, focus) {
   const g = String(grade || '').trim();
   const subj = String(subject || '').trim();
   const f = String(focus || '').trim();
-  return [
-    `Selected learning area: ${subj || 'not specified'}`,
-    `Selected grade: ${g || 'not specified'}`,
-    f ? `CBC strand/sub-strand/topic supplied by the user: ${f}` : '',
-    'Use the supplied strand and sub-strand as alignment metadata. Generate original explanatory content. Do not reproduce or closely paraphrase official KICD curriculum-design wording, textbooks, publisher materials or KNEC assessment documents. Do not invent official learning outcomes or codes. If exact official wording is uncertain, say so and direct the user to the current KICD curriculum design for verification.'
-  ].filter(Boolean).join('\n');
+  const known = {
+    '7|Mathematics': 'KICD Grade 7 Mathematics includes Numbers, Algebra, Measurements, Geometry, and Data Handling and Probability. Algebra includes Algebraic Expressions, Linear Equations and Linear Inequalities. Measurements include Pythagorean Relationship, Length, Area, Volume and Capacity, Time, Distance and Speed, Temperature, and Money.',
+    '8|Mathematics': 'KICD Grade 8 Mathematics includes Numbers, Algebra, Measurements, Geometry, and Data Handling and Probability. Algebra includes Algebraic Expressions and Linear Equations. Measurements include Circles, Area, and Money; Geometry includes Geometrical Constructions, Coordinates and Graphs, Scale Drawing, and Common Solids.',
+    '9|Mathematics': 'Use the KICD Grade 9 Mathematics curriculum context where available. Do not invent a strand or learning outcome; if a specific outcome is unknown, say so and provide a general explanation.'
+  };
+  const base = known[`${g}|${subj}`] || '';
+  return [base, f ? `Requested CBE focus: ${f}` : ''].filter(Boolean).join('\\n');
 }
 
 async function callGemini({ subject, grade, mode, focus, prompt, file, questionFile, workingFile, role, context }) {
@@ -1098,7 +1107,7 @@ This is a guidance assistant, not an account-management or payment-support agent
     parent_revision: 'Suggest practical revision activities based on supplied progress. Use a table with Topic/Area, Activity, Suggested Duration, and How to Check Understanding.',
     parent_report: 'Explain supplied performance information in plain language. Use a small table if it makes the report easier to understand, and clearly distinguish reported results from suggestions.',
     parent_study: 'Give practical study-support suggestions for home. Use a simple table with Goal, Activity, Suggested Routine, and Check-in Method where helpful.',
-    notes: 'Create substantially detailed original CBC-aligned notes. Follow the user-supplied Grade, Learning Area, Strand and Sub-strand. Use learning outcomes, vocabulary, concept explanations, examples, activities, inquiry questions, competencies, values/PCIs where relevant, misconceptions, varied assessment tasks with an answer guide, and a revision summary. Do not reproduce or closely paraphrase copyrighted KICD/KNEC/publisher text and do not claim official status; tell the user to verify exact curriculum wording against the current KICD design.',
+    notes: 'Create substantially detailed ORIGINAL CBC-aligned notes. Treat the supplied grade, learning area, strand and sub-strand as the authoritative curriculum anchor supplied by the application. Never replace the strand/sub-strand with the learning-area name, never invent a different strand/sub-strand, and do not reproduce or closely paraphrase KICD, KNEC, publisher or textbook wording. Structure the response with: curriculum anchor; original learning intentions; key vocabulary; detailed concept explanation; step-by-step worked examples; real-life applications; learner activities; key inquiry questions; suggested core competencies, values and PCIs clearly labelled as suggestions; common misconceptions; differentiated practice; at least 8 assessment questions with answers/marking guidance; revision checklist; and Verification & Reference with the supplied official source URL. If the supplied curriculum mapping is absent or uncertain, say so rather than inventing it.',
     practice: 'Create practice questions appropriate to the selected subject and topic, followed by a separate answer key. Keep numbering clear.',
     summary: 'Summarize the requested topic using headings, concise bullet points, key terms, examples where useful, and a short self-check.',
     inquiry: 'Create an inquiry-based activity with a clear question, learning goal, learner steps, resources, expected evidence and reflection questions.',

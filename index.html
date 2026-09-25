@@ -580,13 +580,18 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
       <h3>📚 Generate Notes</h3>
       <form id="notesForm" onsubmit="generateNotes(event)">
         <label>Subject / Learning Area</label>
-        <select id="notesSubject"><option>Mathematics</option><option>English</option><option>Kiswahili</option><option>Integrated Science</option><option>Biology</option><option>Chemistry</option><option>Physics</option><option>Agriculture</option><option>Social Studies</option><option>Pre-Technical Studies</option><option>Creative Arts & Sports</option><option>Business Studies</option><option>Geography</option><option>History & Citizenship</option><option>Computer Studies</option><option>ICT</option><option>Home Science</option></select>
+        <select id="notesSubject" onchange="updateNotesStrands()"><option>Mathematics</option><option>English</option><option>Kiswahili</option><option>Integrated Science</option><option>Biology</option><option>Chemistry</option><option>Physics</option><option>Agriculture</option><option>Social Studies</option><option>Pre-Technical Studies</option><option>Creative Arts & Sports</option><option>Business Studies</option><option>Geography</option><option>History & Citizenship</option><option>Computer Studies</option><option>ICT</option><option>Home Science</option></select>
         <label>Grade / Level</label>
-        <select id="notesGrade"><option>Grade 1</option><option>Grade 2</option><option>Grade 3</option><option>Grade 4</option><option>Grade 5</option><option>Grade 6</option><option>Grade 7</option><option>Grade 8</option><option>Grade 9</option><option>Grade 10</option><option>Grade 11</option><option>Grade 12</option></select>
-        <label>Topic</label>
-        <input id="notesTopic" required placeholder="e.g. Linear equations, photosynthesis, persuasive writing">
+        <select id="notesGrade" onchange="updateNotesStrands()"><option>Grade 1</option><option>Grade 2</option><option>Grade 3</option><option>Grade 4</option><option>Grade 5</option><option>Grade 6</option><option>Grade 7</option><option>Grade 8</option><option>Grade 9</option><option>Grade 10</option><option>Grade 11</option><option>Grade 12</option></select>
+        <label>Strand</label>
+        <select id="notesStrand" required onchange="updateNotesSubstrands()"><option value="">Select a strand</option></select>
+        <label>Sub-strand</label>
+        <select id="notesSubstrand" required><option value="">Select a sub-strand</option></select>
+        <div id="notesStructureHint" class="small" style="margin:6px 0 12px">Select a grade, learning area, strand and sub-strand. The generator will use these as the CBC structure for the notes.</div>
+        <label>Topic / focus within the sub-strand</label>
+        <input id="notesTopic" required placeholder="e.g. Solving linear equations, separation of mixtures, paragraph writing">
         <label>What should the notes include?</label>
-        <textarea id="notesPrompt" rows="5" placeholder="Add key points, examples, revision questions, vocabulary, practical activities, or paste your own teacher notes."></textarea>
+        <textarea id="notesPrompt" rows="5" placeholder="Add key points, examples, revision questions, vocabulary, practical activities, learner misconceptions, or your own teacher notes."></textarea>
         <label>Note style</label>
         <select id="notesStyle"><option value="revision">Revision notes</option><option value="teacher">Teacher lesson notes</option><option value="learner">Learner-friendly notes</option><option value="exam">Exam preparation notes</option></select>
         <button class="btn primary" type="submit">📝 Generate Notes</button>
@@ -1887,28 +1892,111 @@ function refreshProgress(){
   const p=document.getElementById('progressActivity');if(p)p.innerHTML=logs.length?logs.slice(0,10).map(x=>`<div class="material"><div>📝 ${escHtml(x.action)}</div><small>${escHtml(x.time)}</small></div>`).join(''):'<p>No learning activity yet.</p>';
   const pa=document.getElementById('parentActivity');if(pa)pa.textContent=views+' material view(s) recorded.';const pai=document.getElementById('parentAI');if(pai)pai.textContent=ai+' AI-assisted study session(s) recorded.';const pp=document.getElementById('parentPractice');if(pp)pp.textContent=practice+' practice/assessment action(s) recorded.';
 }
+const CBC_NOTES_STRUCTURE = {
+  'Grade 7|Mathematics': {
+    'Numbers': ['Integers','Fractions, Decimals and Percentages','Indices and Logarithms'],
+    'Algebra': ['Algebraic Expressions','Linear Equations','Linear Inequalities'],
+    'Measurements': ['Pythagorean Relationship','Length','Area','Volume and Capacity','Time','Distance and Speed','Temperature','Money'],
+    'Geometry': ['Angles and Plane Figures','Geometrical Constructions','Transformation'],
+    'Data Handling and Probability': ['Data Collection and Representation','Measures of Central Tendency','Probability']
+  },
+  'Grade 8|Mathematics': {
+    'Numbers': ['Squares and Square Roots','Cubes and Cube Roots','Rates, Ratios and Proportion'],
+    'Algebra': ['Algebraic Expressions','Linear Equations','Sequences and Patterns'],
+    'Measurements': ['Circles','Area','Money'],
+    'Geometry': ['Geometrical Constructions','Coordinates and Graphs','Scale Drawing','Common Solids'],
+    'Data Handling and Probability': ['Data Representation','Measures of Central Tendency','Probability']
+  },
+  'Grade 9|Mathematics': {
+    'Numbers': ['Number Systems','Approximation and Estimation','Financial Mathematics'],
+    'Algebra': ['Algebraic Expressions','Linear Equations and Inequalities','Sequences and Patterns'],
+    'Measurements': ['Area and Volume','Rates and Proportions','Time and Work'],
+    'Geometry': ['Coordinates and Graphs','Geometrical Constructions','Similarity and Enlargement'],
+    'Data Handling and Probability': ['Data Representation and Interpretation','Measures of Central Tendency','Probability']
+  },
+  'Grade 7|Integrated Science': {
+    'Scientific Investigation': ['Introduction to Integrated Science','Laboratory Safety','Basic Science Skills','Laboratory Apparatus and Instruments'],
+    'Mixtures, Elements and Compounds': ['Mixtures','Acids, Bases and Indicators','Solid-Liquid Mixture Separation and Water Purification'],
+    'Living Things and their Environment': ['Reproduction in Human Beings','Human Excretory System','Healthy Living'],
+    'Force and Energy': ['Electrical Energy','Magnetism','Force and its Effects']
+  }
+};
+const CBC_GENERAL_STRANDS = {
+  'Grade 1':['Mathematics','English','Kiswahili','Environmental Activities','Creative Activities'],
+  'Grade 2':['Mathematics','English','Kiswahili','Environmental Activities','Creative Activities'],
+  'Grade 3':['Mathematics','English','Kiswahili','Environmental Activities','Creative Activities'],
+  'Grade 4':['English','Kiswahili','Mathematics','Science and Technology','Social Studies','Agriculture','Creative Arts'],
+  'Grade 5':['English','Kiswahili','Mathematics','Science and Technology','Social Studies','Agriculture','Creative Arts'],
+  'Grade 6':['English','Kiswahili','Mathematics','Science and Technology','Social Studies','Agriculture','Creative Arts'],
+  'Grade 8':['English','Kiswahili','Integrated Science','Mathematics','Social Studies','Pre-Technical Studies','Creative Arts & Sports'],
+  'Grade 9':['English','Kiswahili','Integrated Science','Mathematics','Social Studies','Pre-Technical Studies','Creative Arts & Sports'],
+  'Grade 10':['Languages','Humanities','Pure Sciences','Applied Sciences','Arts & Sports','Technical Studies','Religious Education']
+};
+function notesKey(){return `${document.getElementById('notesGrade')?.value||''}|${document.getElementById('notesSubject')?.value||''}`}
+function updateNotesStrands(){
+  const grade=document.getElementById('notesGrade').value, subject=document.getElementById('notesSubject').value;
+  const strand=document.getElementById('notesStrand'), sub=document.getElementById('notesSubstrand'), hint=document.getElementById('notesStructureHint');
+  const data=CBC_NOTES_STRUCTURE[`${grade}|${subject}`];
+  strand.innerHTML='<option value="">Select a strand</option>';
+  if(data){Object.keys(data).forEach(x=>{const o=document.createElement('option');o.value=x;o.textContent=x;strand.appendChild(o)});hint.textContent='This grade/learning-area combination has a built-in CBC strand/sub-strand map. The notes will be generated against the selected structure.';}
+  else {hint.textContent='A full built-in strand map is not embedded for this combination. Use the official KICD curriculum design to verify the selected structure, or choose Custom below.';const general=CBC_GENERAL_STRANDS[grade]||[];general.forEach(x=>{const o=document.createElement('option');o.value=x;o.textContent=x;strand.appendChild(o)});const c=document.createElement('option');c.value='Custom / official KICD strand';c.textContent='Custom / official KICD strand';strand.appendChild(c)}
+  sub.innerHTML='<option value="">Select a sub-strand</option><option value="Custom / official KICD sub-strand">Custom / official KICD sub-strand</option>';
+}
+function updateNotesSubstrands(){
+  const data=CBC_NOTES_STRUCTURE[notesKey()]||{}; const selected=document.getElementById('notesStrand').value; const sub=document.getElementById('notesSubstrand');
+  sub.innerHTML='<option value="">Select a sub-strand</option>';
+  (data[selected]||[]).forEach(x=>{const o=document.createElement('option');o.value=x;o.textContent=x;sub.appendChild(o)});
+  const c=document.createElement('option');c.value='Custom / official KICD sub-strand';c.textContent='Custom / official KICD sub-strand';sub.appendChild(c);
+}
+function initNotesStructure(){updateNotesStrands();}
+
 async function generateNotes(e){
   e.preventDefault();
   const subject=document.getElementById('notesSubject').value;
   const grade=document.getElementById('notesGrade').value;
+  const strand=document.getElementById('notesStrand').value;
+  const substrand=document.getElementById('notesSubstrand').value;
   const topic=document.getElementById('notesTopic').value.trim();
   const extra=document.getElementById('notesPrompt').value.trim();
   const style=document.getElementById('notesStyle').value;
-  const box=document.getElementById('notesResult');
-  const answer=document.getElementById('notesAnswer');
+  const box=document.getElementById('notesResult'); const answer=document.getElementById('notesAnswer');
   const button=e.target.querySelector('button[type="submit"]');
-  if(!topic){return;}
-  button.disabled=true; button.textContent='⏳ Generating...'; box.style.display='block'; answer.textContent='Preparing original notes...';
-  const styleText={revision:'concise revision notes with key points, examples and self-check questions',teacher:'structured teacher notes with lesson flow, examples, learner activities and assessment ideas',learner:'simple learner-friendly notes with definitions, examples and quick checks',exam:'exam-preparation notes with key concepts, common errors, worked examples where appropriate and self-check questions'}[style]||'clear study notes';
-  const prompt=`Create original ${styleText} for ${subject}, ${grade}, on the topic: ${topic}. ${extra?`Use these user-provided instructions/material as the basis where relevant: ${extra}`:''} Do not reproduce or quote copyrighted textbooks, KICD curriculum designs, KNEC papers, publisher materials or other protected documents. Do not claim that the generated notes are an official KICD or KNEC document. If curriculum alignment is mentioned, describe it cautiously and tell the user to verify against the current official source. End with a short “Verification & References” section that points the user to the official KICD CBE materials page and, where relevant, KNEC official assessment guidance.`;
+  if(!strand||!substrand||!topic){showToast?.('Select the strand and sub-strand, then enter the topic/focus.','error');return;}
+  button.disabled=true; button.textContent='⏳ Generating detailed CBC notes...'; box.style.display='block'; answer.textContent='Building detailed notes from the selected CBC structure...';
+  const styleText={revision:'detailed revision notes',teacher:'detailed teacher notes',learner:'detailed learner-friendly notes',exam:'detailed exam-preparation notes'}[style]||'detailed study notes';
+  const prompt=`Create ${styleText} for ${subject}, ${grade}. CBC STRUCTURE SELECTED: Strand: ${strand}. Sub-strand: ${substrand}. Topic/focus: ${topic}. ${extra?`Additional user instructions/material: ${extra}`:''}
+
+The notes must be substantially detailed and organised around the selected strand and sub-strand. Treat the strand/sub-strand names as curriculum alignment metadata, not as permission to reproduce official curriculum text. Do not reproduce, quote or closely paraphrase copyrighted KICD curriculum designs, textbooks, publisher materials, KNEC papers or other protected documents. Do not claim the output is an official KICD/KNEC document.
+
+Use this exact output structure:
+1. Title and CBC placement (Grade, Learning Area, Strand, Sub-strand, Topic)
+2. Learning intention / what the learner is expected to understand
+3. Detailed learning outcomes — write original, measurable outcomes appropriate to the selected sub-strand
+4. Key vocabulary and meanings
+5. Detailed concept notes — explain each major concept step-by-step; define terms; show relationships; include formulas or rules where relevant
+6. Worked examples / illustrations — give several original examples and explain each step
+7. Practical or real-life application — connect the concept to everyday Kenyan learner contexts where appropriate
+8. Learning activities — individual, pair/group or practical activities suitable for the grade
+9. Key inquiry questions
+10. Core competencies that can be developed and how they appear in the activities
+11. Relevant values and pertinent/contemporary issues, only where genuinely relevant
+12. Common misconceptions / mistakes and corrections
+13. Assessment — at least 8 varied questions/tasks moving from recall to application and reasoning, followed by a separate answer guide
+14. Quick revision summary — concise bullet points
+15. Verification & References — tell the user to verify exact official wording and current curriculum alignment against the official KICD curriculum design; provide the official KICD CBC materials/curriculum-designs reference rather than reproducing it.
+
+If the exact official strand/sub-strand terminology cannot be confidently verified from the information provided, do not invent official wording. Clearly mark any uncertain alignment and tell the user to verify it against the current KICD design.`;
   try{
-    const res=await fetch('/api/ai',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},credentials:'include',body:JSON.stringify({subject,grade,mode:'notes',focus:'Original CBE study notes',prompt,role:getSessionRole()||'learner'})});
+    const res=await fetch('/api/ai',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},credentials:'include',body:JSON.stringify({subject,grade,mode:'notes',focus:`CBC Strand: ${strand}; Sub-strand: ${substrand}; Topic: ${topic}`,prompt,role:getSessionRole()||'learner',cbc:{strand,substrand,topic}})});
     const raw=await res.text(); let d; try{d=raw?JSON.parse(raw):{}}catch{throw new Error(/<!doctype html|<html/i.test(raw)?'The server returned an HTML page. Deploy the current server.mjs and restart Render.':'The notes service returned an invalid response.')}
     if(!res.ok)throw new Error(d.error||`Could not generate notes (HTTP ${res.status}).`);
     renderAIResponse(answer,d.answer||'No notes were generated.');
   }catch(err){answer.textContent=err.message||'Could not generate notes.';showToast?.(err.message||'Could not generate notes.','error')}
-  finally{button.disabled=false;button.textContent='📝 Generate Notes';}
+  finally{button.disabled=false;button.textContent='📝 Generate Detailed CBC Notes';}
 }
+
+
+if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',initNotesStructure);}else{initNotesStructure();}
 
 async function openTusomeAI(){
   try{

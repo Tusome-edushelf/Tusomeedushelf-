@@ -683,8 +683,6 @@ async function initDatabase() {
 
   const defaultTeacherRevenue = Math.min(100, Math.max(0, Number(process.env.TEACHER_REVENUE_PERCENT || 80)));
   await db.query(`INSERT INTO platform_settings(setting_key,setting_value) VALUES ('teacher_revenue_percentage',$1),('platform_revenue_percentage',$2) ON CONFLICT(setting_key) DO NOTHING`, [String(defaultTeacherRevenue), String(100-defaultTeacherRevenue)]);
-
-
   // Seed/update the three current demo accounts from Render environment variables.
   const adminEmail = String(process.env.ADMIN_EMAIL || 'admin@edushelf.com').trim().toLowerCase();
   const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
@@ -942,10 +940,10 @@ function curriculumContext(subject, grade, focus) {
   const subj = String(subject || '').trim();
   const f = String(focus || '').trim();
   return [
-    `Subject: ${subj || 'General'}`,
-    `Grade/Level: ${g || 'General'}`,
-    f ? `Requested focus: ${f}` : '',
-    'For Kenya CBE alignment, use the current official KICD CBE materials as the verification source. Do not invent official curriculum codes, strands, sub-strands or exact official wording.'
+    `Selected learning area: ${subj || 'not specified'}`,
+    `Selected grade: ${g || 'not specified'}`,
+    f ? `CBC strand/sub-strand/topic supplied by the user: ${f}` : '',
+    'Use the supplied strand and sub-strand as alignment metadata. Generate original explanatory content. Do not reproduce or closely paraphrase official KICD curriculum-design wording, textbooks, publisher materials or KNEC assessment documents. Do not invent official learning outcomes or codes. If exact official wording is uncertain, say so and direct the user to the current KICD curriculum design for verification.'
   ].filter(Boolean).join('\n');
 }
 
@@ -1100,7 +1098,7 @@ This is a guidance assistant, not an account-management or payment-support agent
     parent_revision: 'Suggest practical revision activities based on supplied progress. Use a table with Topic/Area, Activity, Suggested Duration, and How to Check Understanding.',
     parent_report: 'Explain supplied performance information in plain language. Use a small table if it makes the report easier to understand, and clearly distinguish reported results from suggestions.',
     parent_study: 'Give practical study-support suggestions for home. Use a simple table with Goal, Activity, Suggested Routine, and Check-in Method where helpful.',
-    notes: 'Create original, concise notes with headings, key points, examples and a short self-check section. Do not reproduce or closely paraphrase copyrighted textbooks, KICD curriculum documents, KNEC examination papers or publisher materials. Do not present the notes as official KICD/KNEC content. End with a short Verification & References section directing the user to the official KICD CBE materials and relevant official KNEC guidance for checking current requirements.',
+    notes: 'Create substantially detailed original CBC-aligned notes. Follow the user-supplied Grade, Learning Area, Strand and Sub-strand. Use learning outcomes, vocabulary, concept explanations, examples, activities, inquiry questions, competencies, values/PCIs where relevant, misconceptions, varied assessment tasks with an answer guide, and a revision summary. Do not reproduce or closely paraphrase copyrighted KICD/KNEC/publisher text and do not claim official status; tell the user to verify exact curriculum wording against the current KICD design.',
     practice: 'Create practice questions appropriate to the selected subject and topic, followed by a separate answer key. Keep numbering clear.',
     summary: 'Summarize the requested topic using headings, concise bullet points, key terms, examples where useful, and a short self-check.',
     inquiry: 'Create an inquiry-based activity with a clear question, learning goal, learner steps, resources, expected evidence and reflection questions.',

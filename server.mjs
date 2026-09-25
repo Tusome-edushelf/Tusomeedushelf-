@@ -989,8 +989,10 @@ async function callGemini({ subject, grade, mode, focus, prompt, file, questionF
   if (!apiKey) throw new Error('GEMINI_API_KEY is not configured on the server.');
 
   // Stable multimodal models that are currently listed by Google.
-  const primaryModel = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
-  const fallbackModels = (process.env.GEMINI_FALLBACK_MODELS || 'gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash')
+  const primaryModel = mode === 'notes'
+    ? (process.env.GEMINI_NOTES_MODEL || 'gemini-3.5-flash-lite')
+    : (process.env.GEMINI_MODEL || 'gemini-3.8-flash');
+  const fallbackModels = (process.env.GEMINI_FALLBACK_MODELS || 'gemini-3.6-flash,gemini-3.5-flash-lite,gemini-3.5-flash')
     .split(',').map(x => x.trim()).filter(Boolean);
   const models = [...new Set([primaryModel, ...fallbackModels])];
 
@@ -1164,8 +1166,8 @@ const parts = [];
   parts.push({ text: `${system}\n\nTASK MODE:\n${selectedInstruction}\n\nUSER REQUEST:\n${userPrompt}${contextText}` });
 
   const transientStatuses = new Set([408, 429, 500, 502, 503, 504]);
-  const maxRetriesPerModel = Math.max(1, Math.min(3, Number(process.env.GEMINI_RETRIES || 2)));
-  const baseDelayMs = Math.max(700, Number(process.env.GEMINI_RETRY_DELAY_MS || 1500));
+  const maxRetriesPerModel = Math.max(0, Math.min(2, Number(process.env.GEMINI_RETRIES || 1)));
+  const baseDelayMs = Math.max(500, Number(process.env.GEMINI_RETRY_DELAY_MS || 900));
   let lastError = null;
 
   for (const model of models) {
@@ -1177,8 +1179,7 @@ const parts = [];
           body: JSON.stringify({
             contents: [{ role: 'user', parts }],
             generationConfig: {
-              temperature: 0.1,
-              topP: 0.9
+              thinkingConfig: { thinkingLevel: (mode === 'notes' || mode === 'summary' || mode === 'practice') ? 'low' : 'medium' }
             }
           })
         });
@@ -1638,8 +1639,10 @@ app.get('/api/tusome-ai/health', async (_req,res)=>{
 async function callTusomeGemini({ prompt, thinkingLevel, studyMode, history, files }) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('GEMINI_API_KEY is not configured on the server.');
-  const primaryModel = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
-  const fallbackModels = (process.env.GEMINI_FALLBACK_MODELS || 'gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash').split(',').map(x=>x.trim()).filter(Boolean);
+  const primaryModel = mode === 'notes'
+    ? (process.env.GEMINI_NOTES_MODEL || 'gemini-3.5-flash-lite')
+    : (process.env.GEMINI_MODEL || 'gemini-3.8-flash');
+  const fallbackModels = (process.env.GEMINI_FALLBACK_MODELS || 'gemini-3.6-flash,gemini-3.5-flash-lite,gemini-3.5-flash').split(',').map(x=>x.trim()).filter(Boolean);
   const models=[...new Set([primaryModel,...fallbackModels])];
   const level = ['fast','medium','deep'].includes(String(thinkingLevel)) ? String(thinkingLevel) : 'medium';
   const levelGuide = {fast:'Answer efficiently with the essential reasoning.',medium:'Give balanced reasoning and a clear useful answer.',deep:'Use careful multi-step reasoning, checking calculations and assumptions before answering.'}[level];
@@ -1763,7 +1766,7 @@ app.get('/api/health', async (_req, res) => {
     missing,
     shortcodeSource: process.env.MPESA_SHORTCODE ? 'render_env' : (sandboxDefaults ? 'sandbox_default' : 'missing'),
     passkeySource: process.env.MPESA_PASSKEY ? 'render_env' : (sandboxDefaults ? 'sandbox_default' : 'missing'),
-    ai: { configured: aiConfigured, provider: 'Gemini', model: process.env.GEMINI_MODEL || 'gemini-3.8-flash', fallbackModels: (process.env.GEMINI_FALLBACK_MODELS || 'gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash').split(',').map(x => x.trim()).filter(Boolean) },
+    ai: { configured: aiConfigured, provider: 'Gemini', model: process.env.GEMINI_MODEL || 'gemini-3.8-flash', fallbackModels: (process.env.GEMINI_FALLBACK_MODELS || 'gemini-3.6-flash,gemini-3.5-flash-lite,gemini-3.5-flash').split(',').map(x => x.trim()).filter(Boolean) },
     database: { configured: Boolean(DATABASE_URL), connected: databaseReady, provider: 'PostgreSQL' }
   });
 });

@@ -150,6 +150,7 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
   <nav>
     <button onclick="show('home')">Home</button>
     <button class="nav-auth" onclick="show('help')">❓ Help</button><button id="notificationNav" class="nav-auth nav-notify" onclick="show('notifications')" aria-label="Notifications">🔔 <span id="notificationNavCount" class="notify-count" aria-live="polite">0</span></button><button id="schoolDashboardNav" class="nav-auth" onclick="show('schoolDashboard')" style="display:none">🏫 School Dashboard</button><button class="nav-auth" onclick="show('account')">👤 Account</button><button class="nav-auth a11y-toggle" onclick="toggleAccessibilityPanel()" aria-expanded="false" aria-controls="accessibilityPanel">⚙️ Accessibility</button>
+    <button class="nav-auth" type="button" onclick="openTusomeAI()">✨ Tusome AI</button>
     <button class="nav-auth" onclick="show('login')">Sign In</button>
     <button class="nav-auth nav-signup" onclick="show('signup')">Sign Up</button>
   </nav>
@@ -297,7 +298,7 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
     <div class="card"><h3>📘 Mathematics</h3><p>12 materials</p></div>
     <div class="card"><h3>🧬 Biology</h3><p>8 materials</p></div>
     <div class="card"><h3>📖 English</h3><p>10 materials</p></div>
-    <div class="card"><h3>🤖 AI Assistant</h3><p>Ask questions, create notes, practise and get study support.</p><button class="btn primary" onclick="openAIAssistant('learner')">Open AI Assistant</button><button class="btn" style="margin-top:8px" onclick="openTusomeAI()">✨ Open Tusome AI</button></div>
+    <div class="card"><h3>🤖 AI Assistant</h3><p>Ask questions, create notes, practise and get study support.</p><button class="btn primary" onclick="openAIAssistant('learner')">Open AI Assistant</button></div>
   </div>
   <div class="progress-grid" style="margin-top:18px">
     <div class="card"><h3>▶️ Continue Learning</h3><div id="continueLearning"><p>Open a material to start building your learning history.</p></div></div>
@@ -684,6 +685,7 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
   <div class="notice"><b>Payment safety:</b> If you are under 18, use only a parent/guardian or other authorized adult's payment method with their permission. Never enter an M-PESA PIN into Tusome EduShelf.</div>
   <div class="card" style="margin-top:14px"><h3>📱 Membership payment number</h3><label>Authorized M-PESA number<input id="membershipPhone" inputmode="tel" autocomplete="tel" maxlength="16" placeholder="07XXXXXXXX"></label><p class="small">The server sends the M-PESA prompt to this number. Tusome EduShelf never asks for your M-PESA PIN.</p></div>
   <div id="membershipStatus" class="membership-status">Loading membership status…</div>
+  <div class="card" style="margin-top:14px"><div class="topline" style="margin:0"><div><h3>✨ Tusome AI Usage</h3><p class="small">Your separate Tusome AI allowance is enforced on the server and resets monthly.</p></div><button class="btn" type="button" onclick="loadTusomeAIEntitlement()">↻ Refresh</button></div><div id="tusomeAIEntitlementBox" class="small" style="margin-top:10px">Loading AI allowance…</div><button class="btn primary" type="button" style="margin-top:10px" onclick="openTusomeAI()">Open Tusome AI</button></div>
   <div class="membership-grid" id="membershipPlans" style="margin-top:18px"></div>
   <div class="card" style="margin-top:18px"><h3>🏫 School Plans</h3><p>Schools can request a school workspace with teacher and learner management, shared resources and analytics.</p><div class="school-panel"><label>School name<input id="schoolRequestName" maxlength="160" placeholder="School name"></label><label>Contact email<input id="schoolRequestEmail" type="email" maxlength="160" placeholder="school@example.com"></label><label>Contact phone (optional)<input id="schoolRequestPhone" maxlength="40" placeholder="Optional"></label><label>Plan<select id="schoolRequestPlan"><option value="school_starter">School Starter</option><option value="school_growth">School Growth</option></select></label></div><button class="btn primary" style="margin-top:12px" onclick="requestSchoolPlan()">Request School Plan</button><p class="small" style="margin-top:8px">A school plan request does not charge the account. An authorized administrator handles activation and payment arrangements.</p></div>
 </section>
@@ -728,7 +730,7 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
     <div class="card"><h3>👁 Views</h3><p><b id="teacherViewStat">128</b> learner views</p></div>
     <div class="card"><h3>📚 Subjects</h3><p><b id="teacherSubjectStat">3</b> subjects</p></div>
     <div class="card"><h3>💰 Earnings</h3><p><b id="teacherBalance">KES 0.00</b> available</p><small id="teacherRevenueRate">Teacher share: 80%</small></div>
-    <div class="card"><h3>🤖 AI Assistant</h3><p>Create lesson plans, assessments, notes and learning activities.</p><button class="btn primary" onclick="openAIAssistant('teacher')">Open AI Assistant</button><button class="btn" style="margin-top:8px" onclick="openTusomeAI()">✨ Open Tusome AI</button></div>
+    <div class="card"><h3>🤖 AI Assistant</h3><p>Create lesson plans, assessments, notes and learning activities.</p><button class="btn primary" onclick="openAIAssistant('teacher')">Open AI Assistant</button></div>
   </div>
   <div id="teacherGoalSection" class="card teacher-goal-card" style="margin-top:22px"><div><span class="teacher-eyebrow">MY TEACHING GOAL</span><h3 id="teacherGoalTitle">No teaching goal set yet.</h3><p id="teacherGoalHint" class="small">Choose one clear focus so the dashboard reminds you what you want to improve.</p></div><button class="btn" onclick="setTeacherFocusGoal()">Set Goal</button></div>
   <div id="teacherAnalyticsSection" class="card teacher-section-card" style="margin-top:22px"><h3>📊 Material Analytics</h3><div id="teacherAnalyticsPanel"><p>Loading analytics...</p></div></div>
@@ -1087,7 +1089,7 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
 <section id="admin" class="page">
   <div class="topline"><div><h2>🛡️ Administrator Control Center</h2><p>Central control for approvals, users, AI-generated notes, pricing, reports, transactions and platform revenue.</p></div><button class="btn primary" onclick="adminRefreshAll()">Refresh</button></div>
   <div class="admin-command">
-    <div class="command-hero"><h3>👋 Admin Command Centre</h3><p>One place to see what needs attention, jump to common tasks and monitor the platform. Use the detailed tabs below when you need deeper records.</p><div class="admin-action-row" style="margin-top:12px"><button class="btn light" onclick="adminTab('analytics')">Open Full Analytics</button><button class="btn light" onclick="openAIAssistant('admin')">Ask Admin AI</button><button class="btn light" onclick="openTusomeAI()">✨ Tusome AI</button></div></div>
+    <div class="command-hero"><h3>👋 Admin Command Centre</h3><p>One place to see what needs attention, jump to common tasks and monitor the platform. Use the detailed tabs below when you need deeper records.</p><div class="admin-action-row" style="margin-top:12px"><button class="btn light" onclick="adminTab('analytics')">Open Full Analytics</button><button class="btn light" onclick="openAIAssistant('admin')">Ask Admin AI</button></div></div>
     <div class="command-kpis">
       <div class="command-kpi">📚 Materials<b id="commandMaterials">0</b></div>
       <div class="command-kpi">⏳ Pending Review<b id="commandPending">0</b></div>
@@ -1151,6 +1153,8 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
 
   <div id="adminMemberships" class="admin-panel" style="display:none">
     <div class="cards"><div class="card"><h3>👑 Requests</h3><p><b id="adminSubRequests">0</b></p></div><div class="card"><h3>✅ Active Memberships</h3><p><b id="adminSubActive">0</b></p></div><div class="card"><h3>🏫 Schools</h3><p><b id="adminSchoolCount">0</b></p></div></div>
+    <div class="cards" style="margin-top:16px"><div class="card"><h3>✨ AI Requests This Month</h3><p><b id="adminAIRequests">0</b></p></div><div class="card"><h3>⚡ AI Units Used</h3><p><b id="adminAIUnits">0</b></p></div><div class="card"><h3>💰 AI Membership Revenue</h3><p><b id="adminAIRevenue">KES 0.00</b></p></div><div class="card"><h3>📊 AI Revenue Plans</h3><p id="adminAIPlans">Loading…</p></div></div>
+    <div class="card" style="margin-top:16px"><h3>✨ Tusome AI Usage by Plan</h3><div class="table-like"><table><thead><tr><th>Plan</th><th>Users/Scopes</th><th>Requests</th><th>Units</th></tr></thead><tbody id="adminAIUsageTable"><tr><td colspan="4">Loading…</td></tr></tbody></table></div></div>
     <div class="card" style="margin-top:16px"><h3>Membership Requests</h3><p class="small">Activate only after the organization's authorized payment/account checks are complete.</p><div class="table-like"><table><thead><tr><th>Date</th><th>Account/School</th><th>Plan</th><th>Amount</th><th>Status</th><th>Action</th></tr></thead><tbody id="adminSubscriptionsTable"></tbody></table></div></div>
     <div class="card" style="margin-top:16px"><h3>🏫 School Workspaces</h3><div class="table-like"><table><thead><tr><th>School</th><th>Contact</th><th>Members</th><th>Status</th><th>Action</th></tr></thead><tbody id="adminSchoolsTable"></tbody></table></div></div>
   </div>
@@ -1812,7 +1816,6 @@ function configureAIAssistant(dashboard){
   prompt.placeholder=dashboard==='teacher'?'Example: Create a Grade 8 Mathematics lesson on linear equations...':dashboard==='admin'?'Example: Summarize materials awaiting approval and recent payment activity...':dashboard==='parent'?'Example: Explain this learner\'s recent progress and suggest revision support...':'Example: Explain linear functions and give me two examples.';
   document.getElementById('aiResult').style.display='none';
 }
-function openTusomeAI(){ window.location.href='/tusome-ai.html'; }
 function openAIAssistant(dashboard){
   aiReturnDashboard=dashboard||getSessionRole()||'learner';
   sessionStorage.setItem('tusomeAIReturnDashboard',aiReturnDashboard);
@@ -1915,13 +1918,41 @@ function refreshProgress(){
   const p=document.getElementById('progressActivity');if(p)p.innerHTML=logs.length?logs.slice(0,10).map(x=>`<div class="material"><div>📝 ${escHtml(x.action)}</div><small>${escHtml(x.time)}</small></div>`).join(''):'<p>No learning activity yet.</p>';
   const pa=document.getElementById('parentActivity');if(pa)pa.textContent=views+' material view(s) recorded.';const pai=document.getElementById('parentAI');if(pai)pai.textContent=ai+' AI-assisted study session(s) recorded.';const pp=document.getElementById('parentPractice');if(pp)pp.textContent=practice+' practice/assessment action(s) recorded.';
 }
+async function openTusomeAI(){
+  try{
+    const r=await fetch('/api/auth/me',{credentials:'include'});
+    if(!r.ok){show('login');showToast?.('Please sign in to use Tusome AI.','error');return;}
+    window.location.href='/tusome-ai.html';
+  }catch{show('login');showToast?.('Please sign in to use Tusome AI.','error')}
+}
+async function loadTusomeAIEntitlement(){
+  const box=document.getElementById('tusomeAIEntitlementBox'); if(!box)return;
+  try{
+    const r=await fetch('/api/tusome-ai/entitlement',{credentials:'include'}); const d=await r.json();
+    if(!r.ok)throw new Error(d.error||'Could not load AI allowance.');
+    const e=d.entitlement;
+    box.innerHTML=e.unlimited?'<b>Administrator access:</b> Unlimited internal Tusome AI usage.':`<b>${escHtml(e.planName)}</b> • ${e.remaining} / ${e.monthlyLimit} AI units remaining this month${e.scopeType==='school'?` • Shared school pool for ${e.memberCount} active member${e.memberCount===1?'':'s'}.`:''}`;
+  }catch(e){box.textContent=e.message||'Could not load AI allowance.'}
+}
+
+async function loadAdminAIRevenue(){
+  try{
+    const r=await fetch('/api/admin/tusome-ai/revenue',{credentials:'include'}),d=await r.json(); if(!r.ok)throw new Error(d.error||'Could not load AI revenue.');
+    const set=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v};
+    set('adminAIRequests',Number(d.summary?.requests||0).toLocaleString());set('adminAIUnits',Number(d.summary?.units||0).toLocaleString());set('adminAIRevenue','KES '+Number(d.summary?.membershipRevenue||0).toFixed(2));
+    set('adminAIPlans',(d.planRevenue||[]).map(x=>`${x.planName}: KES ${Number(x.revenue||0).toFixed(0)}`).join(' • ')||'No paid AI membership revenue yet');
+    const tb=document.getElementById('adminAIUsageTable'); if(tb)tb.innerHTML=(d.usageByPlan||[]).length?(d.usageByPlan||[]).map(x=>`<tr><td>${escapeHtml(x.planName||x.planKey||'Free')}</td><td>${Number(x.scopes||0)}</td><td>${Number(x.requests||0)}</td><td>${Number(x.units||0)}</td></tr>`).join(''):'<tr><td colspan="4">No AI usage recorded this month.</td></tr>';
+  }catch(e){const tb=document.getElementById('adminAIUsageTable');if(tb)tb.innerHTML=`<tr><td colspan="4">${escapeHtml(e.message||'Could not load AI usage.')}</td></tr>`}
+}
+
 async function restoreServerSession(){
   try{
     const r=await fetch('/api/auth/me',{credentials:'include'});
-    if(r.ok){const d=await r.json();setSessionRole(d.user.role,d.user.email);if(d.user.role==='learner')await loadServerPurchases()}
+    if(r.ok){const d=await r.json();setSessionRole(d.user.role,d.user.email);if(d.user.role==='learner')await loadServerPurchases();await loadTusomeAIEntitlement();if(d.user.role==='admin')await loadAdminAIRevenue()}
     else{sessionStorage.removeItem('tusomeLoggedIn');sessionStorage.removeItem('tusomeRole');sessionStorage.removeItem('tusomeCurrentUser')}
   }catch{}
   updatePublicUi();
+  const params=new URLSearchParams(location.search);if(params.get('openMembership')==='1'){show('membership');loadMembership();history.replaceState({},'',location.pathname)}
 }
 
 function getTeacherPrefs(){try{return JSON.parse(localStorage.getItem('tusomeTeacherDashboardPrefs')||'null')||{analytics:true,earnings:true,uploads:true,goal:true}}catch{return {analytics:true,earnings:true,uploads:true,goal:true}}}
@@ -2099,7 +2130,7 @@ async function pollMembershipPayment(checkoutRequestId){
 }
 async function requestMembership(planKey,billingCycle){return payMembership(planKey,billingCycle)}
 async function requestSchoolPlan(){const schoolName=document.getElementById('schoolRequestName')?.value.trim(),contactEmail=document.getElementById('schoolRequestEmail')?.value.trim(),contactPhone=document.getElementById('schoolRequestPhone')?.value.trim(),planKey=document.getElementById('schoolRequestPlan')?.value||'school_starter';if(!schoolName){showToast?.('Enter the school name.','error');return}if(!confirm('Submit this school plan request? It does not charge the account.'))return;try{const r=await fetch('/api/schools/request',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({schoolName,contactEmail,contactPhone,planKey})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Request failed.');showToast?.('School plan request submitted.','success');loadMembership()}catch(e){showToast?.(e.message,'error')}}
-async function loadAdminMemberships(){try{const r=await fetch('/api/admin/subscriptions',{credentials:'include'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load memberships.');const subs=d.subscriptions||[], schools=d.schools||[];document.getElementById('adminSubRequests').textContent=subs.filter(x=>['requested','pending_payment'].includes(x.status)).length;document.getElementById('adminSubActive').textContent=subs.filter(x=>x.status==='active').length;document.getElementById('adminSchoolCount').textContent=schools.length;const tb=document.getElementById('adminSubscriptionsTable');tb.innerHTML=subs.length?subs.map(x=>`<tr><td>${new Date(x.requestedAt).toLocaleString()}</td><td>${escapeHtml(x.schoolName||x.userEmail||'—')}</td><td>${escapeHtml(x.name||x.planKey)}</td><td>KES ${Number(x.amount||0).toFixed(2)}</td><td>${escapeHtml(x.status)}</td><td>${['requested','pending_payment'].includes(x.status)?`<button class="btn" onclick="setSubscriptionStatus('${escapeHtml(x.subscriptionId)}','active')">Activate 30d</button> <button class="btn" onclick="setSubscriptionStatus('${escapeHtml(x.subscriptionId)}','rejected')">Reject</button>`:'—'}</td></tr>`).join(''):'<tr><td colspan="6">No membership requests.</td></tr>';const sb=document.getElementById('adminSchoolsTable');sb.innerHTML=schools.length?schools.map(x=>`<tr><td>${escapeHtml(x.schoolName)}</td><td>${escapeHtml(x.contactEmail||'—')}<br>${escapeHtml(x.contactPhone||'')}</td><td>${x.memberCount}</td><td>${escapeHtml(x.status)}</td><td>${x.status==='pending'?`<button class="btn" onclick="setSchoolStatus('${escapeHtml(x.schoolId)}','active')">Activate</button>`:x.status==='active'?`<button class="btn" onclick="setSchoolStatus('${escapeHtml(x.schoolId)}','suspended')">Suspend</button>`:`<button class="btn" onclick="setSchoolStatus('${escapeHtml(x.schoolId)}','active')">Reactivate</button>`}</td></tr>`).join(''):'<tr><td colspan="5">No school requests.</td></tr>'}catch(e){showToast?.(e.message,'error')}}
+async function loadAdminMemberships(){loadAdminAIRevenue();try{const r=await fetch('/api/admin/subscriptions',{credentials:'include'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load memberships.');const subs=d.subscriptions||[], schools=d.schools||[];document.getElementById('adminSubRequests').textContent=subs.filter(x=>['requested','pending_payment'].includes(x.status)).length;document.getElementById('adminSubActive').textContent=subs.filter(x=>x.status==='active').length;document.getElementById('adminSchoolCount').textContent=schools.length;const tb=document.getElementById('adminSubscriptionsTable');tb.innerHTML=subs.length?subs.map(x=>`<tr><td>${new Date(x.requestedAt).toLocaleString()}</td><td>${escapeHtml(x.schoolName||x.userEmail||'—')}</td><td>${escapeHtml(x.name||x.planKey)}</td><td>KES ${Number(x.amount||0).toFixed(2)}</td><td>${escapeHtml(x.status)}</td><td>${['requested','pending_payment'].includes(x.status)?`<button class="btn" onclick="setSubscriptionStatus('${escapeHtml(x.subscriptionId)}','active')">Activate 30d</button> <button class="btn" onclick="setSubscriptionStatus('${escapeHtml(x.subscriptionId)}','rejected')">Reject</button>`:'—'}</td></tr>`).join(''):'<tr><td colspan="6">No membership requests.</td></tr>';const sb=document.getElementById('adminSchoolsTable');sb.innerHTML=schools.length?schools.map(x=>`<tr><td>${escapeHtml(x.schoolName)}</td><td>${escapeHtml(x.contactEmail||'—')}<br>${escapeHtml(x.contactPhone||'')}</td><td>${x.memberCount}</td><td>${escapeHtml(x.status)}</td><td>${x.status==='pending'?`<button class="btn" onclick="setSchoolStatus('${escapeHtml(x.schoolId)}','active')">Activate</button>`:x.status==='active'?`<button class="btn" onclick="setSchoolStatus('${escapeHtml(x.schoolId)}','suspended')">Suspend</button>`:`<button class="btn" onclick="setSchoolStatus('${escapeHtml(x.schoolId)}','active')">Reactivate</button>`}</td></tr>`).join(''):'<tr><td colspan="5">No school requests.</td></tr>'}catch(e){showToast?.(e.message,'error')}}
 async function setSubscriptionStatus(id,status){if(!confirm(status==='active'?'Activate this membership for 30 days?':`Set membership to ${status}?`))return;try{const r=await fetch('/api/admin/subscriptions/'+encodeURIComponent(id)+'/status',{method:'PATCH',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({status,days:30})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Update failed.');loadAdminMemberships()}catch(e){showToast?.(e.message,'error')}}
 async function setSchoolStatus(id,status){if(!confirm(`Set school status to ${status}?`))return;try{const r=await fetch('/api/admin/schools/'+encodeURIComponent(id)+'/status',{method:'PATCH',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({status})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Update failed.');loadAdminMemberships()}catch(e){showToast?.(e.message,'error')}}
 

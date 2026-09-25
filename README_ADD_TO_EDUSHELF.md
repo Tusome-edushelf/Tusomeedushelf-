@@ -1,19 +1,7 @@
-# Tusome AI — Clean Conversation Search + Rename Upgrade
+# Tusome AI — Search + Rename Clean Fix
 
-This version is rebuilt from the last known working Study Mode version.
+Replace only the existing `tusome-ai.html` in the Tusome EduShelf repository with the included file.
 
-It keeps:
-- Fast / Balanced / Deep
-- Study Mode
-- math rendering
-- multi-file upload and reuse
-- chat history
-- delete chat
-- Word/PDF export
+This version preserves the working Tusome AI features and adds conversation search + rename.
 
-Adds only:
-- Search conversations by title or message text
-- Rename conversations with an inline editor
-
-## Install
-Replace the existing `tusome-ai.html` in your EduShelf project with the included file, commit/push to GitHub, then let Render deploy.
+Important: deploy the GitHub change to Render after replacing the file.

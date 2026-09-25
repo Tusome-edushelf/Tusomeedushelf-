@@ -174,7 +174,7 @@ function startRename(id,row){
   input.focus();
   input.select();
 }
-function openDrawerfunction openDrawer(){historyDrawer.classList.add('open');historyOverlay.style.display='block';renderHistory()}
+function openDrawer(){historyDrawer.classList.add('open');historyOverlay.style.display='block';renderHistory()}
 function closeDrawer(){historyDrawer.classList.remove('open');historyOverlay.style.display='none'}
 function resetView(){chat.innerHTML='';const e=document.createElement('div');e.className='empty';e.id='empty';e.innerHTML='<h2>How can I help?</h2><p>Ask a general question, solve a problem, write or debug code, explain a concept, analyze a file, or work through a difficult task.</p>';chat.appendChild(e)}
 function attachmentMeta(a){return {id:a.id,name:a.name,size:a.size,mimeType:a.mimeType}}

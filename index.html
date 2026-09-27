@@ -667,7 +667,6 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
   <div class="card" style="margin-top:14px"><h3>📱 Membership payment number</h3><label>Authorized M-PESA number<input id="membershipPhone" inputmode="tel" autocomplete="tel" maxlength="16" placeholder="07XXXXXXXX"></label><p class="small">The server sends the M-PESA prompt to this number. Tusome EduShelf never asks for your M-PESA PIN.</p></div>
   <div id="membershipStatus" class="membership-status">Loading membership status…</div>
   <div class="membership-grid" id="membershipPlans" style="margin-top:18px"></div>
-  <div class="card" style="margin-top:18px"><h3>⚡ AI Boost Credits</h3><p>Need more AI before your monthly allowance resets? Buy one-time AI units through the same M-PESA checkout. These credits are added to your account and can be used after your included allowance.</p><div id="aiCreditPacks" class="membership-grid"></div><p class="small">AI Boost credits are one-time purchases; they do not change your monthly membership.</p></div>
   <div class="card" style="margin-top:18px"><h3>🏫 School Plans</h3><p>Schools can request a school workspace with teacher and learner management, shared resources and analytics.</p><div class="school-panel"><label>School name<input id="schoolRequestName" maxlength="160" placeholder="School name"></label><label>Contact email<input id="schoolRequestEmail" type="email" maxlength="160" placeholder="school@example.com"></label><label>Contact phone (optional)<input id="schoolRequestPhone" maxlength="40" placeholder="Optional"></label><label>Plan<select id="schoolRequestPlan"><option value="school_starter">School Starter</option><option value="school_growth">School Growth</option></select></label></div><button class="btn primary" style="margin-top:12px" onclick="requestSchoolPlan()">Request School Plan</button><p class="small" style="margin-top:8px">A school plan request does not charge the account. An authorized administrator handles activation and payment arrangements.</p></div>
 </section>
 
@@ -773,6 +772,27 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
     </div>
   </div>
   <div id="schoolPlanCard" class="card" style="margin-top:14px"><div class="topline" style="margin:0"><div><h3>💼 School Plan</h3><p id="schoolPlanStatus" class="small">Loading school plan status…</p></div><span id="schoolPlanBadge" class="tag">Checking…</span></div></div>
+  <div id="schoolExecutiveOverview" class="card" style="margin-top:14px;border:2px solid #d7e3f4;background:linear-gradient(135deg,#f8fbff,#ffffff)">
+    <div class="topline" style="margin:0 0 12px"><div><h3>📊 School Executive Overview</h3><p class="small">A single view of people, classes, attendance, academics, assignments and fee activity.</p></div><button class="btn" type="button" onclick="loadSchoolExecutiveOverview()">↻ Refresh</button></div>
+    <div id="schoolExecutiveStats" class="school-stat-grid">
+      <div class="card"><h4>👩🏽‍🏫 Teachers</h4><p><b id="schoolExecTeachers">—</b></p></div>
+      <div class="card"><h4>🎓 Learners</h4><p><b id="schoolExecLearners">—</b></p></div>
+      <div class="card"><h4>🏷️ Classes</h4><p><b id="schoolExecClasses">—</b></p></div>
+      <div class="card"><h4>📅 Attendance</h4><p><b id="schoolExecAttendance">—</b></p></div>
+      <div class="card"><h4>📝 Exams</h4><p><b id="schoolExecExams">—</b></p></div>
+      <div class="card"><h4>📘 Assignments</h4><p><b id="schoolExecAssignments">—</b></p></div>
+      <div class="card"><h4>💰 Fees billed</h4><p><b id="schoolExecFees">—</b></p></div>
+      <div class="card"><h4>👪 Parents</h4><p><b id="schoolExecParents">—</b></p></div>
+    </div>
+    <div class="school-dashboard-actions" style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn primary" type="button" onclick="show('attendance')">📅 Attendance</button>
+      <button class="btn" type="button" onclick="show('exams')">📝 Exams & Results</button>
+      <button class="btn" type="button" onclick="show('fees')">💰 Finance & Fees</button>
+      <button class="btn" type="button" onclick="show('communication')">💬 Communication</button>
+      <button class="btn" type="button" onclick="show('timetable')">🗓️ Timetable</button>
+      <button class="btn" type="button" onclick="openAIAssistant('admin')">🤖 School AI</button>
+    </div>
+  </div>
   <div id="schoolControlCentre" class="card school-dashboard-overview" style="margin-top:14px;display:block!important;visibility:visible!important" aria-label="School Control Centre">
   <h3>🏫 School Control Centre</h3>
   <p class="small">These are the school functions available directly from your School Plan Dashboard.</p>
@@ -1104,8 +1124,6 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
       <div class="card"><h3>👥 Users</h3><p>Learners: <b id="analyticsLearners">0</b><br>Teachers: <b id="analyticsTeachers">0</b><br>Admins: <b id="analyticsAdmins">0</b></p></div>
       <div class="card"><h3>📚 Materials</h3><p>Total: <b id="analyticsMaterials">0</b><br>Pending: <b id="analyticsPending">0</b><br>Approved: <b id="analyticsApproved">0</b></p></div>
       <div class="card"><h3>💳 Payments</h3><p>Paid: <b id="analyticsPaid">0</b><br>Amount: <b id="analyticsPaidAmount">KES 0.00</b></p></div>
-      <div class="card"><h3>💰 Subscription Revenue</h3><p>Paid memberships: <b id="analyticsMembershipsPaid">0</b><br>Revenue: <b id="analyticsMembershipRevenue">KES 0.00</b></p></div>
-      <div class="card"><h3>⚡ AI Boost Revenue</h3><p>Paid packs: <b id="analyticsAIBoostSales">0</b><br>Revenue: <b id="analyticsAIBoostRevenue">KES 0.00</b></p></div>
       <div class="card"><h3>💾 Storage</h3><p><b id="analyticsFiles">0</b> files<br><b id="analyticsStorage">0 MB</b> stored</p></div>
     </div>
     <div class="card" style="margin-top:16px"><h3>⚠️ Requires Attention</h3><div id="analyticsAttention">Loading...</div></div>
@@ -1548,7 +1566,7 @@ async function loadAdminAnalytics(){
     const r=await fetch('/api/admin/analytics',{credentials:'include'}); const d=await r.json(); if(!r.ok) throw new Error(d.error||'Could not load analytics.');
     set('analyticsLearners',d.users?.learner||0); set('analyticsTeachers',d.users?.teacher||0); set('analyticsAdmins',d.users?.admin||0);
     const total=(d.materials?.pending||0)+(d.materials?.approved||0)+(d.materials?.rejected||0)+(d.materials?.draft||0); set('analyticsMaterials',total); set('analyticsPending',d.materials?.pending||0); set('analyticsApproved',d.materials?.approved||0);
-    set('analyticsPaid',d.payments?.paid?.count||0); set('analyticsPaidAmount','KES '+Number(d.payments?.paid?.amount||0).toFixed(2)); set('analyticsMembershipsPaid',d.monetization?.membershipsPaid||0); set('analyticsMembershipRevenue','KES '+Number(d.monetization?.membershipRevenue||0).toFixed(2)); set('analyticsAIBoostSales',d.monetization?.aiBoostSales||0); set('analyticsAIBoostRevenue','KES '+Number(d.monetization?.aiBoostRevenue||0).toFixed(2)); set('analyticsFiles',d.storage?.files||0); set('analyticsStorage',(Number(d.storage?.bytes||0)/1048576).toFixed(2)+' MB');
+    set('analyticsPaid',d.payments?.paid?.count||0); set('analyticsPaidAmount','KES '+Number(d.payments?.paid?.amount||0).toFixed(2)); set('analyticsFiles',d.storage?.files||0); set('analyticsStorage',(Number(d.storage?.bytes||0)/1048576).toFixed(2)+' MB');
     const att=document.getElementById('analyticsAttention'); att.innerHTML=d.attention?.length?d.attention.map(x=>`<div class="notice">⚠️ ${escHtml(x)}</div>`).join(''):'<div class="success">✓ No immediate attention items reported.</div>';
     const a=d.activity||{}; document.getElementById('analyticsActivity').innerHTML=`<p><b>Material views:</b> ${Number(a.views||0).toLocaleString()} &nbsp; <b>Unique learners:</b> ${Number(a.learners||0).toLocaleString()} &nbsp; <b>Bookmarks:</b> ${Number(a.bookmarks||0).toLocaleString()}</p>`;
     const b=d.backups||{}; document.getElementById('analyticsBackups').innerHTML=`<p><b>Total backups:</b> ${b.total||0} &nbsp; <b>Completed:</b> ${b.completed||0} &nbsp; <b>Restore tests passed:</b> ${b.tested_passed||0}<br><b>Latest:</b> ${b.latest?new Date(b.latest).toLocaleString():'None recorded'}</p>`;
@@ -1943,7 +1961,7 @@ async function openTusomeAI(){
 }
 async function loadTusomeAIEntitlement(){
   const box=document.getElementById('tusomeAIEntitlementBox'); if(!box)return;
-  try{const r=await fetch('/api/tusome-ai/entitlement',{credentials:'include'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load AI allowance.');const e=d.entitlement;box.innerHTML=e.unlimited?'<b>Administrator access:</b> Unlimited internal Tusome AI usage.':`<b>${escHtml(e.planName)}</b> • ${e.remaining} / ${e.monthlyLimit} AI units remaining this month${e.scopeType==='school'?` • ${e.memberCount} active school member${e.memberCount===1?'':'s'} covered by the school plan.`:''}`;}catch(e){box.textContent=e.message||'Could not load AI allowance.'}
+  try{const r=await fetch('/api/tusome-ai/entitlement',{credentials:'include'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load AI allowance.');const e=d.entitlement;box.innerHTML=e.unlimited?'<b>Administrator access:</b> Unlimited internal Tusome AI usage.':`<b>${escHtml(e.planName)}</b> • ${e.remaining} / ${e.monthlyLimit} AI units remaining this month${e.scopeType==='school'?` • Shared school pool for ${e.memberCount} active member${e.memberCount===1?'':'s'}.`:''}`;}catch(e){box.textContent=e.message||'Could not load AI allowance.'}
 }
 async function restoreServerSession(){
   try{
@@ -2104,20 +2122,9 @@ async function loadMembership(){
     }
     const schoolCard=document.querySelector('#membership .card:last-child'); if(schoolCard) schoolCard.style.display=['teacher','admin'].includes(getSessionRole())?'block':'none';
     plansBox.innerHTML=(p.plans||[]).filter(x=>x.audience!=='school').map(x=>`<div class="plan-card"><span class="market-badge">${x.audience==='learner'?'Learner':'Teacher'}</span><h3>${escapeHtml(x.name)}</h3><div class="plan-price">KES ${Number(x.priceMonthly||0).toFixed(0)} <small>/ month</small></div><div class="small">KES ${Number(x.priceYearly||0).toFixed(0)} / year</div><p>${escapeHtml(x.description||'')}</p><ul class="plan-features">${(x.features||[]).map(f=>`<li>${escapeHtml(f)}</li>`).join('')}</ul><div class="admin-action-row"><button class="btn primary" onclick="payMembership('${escapeHtml(x.planKey)}','monthly')">Pay Monthly</button><button class="btn" onclick="payMembership('${escapeHtml(x.planKey)}','yearly')">Pay Yearly</button></div></div>`).join('')||'<div class="notice">No active plans are configured.</div>';
-    await loadAICreditPacks();
     if(document.getElementById('schoolRequestEmail') && !document.getElementById('schoolRequestEmail').value) document.getElementById('schoolRequestEmail').value=localStorage.getItem('tusomeCurrentUser')||'';
   }catch(e){statusBox.textContent='Could not load membership information.';showToast?.(e.message,'error')}
 }
-async function loadAICreditPacks(){
-  const box=document.getElementById('aiCreditPacks'); if(!box)return;
-  try{const r=await fetch('/api/ai-credit-packs',{credentials:'include'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load AI credit packs.');box.innerHTML=(d.packs||[]).map(x=>`<div class="plan-card"><h3>${escapeHtml(x.name)}</h3><div class="plan-price">KES ${Number(x.price||0).toFixed(0)}</div><p><b>${Number(x.units||0)} AI units</b></p><p class="small">${escapeHtml(x.description||'')}</p><button class="btn primary" type="button" onclick="buyAICredits('${escapeHtml(x.packKey)}')">Buy with M-PESA</button></div>`).join('')||'<div class="notice">No AI credit packs are available.</div>';}catch(e){box.innerHTML='<div class="notice">AI credit packs are temporarily unavailable.</div>';console.warn(e)}}
-async function buyAICredits(packKey){
-  const phone=document.getElementById('membershipPhone')?.value.trim(); if(!phone){showToast?.('Enter the authorized M-PESA number above first.','error');document.getElementById('membershipPhone')?.focus();return;}
-  if(!confirm('Start the AI Boost M-PESA payment? Only continue if you are authorized to use this payment number.'))return;
-  try{const r=await fetch('/api/ai-credit-packs/pay',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({packKey,phone})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not start AI Boost payment.');showToast?.('M-PESA prompt sent. Complete the payment on the authorized phone.','success');await pollAICreditPayment(d.checkoutRequestId);}catch(e){showToast?.(e.message,'error')}
-}
-async function pollAICreditPayment(id){for(let i=0;i<20;i++){await new Promise(r=>setTimeout(r,3000));try{const r=await fetch('/api/ai-credit-packs/payment-status/'+encodeURIComponent(id),{credentials:'include'});const d=await r.json();if(!r.ok)continue;if(d.status==='paid'){showToast?.(`${Number(d.units||0)} AI units added to your account.`,'success');loadTusomeAIEntitlement();return}if(d.status==='failed'){showToast?.(d.resultDescription||'AI Boost payment was not completed.','error');return}}catch{}}showToast?.('Payment is still being confirmed. Refresh later to check your allowance.','info')}
-
 async function payMembership(planKey,billingCycle){
   const phone=document.getElementById('membershipPhone')?.value.trim();
   if(!phone){showToast?.('Enter the authorized M-PESA number first.','error');document.getElementById('membershipPhone')?.focus();return;}
@@ -2227,7 +2234,25 @@ async function loadSchoolPlanStatus(){
   }catch(e){status.textContent=e.message;badge.textContent='Unavailable'}
 }
 
-async function loadSchoolManagement(){loadSchoolPlanStatus();const sel=document.getElementById('schoolWorkspaceSelect');if(!sel)return;try{const r=await fetch('/api/schools/mine',{credentials:'include'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load school access.');schoolWorkspaces=d.schools||[];sel.innerHTML=schoolWorkspaces.length?schoolWorkspaces.map(x=>`<option value="${escapeHtml(x.schoolId)}">${escapeHtml(x.schoolName)} — ${escapeHtml(x.memberRole)}</option>`).join(''):'<option value="">No active school workspace</option>';if(!schoolWorkspaces.length){document.getElementById('schoolWorkspace').style.display='none';document.getElementById('schoolAccessStatus').textContent='No active school workspace is available. Request one from Premium Membership or ask your school administrator to add your account.';return}selectedSchoolId=selectedSchoolId&&schoolWorkspaces.some(x=>x.schoolId===selectedSchoolId)?selectedSchoolId:schoolWorkspaces[0].schoolId;sel.value=selectedSchoolId;loadSelectedSchool()}catch(e){sel.innerHTML='<option value="">Unable to load</option>';showToast?.(e.message,'error')}}
+async function loadSchoolManagement(){loadSchoolPlanStatus();loadSchoolExecutiveOverview();const sel=document.getElementById('schoolWorkspaceSelect');if(!sel)return;try{const r=await fetch('/api/schools/mine',{credentials:'include'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load school access.');schoolWorkspaces=d.schools||[];sel.innerHTML=schoolWorkspaces.length?schoolWorkspaces.map(x=>`<option value="${escapeHtml(x.schoolId)}">${escapeHtml(x.schoolName)} — ${escapeHtml(x.memberRole)}</option>`).join(''):'<option value="">No active school workspace</option>';if(!schoolWorkspaces.length){document.getElementById('schoolWorkspace').style.display='none';document.getElementById('schoolAccessStatus').textContent='No active school workspace is available. Request one from Premium Membership or ask your school administrator to add your account.';return}selectedSchoolId=selectedSchoolId&&schoolWorkspaces.some(x=>x.schoolId===selectedSchoolId)?selectedSchoolId:schoolWorkspaces[0].schoolId;sel.value=selectedSchoolId;loadSelectedSchool()}catch(e){sel.innerHTML='<option value="">Unable to load</option>';showToast?.(e.message,'error')}}
+
+async function loadSchoolExecutiveOverview(){
+  const box=document.getElementById('schoolExecutiveOverview'); if(!box)return;
+  try{
+    const sid=selectedSchoolId || document.getElementById('schoolWorkspaceSelect')?.value || '';
+    if(!sid)return;
+    const r=await fetch('/api/schools/overview?schoolId='+encodeURIComponent(sid),{credentials:'include'}),d=await r.json();
+    if(!r.ok)throw new Error(d.error||'Could not load school overview.');
+    const x=d.summary||{};
+    const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v};
+    set('schoolExecTeachers',x.teachers??0); set('schoolExecLearners',x.learners??0); set('schoolExecClasses',x.classes??0);
+    set('schoolExecAttendance',`${Number(x.attendancePercent||0).toFixed(1)}%`); set('schoolExecExams',x.exams??0); set('schoolExecAssignments',x.assignments??0);
+    set('schoolExecFees',`KES ${Number(x.feesBilled||0).toLocaleString()}`); set('schoolExecParents',x.parents??0);
+  }catch(e){
+    ['schoolExecTeachers','schoolExecLearners','schoolExecClasses','schoolExecAttendance','schoolExecExams','schoolExecAssignments','schoolExecFees','schoolExecParents'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent='—'});
+  }
+}
+
 async function loadSelectedSchool(){const sel=document.getElementById('schoolWorkspaceSelect');selectedSchoolId=sel?.value||selectedSchoolId;if(!selectedSchoolId)return;try{const r=await fetch('/api/schools/dashboard?schoolId='+encodeURIComponent(selectedSchoolId),{credentials:'include'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load school dashboard.');document.getElementById('schoolWorkspace').style.display='block';document.getElementById('schoolAccessStatus').textContent=`${d.school.schoolName} · ${d.school.memberRole}`;document.getElementById('schoolMemberCount').textContent=d.counts.members;document.getElementById('schoolTeacherCount').textContent=d.counts.teachers;document.getElementById('schoolLearnerCount').textContent=d.counts.learners;document.getElementById('schoolClassCount').textContent=d.counts.classes;window.schoolData=d;renderSchoolManagement(d);loadAcademicManagement()}catch(e){document.getElementById('schoolWorkspace').style.display='none';showToast?.(e.message,'error')}}
 function renderSchoolManagement(d){const classes=d.classes||[],members=d.members||[],materials=d.materials||[];const cls=document.getElementById('schoolClassesTable');cls.innerHTML=classes.length?classes.map(c=>`<tr><td>${escapeHtml(c.className)}</td><td>${escapeHtml(c.grade||'—')}</td><td>${escapeHtml(c.stream||'—')}</td><td>${c.learnerCount||0}</td><td>${d.school.memberRole==='admin'||getSessionRole()==='admin'?`<button class="btn" onclick="deleteSchoolClass('${escapeHtml(c.classId)}')">Remove</button>`:'—'}</td></tr>`).join(''):'<tr><td colspan="5">No classes yet.</td></tr>';const mt=document.getElementById('schoolMembersTable');mt.innerHTML=members.length?members.map(m=>`<tr><td>${escapeHtml(m.email)}</td><td>${escapeHtml(m.memberRole)}</td><td>${escapeHtml(m.status)}</td><td>${(d.school.memberRole==='admin'||getSessionRole()==='admin')&&m.email!==getSessionUserEmail()?`<button class="btn" onclick="suspendSchoolMember('${encodeURIComponent(m.email)}')">Suspend</button>`:'—'}</td></tr>`).join(''):'<tr><td colspan="4">No members yet.</td></tr>';const cs=document.getElementById('schoolInviteClass');if(cs)cs.innerHTML='<option value="">No class</option>'+classes.map(c=>`<option value="${escapeHtml(c.classId)}">${escapeHtml(c.className)}</option>`).join('');const pls=document.getElementById('schoolParentLearner');if(pls){const learners=members.filter(m=>m.memberRole==='learner'&&m.status==='active');pls.innerHTML='<option value="">Select learner</option>'+learners.map(m=>`<option value="${escapeHtml(m.email)}">${escapeHtml(m.email)}</option>`).join('');}loadSchoolParentLinks();const rr=document.getElementById('schoolResources');rr.innerHTML=materials.length?materials.map(m=>`<div class="school-resource"><b>${escapeHtml(m.title)}</b><div class="small">${escapeHtml(m.subject||'')} · ${escapeHtml(m.grade||'')} · ${escapeHtml(m.teacherEmail||'')}</div><button class="btn" style="margin-top:6px" onclick="openMaterialById('${escapeHtml(m.id)}')">Open</button></div>`).join(''):'<div class="notice">No approved learning resources yet.</div>';}
 function getSessionUserEmail(){return sessionStorage.getItem('tusomeCurrentUser')||localStorage.getItem('tusomeCurrentUser')||''}

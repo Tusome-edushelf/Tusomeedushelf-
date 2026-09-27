@@ -446,6 +446,55 @@ async function initDatabase() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
     CREATE INDEX IF NOT EXISTS idx_subscription_payments_sub ON subscription_payments(subscription_id, status);
+    ALTER TABLE subscription_plans ADD COLUMN IF NOT EXISTS ai_units_monthly INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE subscription_plans ADD COLUMN IF NOT EXISTS member_limit INTEGER;
+    ALTER TABLE subscription_plans ADD COLUMN IF NOT EXISTS support_level TEXT NOT NULL DEFAULT 'standard';
+
+    CREATE TABLE IF NOT EXISTS ai_usage_monthly (
+      user_email TEXT NOT NULL,
+      period_start DATE NOT NULL,
+      used_units INTEGER NOT NULL DEFAULT 0 CHECK (used_units >= 0),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (user_email, period_start)
+    );
+    CREATE TABLE IF NOT EXISTS ai_wallets (
+      user_email TEXT PRIMARY KEY,
+      purchased_units INTEGER NOT NULL DEFAULT 0 CHECK (purchased_units >= 0),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS ai_credit_purchases (
+      purchase_id TEXT PRIMARY KEY,
+      user_email TEXT NOT NULL,
+      pack_key TEXT NOT NULL,
+      units INTEGER NOT NULL CHECK (units > 0),
+      amount NUMERIC(12,2) NOT NULL CHECK (amount > 0),
+      phone TEXT NOT NULL,
+      checkout_request_id TEXT UNIQUE,
+      merchant_request_id TEXT,
+      status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','paid','failed')),
+      mpesa_receipt TEXT,
+      result_code INTEGER,
+      result_description TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      paid_at TIMESTAMPTZ
+    );
+    CREATE INDEX IF NOT EXISTS idx_ai_credit_purchases_user ON ai_credit_purchases(user_email,created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS ai_credit_packs (
+      pack_key TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      units INTEGER NOT NULL CHECK (units > 0),
+      price NUMERIC(12,2) NOT NULL CHECK (price > 0),
+      description TEXT NOT NULL,
+      active BOOLEAN NOT NULL DEFAULT TRUE
+    );
+    INSERT INTO ai_credit_packs(pack_key,name,units,price,description) VALUES
+      ('boost_25','AI Boost 25',25,99,'25 extra Tusome AI units for occasional top-ups.'),
+      ('boost_75','AI Boost 75',75,249,'75 extra Tusome AI units for revision periods.'),
+      ('boost_200','AI Boost 200',200,499,'200 extra Tusome AI units for heavier study use.')
+    ON CONFLICT (pack_key) DO NOTHING;
+
     CREATE TABLE IF NOT EXISTS schools (
       school_id TEXT PRIMARY KEY,
       school_name TEXT NOT NULL,
@@ -667,13 +716,13 @@ async function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_school_exam_marks_learner ON school_exam_marks(school_id,learner_email);
     CREATE INDEX IF NOT EXISTS idx_school_report_cards_learner ON school_report_cards(school_id,learner_email,created_at DESC);
 
-    INSERT INTO subscription_plans(plan_key,name,audience,price_monthly,price_yearly,description,features)
+    INSERT INTO subscription_plans(plan_key,name,audience,price_monthly,price_yearly,description,features,ai_units_monthly,member_limit,support_level)
     VALUES
-      ('learner_plus','Learner Plus','learner',299,2990,'More AI practice and study tools.', '["Expanded AI study support","More practice tools","Study planner","Premium learning resources"]'::jsonb),
-      ('teacher_plus','Teacher Plus','teacher',599,5990,'Advanced AI tools for teachers.', '["Lesson-plan generation","Scheme-of-work support","Assessment and rubric tools","Material quality checking","Teacher analytics"]'::jsonb),
-      ('school_starter','School Starter','school',4999,49990,'A starter workspace for schools.', '["School dashboard","Teacher and learner management","Learning resource library","Basic school analytics"]'::jsonb),
-      ('school_growth','School Growth','school',9999,99990,'Expanded school operations and analytics.', '["Everything in Starter","Advanced analytics","AI teacher tools","School-wide learning insights","Priority support"]'::jsonb)
-    ON CONFLICT (plan_key) DO NOTHING;
+      ('learner_plus','Learner Plus','learner',299,2990,'A complete premium study plan with 100 AI units each month.', '["100 AI units/month","Tusome AI + Study Mode","CBE Notes Generator","Practice and worked solutions","Personal study planner","Premium learning resources"]'::jsonb,100,NULL,'standard'),
+      ('teacher_plus','Teacher Plus','teacher',599,5990,'Professional teaching tools with 250 AI units each month.', '["250 AI units/month","Lesson-plan generation","Scheme-of-work support","Assessment and rubric tools","Differentiation and remediation","Material quality checks","Teacher analytics"]'::jsonb,250,NULL,'priority'),
+      ('school_starter','School Starter','school',4999,49990,'A starter school workspace with 500 AI units per active member each month.', '["500 AI units/month per active member","School dashboard","Teacher and learner management","Shared resource library","Basic school analytics"]'::jsonb,500,100,'standard'),
+      ('school_growth','School Growth','school',9999,99990,'Expanded school operations with 1,000 AI units per active member each month.', '["1,000 AI units/month per active member","Everything in Starter","Advanced analytics","AI teacher tools","School-wide learning insights","Priority support"]'::jsonb,1000,500,'priority')
+    ON CONFLICT (plan_key) DO UPDATE SET name=EXCLUDED.name,description=EXCLUDED.description,features=EXCLUDED.features,ai_units_monthly=EXCLUDED.ai_units_monthly,member_limit=EXCLUDED.member_limit,support_level=EXCLUDED.support_level,price_monthly=EXCLUDED.price_monthly,price_yearly=EXCLUDED.price_yearly,active=true,updated_at=NOW();
 
     CREATE INDEX IF NOT EXISTS idx_transactions_user_email ON transactions (user_email);
     CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions (status);
@@ -754,7 +803,7 @@ async function audit(req, action, entityType = null, entityId = null, details = 
 async function createBackup(trigger = 'scheduled') {
   if (!db || !databaseReady) throw new Error('Database is not ready.');
   await fs.mkdir(BACKUP_DIR, { recursive: true });
-  const tables = ['users','materials','material_files','transactions','platform_settings','teacher_payouts','material_versions','audit_logs','curriculum_data'];
+  const tables = ['users','materials','material_files','transactions','platform_settings','teacher_payouts','material_versions','audit_logs','curriculum_data','subscription_plans','subscriptions','subscription_payments','ai_usage_monthly','ai_wallets','ai_credit_purchases','ai_credit_packs'];
   const snapshot = { schemaVersion: 1, product: 'Tusome EduShelf', createdAt: new Date().toISOString(), trigger, tables: {} };
   for (const table of tables) {
     const r = await db.query(`SELECT * FROM ${table}`);
@@ -1579,8 +1628,16 @@ app.post('/api/ai', requireAuth, async (req, res) => {
   try {
     const requestedRole = String(req.body?.role || '');
     const effectiveRole = requestedRole === 'parent' ? 'parent' : req.user.role;
-    const answer = await callGemini({ ...(req.body || {}), role: effectiveRole });
-    res.json({ ok: true, answer });
+    const body=req.body||{};
+    const mode=String(body.mode||'answer');
+    const thinkingLevel=['low','medium','high'].includes(String(body.thinkingLevel||'').toLowerCase())?String(body.thinkingLevel).toLowerCase():(mode==='notes'||mode==='practice'?'low':'medium');
+    const attachments=Array.isArray(body.attachments)?body.attachments.length:0;
+    const units=aiCost({thinkingLevel,files:attachments,mode});
+    const before=await getAIEntitlement(req.user.email);
+    if(!before.unlimited && before.remaining<units) return res.status(402).json({error:`You have ${before.remaining} AI units remaining, but this request needs ${units}.`,code:'AI_ALLOWANCE_EXHAUSTED',entitlement:before});
+    const answer = await callGemini({ ...body, role: effectiveRole });
+    const after=await consumeAIUnits(req.user.email,units);
+    res.json({ ok: true, answer, unitsUsed:units, entitlement:after });
   } catch (e) {
     console.error('AI error:', e);
     const message = e?.message || 'AI service failed.';
@@ -1589,6 +1646,56 @@ app.post('/api/ai', requireAuth, async (req, res) => {
   }
 });
 
+
+// Monetized AI usage helpers. Free accounts receive 10 units/month; paid plans and school
+// memberships receive their configured allowance. Purchased AI Boost units are added on top.
+async function getAIEntitlement(email) {
+  if (!databaseReady) throw new Error('AI usage database is not ready.');
+  const period = new Date(); period.setUTCDate(1); const periodStart = period.toISOString().slice(0,10);
+  const user = await db.query(`SELECT role FROM users WHERE email=$1 LIMIT 1`, [email]);
+  const role = user.rows[0]?.role || 'learner';
+  if (role === 'admin') return { planKey:'admin', planName:'Administrator', unlimited:true, monthlyLimit:null, used:0, purchased:0, remaining:null, periodStart, scopeType:'admin' };
+  let monthlyLimit = 10, planKey='free', planName='Free', scopeType='free', memberCount=0;
+  if (role === 'learner' || role === 'teacher') {
+    const r = await db.query(`SELECT p.plan_key,p.name,p.ai_units_monthly FROM subscriptions s JOIN subscription_plans p ON p.plan_key=s.plan_key WHERE s.user_email=$1 AND s.status IN ('active','trial') AND COALESCE(s.ends_at,NOW())>NOW() AND p.audience=$2 ORDER BY p.ai_units_monthly DESC LIMIT 1`, [email,role]);
+    if (r.rowCount) { planKey=r.rows[0].plan_key; planName=r.rows[0].name; monthlyLimit=Number(r.rows[0].ai_units_monthly||0); scopeType='personal'; }
+  }
+  const school = await db.query(`SELECT p.plan_key,p.name,p.ai_units_monthly,COUNT(sm2.user_email) FILTER (WHERE sm2.status='active')::int AS member_count FROM school_memberships sm JOIN subscriptions s ON s.school_id=sm.school_id AND s.status IN ('active','trial') AND COALESCE(s.ends_at,NOW())>NOW() JOIN subscription_plans p ON p.plan_key=s.plan_key LEFT JOIN school_memberships sm2 ON sm2.school_id=sm.school_id WHERE sm.user_email=$1 AND sm.status='active' AND p.audience='school' GROUP BY p.plan_key,p.name,p.ai_units_monthly ORDER BY p.ai_units_monthly DESC LIMIT 1`, [email]);
+  if (school.rowCount) { planKey=school.rows[0].plan_key; planName=school.rows[0].name; monthlyLimit=Number(school.rows[0].ai_units_monthly||0); scopeType='school'; memberCount=Number(school.rows[0].member_count||0); }
+  const u=await db.query(`SELECT used_units FROM ai_usage_monthly WHERE user_email=$1 AND period_start=$2`,[email,periodStart]);
+  const w=await db.query(`SELECT purchased_units FROM ai_wallets WHERE user_email=$1`,[email]);
+  const used=Number(u.rows[0]?.used_units||0), purchased=Number(w.rows[0]?.purchased_units||0);
+  const remaining=Math.max(0,monthlyLimit-used)+purchased;
+  return {planKey,planName,unlimited:false,monthlyLimit,used,purchased,remaining,periodStart,scopeType,memberCount};
+}
+async function consumeAIUnits(email, units) {
+  const need=Math.max(1,Math.ceil(Number(units)||1));
+  const ent=await getAIEntitlement(email);
+  if(ent.unlimited) return ent;
+  if(ent.remaining < need) { const err=new Error(`AI allowance exhausted. You need ${need} units but only ${ent.remaining} remain.`); err.code='AI_ALLOWANCE_EXHAUSTED'; err.entitlement=ent; throw err; }
+  const period=ent.periodStart;
+  await db.query('BEGIN');
+  try {
+    await db.query(`INSERT INTO ai_usage_monthly(user_email,period_start,used_units) VALUES($1,$2,$3) ON CONFLICT(user_email,period_start) DO UPDATE SET used_units=ai_usage_monthly.used_units+$3,updated_at=NOW()`,[email,period,need]);
+    const baseRemaining=Math.max(0,ent.monthlyLimit-ent.used-need);
+    const fromPurchased=Math.max(0,need-Math.max(0,ent.monthlyLimit-ent.used));
+    if(fromPurchased>0) await db.query(`UPDATE ai_wallets SET purchased_units=GREATEST(0,purchased_units-$2),updated_at=NOW() WHERE user_email=$1`,[email,fromPurchased]);
+    await db.query('COMMIT');
+  } catch(e) { await db.query('ROLLBACK'); throw e; }
+  return await getAIEntitlement(email);
+}
+function aiCost({thinkingLevel='medium',files=0,mode=''}) {
+  const t=String(thinkingLevel||'medium').toLowerCase();
+  const base=t==='high'?4:t==='low'?1:2;
+  const fileCost=Math.min(5,Number(files)||0);
+  const modeExtra=['notes','lesson','scheme','assessment','rubric','differentiated'].includes(String(mode||''))?1:0;
+  return base+fileCost+modeExtra;
+}
+
+app.get('/api/tusome-ai/entitlement', requireAuth, async (req,res)=>{
+  try { res.json({ok:true,entitlement:await getAIEntitlement(req.user.email)}); }
+  catch(e){res.status(503).json({error:e.message||'Could not load AI allowance.'});}
+});
 
 // Tusome AI standalone chat API — kept separate from the role-specific /api/ai endpoint.
 app.get('/api/tusome-ai/health', async (_req, res) => {
@@ -1600,7 +1707,7 @@ app.get('/api/tusome-ai/health', async (_req, res) => {
   });
 });
 
-app.post('/api/tusome-ai/chat', async (req, res) => {
+app.post('/api/tusome-ai/chat', requireAuth, async (req, res) => {
   try {
     const prompt = String(req.body?.prompt || '').trim();
     const thinkingLevel = ['low','medium','high'].includes(String(req.body?.thinkingLevel || '').toLowerCase())
@@ -1634,11 +1741,15 @@ Use plain text math that is comfortable on a phone. Markdown headings, bullets, 
 ${historyText ? `RECENT CONVERSATION:\n${historyText}\n\n` : ''}USER REQUEST:\n${prompt || 'Please analyse the attached file(s).'}
 ${fileParts.length ? '\nATTACHED FILES: ' + fileParts.map(f => f.label).join(', ') : ''}`;
 
+    const units=aiCost({thinkingLevel,files:files.length,mode:'answer'});
+    const before=await getAIEntitlement(req.user.email);
+    if(!before.unlimited && before.remaining<units) return res.status(402).json({error:`You have ${before.remaining} AI units remaining, but this request needs ${units}.`,code:'AI_ALLOWANCE_EXHAUSTED',entitlement:before});
     const answer = await callGemini({
       subject: 'General', grade: 'General', mode: 'answer', focus: '',
-      prompt: standalonePrompt, role: 'learner', attachments: files
+      prompt: standalonePrompt, role: req.user.role || 'learner', attachments: files
     });
-    res.json({ ok: true, answer, model: process.env.GEMINI_MODEL || 'gemini-3.8-flash', thinkingLevel });
+    const after=await consumeAIUnits(req.user.email,units);
+    res.json({ ok: true, answer, model: process.env.GEMINI_MODEL || 'gemini-3.8-flash', thinkingLevel, unitsUsed:units, entitlement:after });
   } catch (e) {
     console.error('Tusome AI chat error:', e);
     const message = e?.message || 'Tusome AI service failed.';
@@ -1786,6 +1897,12 @@ app.post('/api/payments/callback', async (req, res) => {
         await db.query(`UPDATE subscription_payments SET status=$1,result_code=$2,result_description=$3,mpesa_receipt=$4,paid_amount=$5,paid_phone=$6,transaction_date=$7,updated_at=NOW() WHERE payment_id=$8`,[patch.status,patch.resultCode,patch.resultDescription,patch.mpesaReceipt,patch.paidAmount,patch.paidPhone,patch.transactionDate,p.payment_id]);
         await db.query(`UPDATE subscriptions SET status=$1,starts_at=CASE WHEN $1='active' THEN NOW() ELSE starts_at END,ends_at=CASE WHEN $1='active' THEN NOW()+CASE billing_cycle WHEN 'yearly' THEN INTERVAL '1 year' ELSE INTERVAL '1 month' END ELSE ends_at END,updated_at=NOW() WHERE subscription_id=$2`,[patch.status==='paid'?'active':'payment_failed',p.subscription_id]);
       }
+      const cp=await db.query(`SELECT purchase_id,user_email,units,status FROM ai_credit_purchases WHERE checkout_request_id=$1 LIMIT 1`,[stk.CheckoutRequestID]);
+      if(cp.rowCount){
+        const purchase=cp.rows[0];
+        await db.query(`UPDATE ai_credit_purchases SET status=$1,result_code=$2,result_description=$3,mpesa_receipt=$4,updated_at=NOW(),paid_at=CASE WHEN $1='paid' THEN NOW() ELSE paid_at END WHERE purchase_id=$5`,[patch.status,patch.resultCode,patch.resultDescription,patch.mpesaReceipt,purchase.purchase_id]);
+        if(patch.status==='paid' && purchase.status!=='paid') await db.query(`INSERT INTO ai_wallets(user_email,purchased_units) VALUES($1,$2) ON CONFLICT(user_email) DO UPDATE SET purchased_units=ai_wallets.purchased_units+$2,updated_at=NOW()`,[purchase.user_email,Number(purchase.units)]);
+      }
     } else {
       const items = await readTx();
       const tx = items.find(x => x.checkoutRequestId === stk.CheckoutRequestID);
@@ -1830,14 +1947,16 @@ app.get('/api/admin/ai-context', requireRole('admin'), async (req,res)=>{
 
 app.get('/api/admin/analytics', requireRole('admin'), async (req,res)=>{
   try {
-    const [users, mats, payments, activity, audits, backups, storage] = await Promise.all([
+    const [users, mats, payments, activity, audits, backups, storage, memberships, aiBoost] = await Promise.all([
       db.query(`SELECT role,COUNT(*)::int AS count FROM users GROUP BY role`),
       db.query(`SELECT approval_status AS status,COUNT(*)::int AS count FROM materials WHERE deleted_at IS NULL GROUP BY approval_status`),
       db.query(`SELECT status,COUNT(*)::int AS count,COALESCE(SUM(CASE WHEN status='paid' THEN COALESCE(paid_amount,amount) ELSE 0 END),0) AS amount FROM transactions GROUP BY status`),
       db.query(`SELECT COUNT(*)::int AS views,COUNT(DISTINCT learner_email)::int AS learners,COUNT(*) FILTER (WHERE bookmarked)::int AS bookmarks FROM learner_material_activity`),
       db.query(`SELECT actor_role AS role,COUNT(*)::int AS count,MAX(created_at) AS latest FROM audit_logs GROUP BY actor_role ORDER BY count DESC`),
       db.query(`SELECT COUNT(*)::int AS total,COUNT(*) FILTER (WHERE status='completed')::int AS completed,COUNT(*) FILTER (WHERE restore_test_status='passed')::int AS tested_passed,MAX(created_at) AS latest FROM backup_records`),
-      db.query(`SELECT COALESCE(SUM(file_size),0)::bigint AS bytes,COUNT(*)::int AS files FROM material_files`)
+      db.query(`SELECT COALESCE(SUM(file_size),0)::bigint AS bytes,COUNT(*)::int AS files FROM material_files`),
+      db.query(`SELECT COUNT(*) FILTER(WHERE status='active')::int AS paid_count,COALESCE(SUM(CASE WHEN status='active' THEN amount ELSE 0 END),0) AS revenue FROM subscriptions WHERE amount>0`),
+      db.query(`SELECT COUNT(*) FILTER(WHERE status='paid')::int AS paid_count,COALESCE(SUM(CASE WHEN status='paid' THEN amount ELSE 0 END),0) AS revenue FROM ai_credit_purchases`)
     ]);
     const roleCounts=Object.fromEntries(users.rows.map(x=>[x.role,Number(x.count||0)]));
     const materialCounts=Object.fromEntries(mats.rows.map(x=>[x.status,Number(x.count||0)]));
@@ -1846,7 +1965,7 @@ app.get('/api/admin/analytics', requireRole('admin'), async (req,res)=>{
     if(Number(materialCounts.pending||0)>0) warnings.push(`${materialCounts.pending} material(s) are awaiting review.`);
     if(Number(paymentCounts.pending?.count||0)>0) warnings.push(`${paymentCounts.pending.count} payment(s) are still pending.`);
     if(!backups.rows[0]?.completed) warnings.push('No completed backup is recorded yet.');
-    res.json({ok:true,users:roleCounts,materials:materialCounts,payments:paymentCounts,activity:activity.rows[0]||{},auditSummary:audits.rows,backups:backups.rows[0]||{},storage:{bytes:Number(storage.rows[0]?.bytes||0),files:Number(storage.rows[0]?.files||0)},attention:warnings});
+    res.json({ok:true,users:roleCounts,materials:materialCounts,payments:paymentCounts,activity:activity.rows[0]||{},auditSummary:audits.rows,backups:backups.rows[0]||{},storage:{bytes:Number(storage.rows[0]?.bytes||0),files:Number(storage.rows[0]?.files||0)},monetization:{membershipsPaid:Number(memberships.rows[0]?.paid_count||0),membershipRevenue:Number(memberships.rows[0]?.revenue||0),aiBoostSales:Number(aiBoost.rows[0]?.paid_count||0),aiBoostRevenue:Number(aiBoost.rows[0]?.revenue||0)},attention:warnings});
   } catch(e) { console.error('Admin analytics error:',e); res.status(500).json({error:'Could not load admin analytics.'}); }
 });
 
@@ -2030,7 +2149,7 @@ app.get('/api/discussions/signals', requireAuth, async (req,res)=>{
 // v36 Premium Membership + School Plans.
 app.get('/api/plans', requireAuth, async (_req,res)=>{
   if(!databaseReady) return res.json({ok:true,plans:[]});
-  try{const r=await db.query(`SELECT plan_key AS "planKey",name,audience,price_monthly AS "priceMonthly",price_yearly AS "priceYearly",description,features FROM subscription_plans WHERE active=true ORDER BY audience,price_monthly`);res.json({ok:true,plans:r.rows});}
+  try{const r=await db.query(`SELECT plan_key AS "planKey",name,audience,price_monthly AS "priceMonthly",price_yearly AS "priceYearly",description,features,ai_units_monthly AS "aiUnitsMonthly",member_limit AS "memberLimit",support_level AS "supportLevel" FROM subscription_plans WHERE active=true ORDER BY audience,price_monthly`);res.json({ok:true,plans:r.rows});}
   catch(e){console.error(e);res.status(500).json({error:'Could not load membership plans.'})}
 });
 
@@ -2103,6 +2222,32 @@ app.get('/api/subscriptions/payment-status/:checkoutRequestId', requireAuth, asy
     if(!r.rowCount)return res.status(404).json({error:'Subscription payment not found.'});
     res.json(r.rows[0]);
   }catch(e){console.error(e);res.status(500).json({error:'Could not check membership payment.'});}
+});
+
+app.get('/api/ai-credit-packs', requireAuth, async (_req,res)=>{
+  try { const r=await db.query(`SELECT pack_key AS "packKey",name,units,price,description FROM ai_credit_packs WHERE active=true ORDER BY units`); res.json({ok:true,packs:r.rows}); }
+  catch(e){res.status(503).json({error:'AI credit packs are not available.'});}
+});
+app.post('/api/ai-credit-packs/pay', requireAuth, async (req,res)=>{
+  if(!databaseReady)return res.status(503).json({error:'AI credit payments require PostgreSQL.'});
+  try{
+    const packKey=String(req.body?.packKey||''),phone=String(req.body?.phone||'').trim().replace(/\s+/g,'');
+    const r=await db.query(`SELECT * FROM ai_credit_packs WHERE pack_key=$1 AND active=true`,[packKey]);
+    if(!r.rowCount)return res.status(404).json({error:'AI credit pack not found.'});
+    if(!/^254\d{9}$/.test(phone)&&!/^07\d{8}$/.test(phone)&&!/^01\d{8}$/.test(phone))return res.status(400).json({error:'Enter a valid authorized Kenyan M-PESA number.'});
+    const normalized=phone.startsWith('0')?'254'+phone.slice(1):phone;
+    const p=r.rows[0],id='AIC-'+Date.now().toString(36).toUpperCase()+'-'+crypto.randomBytes(3).toString('hex').toUpperCase();
+    const base=(process.env.MPESA_BASE_URL||'https://sandbox.safaricom.co.ke').replace(/\/$/,''); const shortcode=cfg('MPESA_SHORTCODE'),passkey=cfg('MPESA_PASSKEY'); const ts=timestamp(); const password=Buffer.from(`${shortcode}${passkey}${ts}`).toString('base64'); const token=await getAccessToken();
+    const body={BusinessShortCode:shortcode,Password:password,Timestamp:ts,TransactionType:process.env.MPESA_TRANSACTION_TYPE||'CustomerPayBillOnline',Amount:Math.round(Number(p.price)),PartyA:normalized,PartyB:shortcode,PhoneNumber:normalized,CallBackURL:cfg('MPESA_CALLBACK_URL'),AccountReference:id.slice(0,20),TransactionDesc:`Tusome ${p.name}`.slice(0,100)};
+    const rr=await fetch(`${base}/mpesa/stkpush/v1/processrequest`,{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify(body)}); const data=await rr.json();
+    if(!rr.ok||data.ResponseCode!=='0')return res.status(502).json({error:data.errorMessage||data.ResponseDescription||'Daraja rejected the AI credit STK Push.'});
+    await db.query(`INSERT INTO ai_credit_purchases(purchase_id,user_email,pack_key,units,amount,phone,checkout_request_id,merchant_request_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,[id,req.user.email,packKey,Number(p.units),Number(p.price),normalized,data.CheckoutRequestID,data.MerchantRequestID]);
+    res.json({ok:true,purchaseId:id,checkoutRequestId:data.CheckoutRequestID,message:data.CustomerMessage||'M-PESA prompt sent.'});
+  }catch(e){console.error(e);res.status(500).json({error:e.message||'Could not start AI credit payment.'});}
+});
+app.get('/api/ai-credit-packs/payment-status/:checkoutRequestId', requireAuth, async (req,res)=>{
+  try{const r=await db.query(`SELECT status,units,amount,mpesa_receipt AS "mpesaReceipt",result_description AS "resultDescription" FROM ai_credit_purchases WHERE checkout_request_id=$1 AND user_email=$2 LIMIT 1`,[req.params.checkoutRequestId,req.user.email]);if(!r.rowCount)return res.status(404).json({error:'AI credit payment not found.'});res.json(r.rows[0]);}
+  catch(e){res.status(500).json({error:'Could not check AI credit payment.'});}
 });
 
 app.post('/api/subscriptions/request', requireAuth, async (req,res)=>{

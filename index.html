@@ -797,9 +797,10 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
   <h3>🏫 School Control Centre</h3>
   <p class="small">These are the school functions available directly from your School Plan Dashboard.</p>
   <div class="card" style="margin-top:12px;border:1px solid #dbe4f0;background:#f8fbff">
-    <h3 style="margin-top:0">👤 School Role Workspaces</h3>
-    <p class="small">Your school membership determines which operational tools you can use. Global learner, teacher and parent dashboards remain available separately.</p>
-    <div class="school-module-grid">
+    <h3 style="margin-top:0">👤 Choose your School Workspace</h3>
+    <p class="small">Start here. Choose the role that matches your school responsibility. Tusome will take you directly to the tools you need.</p>
+    <div class="notice" style="margin:10px 0 14px"><b>Simple access:</b> Bursar → Finance only · Teacher → Teaching tools · Learner → Learning tools · Parent/Guardian → Child information · School Admin → Full school control.</div>
+    <div id="schoolRoleChooser" class="school-module-grid">
       <button class="school-module" onclick="openSchoolRoleWorkspace('admin')"><span class="school-module-icon">🛡️</span><b>School Admin</b><small>People, classes, academics, attendance, finance, reports and school settings.</small></button>
       <button class="school-module" onclick="openSchoolRoleWorkspace('teacher')"><span class="school-module-icon">👩🏽‍🏫</span><b>Teacher</b><small>Teaching classes, attendance, assignments, gradebook, results and resources.</small></button>
       <button class="school-module" onclick="openSchoolRoleWorkspace('learner')"><span class="school-module-icon">🎓</span><b>Learner</b><small>Assignments, results, fees, timetable, resources and Tusome AI.</small></button>
@@ -820,7 +821,7 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
     <div class="card"><h3>🤖 School AI Support</h3><p>Get school planning and learning-support assistance.</p></div>
   </div>
 </div>
-<div id="schoolManagementCentre" class="card school-dashboard-content" style="display:block!important;visibility:visible!important">
+<div id="schoolManagementCentre" class="card school-dashboard-content" style="display:none">
     <div class="topline"><div><h3>🧭 School Management Centre</h3><p class="small">All school operations are collected here. Select a section below to open its full tools.</p></div></div>
     <div class="school-module-grid">
       <button class="school-module" onclick="document.getElementById('schoolWorkspace')?.scrollIntoView({behavior:'smooth'});"><span class="school-module-icon">🏫</span><b>School Management</b><small>School profile, members, classes and administration.</small></button>
@@ -837,8 +838,8 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
       <div class="card" style="box-shadow:none;border:1px solid #e1e7f0"><h3>⚡ Quick Actions</h3><p class="small">Common school administrator tasks.</p><button class="btn primary" onclick="document.getElementById('schoolClassName')?.focus();document.getElementById('schoolWorkspace')?.scrollIntoView({behavior:'smooth'})">＋ Create Class</button><button class="btn" onclick="document.getElementById('schoolInviteEmail')?.focus();document.getElementById('schoolWorkspace')?.scrollIntoView({behavior:'smooth'})">＋ Add Teacher/Learner</button><button class="btn" onclick="show('communication')">📢 Publish Announcement</button><button class="btn" onclick="show('attendance')">✅ Open Attendance</button></div>
     </div>
   </div>
-  <div id="schoolWorkspaceCard" class="card" style="margin-top:14px"><label>School workspace<select id="schoolWorkspaceSelect" onchange="loadSelectedSchool()"><option value="">Loading school access...</option></select></label><p id="schoolAccessStatus" class="small" style="margin-top:8px"></p></div>
-  <div id="schoolGlanceCard" class="card" style="margin-top:14px;border:2px solid #dce7f7;background:#f8fbff;display:block!important;visibility:visible!important">
+  <div id="schoolWorkspaceCard" class="card" style="margin-top:14px;display:none"><label>School workspace<select id="schoolWorkspaceSelect" onchange="loadSelectedSchool()"><option value="">Loading school access...</option></select></label><p id="schoolAccessStatus" class="small" style="margin-top:8px"></p></div>
+  <div id="schoolGlanceCard" class="card" style="margin-top:14px;border:2px solid #dce7f7;background:#f8fbff;display:none">
     <h3 style="margin-top:0;color:#173f8a">📌 School Dashboard at a Glance</h3>
     <div class="cards" style="margin-top:12px">
       <div class="card"><h3>👥 People</h3><p>Teachers, learners and parent/guardian links.</p></div>
@@ -851,7 +852,7 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
       <div class="card"><h3>📚 Digital Library</h3><p>Approved digital learning resources.</p></div>
     </div>
   </div>
-  <div id="schoolWorkspace" style="display:block!important;visibility:visible!important">
+  <div id="schoolWorkspace" style="display:none">
     <div class="school-stat-grid" style="margin-top:16px"><div class="card"><h3>👥 Members</h3><p><b id="schoolMemberCount">0</b></p></div><div class="card"><h3>👩🏽‍🏫 Teachers</h3><p><b id="schoolTeacherCount">0</b></p></div><div class="card"><h3>🎓 Learners</h3><p><b id="schoolLearnerCount">0</b></p></div><div class="card"><h3>📚 Classes</h3><p><b id="schoolClassCount">0</b></p></div></div>
     <div class="school-grid" style="margin-top:16px">
       <div class="card"><h3>🏷️ Create Class</h3><label>Class name<input id="schoolClassName" maxlength="100" placeholder="Grade 7 Blue"></label><label>Grade<input id="schoolClassGrade" maxlength="40" placeholder="Grade 7"></label><label>Stream<input id="schoolClassStream" maxlength="40" placeholder="Blue"></label><label>Teacher email (optional)<input id="schoolClassTeacher" type="email" maxlength="160" placeholder="teacher@example.com"></label><button class="btn primary" style="margin-top:10px" onclick="createSchoolClass()">Create Class</button></div>
@@ -2174,9 +2175,12 @@ async function openSchoolDashboard(skipHistory=false){
   try{
     const r=await fetch('/api/schools/mine',{credentials:'include'}),d=await r.json();
     if(!r.ok)throw new Error(d.error||'Could not verify school access.');
-    const isSchoolAdmin=(d.schools||[]).some(x=>x.memberRole==='admin'&&x.status!=='suspended');
-    if(!isSchoolAdmin){showSchoolAuthGate('This dashboard is for school administrator accounts. Sign in with a school account or create one below.');return}
-    hideSchoolAuthGate();loadSchoolManagement();
+    const schools=d.schools||[];
+    const hasSchoolAccess=schools.some(x=>x.status!=='suspended');
+    if(!hasSchoolAccess && role!=='parent'){showSchoolAuthGate('No active school workspace is linked to this account. Sign in with a school account or ask your school administrator to add you.');return}
+    hideSchoolAuthGate();
+    if(role==='parent'&&!schools.length){ updateSchoolRoleCards(); }
+    loadSchoolManagement();
   }catch(e){showSchoolAuthGate(e.message||'Please sign in or create a school account.')}
 }
 function showSchoolAuthGate(message=''){
@@ -2186,7 +2190,8 @@ function showSchoolAuthGate(message=''){
 }
 function hideSchoolAuthGate(){
   const gate=document.getElementById('schoolAuthGate');if(gate)gate.style.display='none';
-  ['schoolControlCentre','schoolManagementCentre','schoolPlanCard','schoolWorkspaceCard','schoolGlanceCard'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='block'});
+  const control=document.getElementById('schoolControlCentre');if(control)control.style.display='block';
+  showSchoolRoleHome();
 }
 function openSchoolSignIn(){
   document.getElementById('schoolSignInBox').style.display='block';document.getElementById('schoolRegisterBox').style.display='none';document.getElementById('schoolSignInEmail')?.focus();
@@ -2246,21 +2251,46 @@ async function loadSchoolPlanStatus(){
   }catch(e){status.textContent=e.message;badge.textContent='Unavailable'}
 }
 
-function openSchoolRoleWorkspace(target){
+function showSchoolRoleHome(){
+  const ids=['schoolRoleChooser','schoolManagementCentre','schoolWorkspaceCard','schoolGlanceCard','schoolWorkspace','schoolPlanCard'];
+  const chooser=document.getElementById('schoolRoleChooser'); if(chooser)chooser.style.display='grid';
+  ['schoolManagementCentre','schoolWorkspaceCard','schoolGlanceCard','schoolWorkspace'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none'});
+  const status=document.getElementById('schoolRoleStatus'); if(status)status.textContent='Choose your role to continue.';
+  updateSchoolRoleCards();
+}
+function updateSchoolRoleCards(){
   const role=getSessionRole();
   const memberRole=document.getElementById('schoolWorkspaceSelect')?.selectedOptions?.[0]?.dataset?.memberRole||'';
+  const effective=memberRole||role;
+  document.querySelectorAll('#schoolRoleChooser .school-module').forEach(btn=>{
+    const onclick=btn.getAttribute('onclick')||''; const m=onclick.match(/openSchoolRoleWorkspace\('([^']+)'\)/); const target=m?.[1]; if(!target)return;
+    const allowed=target==='parent'?role==='parent'||effective==='parent':target==='admin'?effective==='admin'||role==='admin':target==='bursar'?effective==='bursar'||effective==='admin'||role==='admin':effective===target||role===target||role==='admin';
+    btn.style.opacity=allowed?'1':'0.52'; btn.setAttribute('aria-disabled',String(!allowed));
+    const small=btn.querySelector('small'); if(small && !allowed && !small.dataset.original){small.dataset.original=small.textContent; small.textContent='Authorised '+target+' access required.';}
+    if(small && allowed && small.dataset.original){small.textContent=small.dataset.original; delete small.dataset.original;}
+  });
+}
+
+function openSchoolRoleWorkspace(target){
+  const role=getSessionRole();
+  const memberRole=document.getElementById('schoolWorkspaceSelect')?.selectedOptions?.[0]?.dataset?.memberRole||role||'';
   const status=document.getElementById('schoolRoleStatus');
-  const allowed = target==='parent' ? role==='parent' : (target==='admin' ? memberRole==='admin'||role==='admin' : target==='bursar' ? memberRole==='bursar'||memberRole==='admin'||role==='admin' : memberRole===target||role===target);
-  if(!allowed){ if(status) status.textContent='This workspace is available only to the matching authorised school role.'; showToast?.('Authorised school role required.','error'); return; }
-  if(status) status.textContent=`Opening ${target==='bursar'?'Bursar / Finance':target} workspace.`;
+  const allowed = target==='parent' ? (role==='parent'||memberRole==='parent') : (target==='admin' ? memberRole==='admin'||role==='admin' : target==='bursar' ? memberRole==='bursar'||memberRole==='admin'||role==='admin' : memberRole===target||role===target||role==='admin');
+  if(!allowed){ if(status) status.textContent='This workspace is locked for your account. Ask the school administrator to assign the correct role.'; showToast?.('Authorised school role required.','error'); return; }
+  const chooser=document.getElementById('schoolRoleChooser'); if(chooser)chooser.style.display='none';
+  ['schoolManagementCentre','schoolWorkspaceCard','schoolGlanceCard','schoolWorkspace'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none'});
+  if(status) status.textContent=`Opening ${target==='bursar'?'Bursar / Finance':target==='parent'?'Parent / Guardian':target} workspace.`;
   if(target==='parent') return show('parent');
   if(target==='learner') return show('learner');
   if(target==='teacher') return show('teacher');
-  if(target==='bursar') return show('fees');
-  if(target==='admin') return document.getElementById('schoolWorkspace')?.scrollIntoView({behavior:'smooth'});
+  if(target==='bursar'){ const el=document.getElementById('schoolRoleChooser'); if(el)el.closest('.card')?.querySelector('h3')?.focus?.(); return show('fees'); }
+  if(target==='admin'){
+    ['schoolManagementCentre','schoolWorkspaceCard','schoolGlanceCard','schoolWorkspace'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='block'});
+    return loadSchoolManagement();
+  }
 }
 
-async function loadSchoolManagement(){loadSchoolPlanStatus();loadSchoolExecutiveOverview();const sel=document.getElementById('schoolWorkspaceSelect');if(!sel)return;try{const r=await fetch('/api/schools/mine',{credentials:'include'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load school access.');schoolWorkspaces=d.schools||[];sel.innerHTML=schoolWorkspaces.length?schoolWorkspaces.map(x=>`<option value="${escapeHtml(x.schoolId)}" data-member-role="${escapeHtml(x.memberRole)}">${escapeHtml(x.schoolName)} — ${escapeHtml(x.memberRole)}</option>`).join(''):'<option value="">No active school workspace</option>';if(!schoolWorkspaces.length){document.getElementById('schoolWorkspace').style.display='none';document.getElementById('schoolAccessStatus').textContent='No active school workspace is available. Request one from Premium Membership or ask your school administrator to add your account.';return}selectedSchoolId=selectedSchoolId&&schoolWorkspaces.some(x=>x.schoolId===selectedSchoolId)?selectedSchoolId:schoolWorkspaces[0].schoolId;sel.value=selectedSchoolId;loadSelectedSchool()}catch(e){sel.innerHTML='<option value="">Unable to load</option>';showToast?.(e.message,'error')}}
+async function loadSchoolManagement(){loadSchoolPlanStatus();loadSchoolExecutiveOverview();const sel=document.getElementById('schoolWorkspaceSelect');if(!sel)return;try{const r=await fetch('/api/schools/mine',{credentials:'include'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load school access.');schoolWorkspaces=d.schools||[];updateSchoolRoleCards();sel.innerHTML=schoolWorkspaces.length?schoolWorkspaces.map(x=>`<option value="${escapeHtml(x.schoolId)}" data-member-role="${escapeHtml(x.memberRole)}">${escapeHtml(x.schoolName)} — ${escapeHtml(x.memberRole)}</option>`).join(''):'<option value="">No active school workspace</option>';if(!schoolWorkspaces.length){document.getElementById('schoolWorkspace').style.display='none';document.getElementById('schoolAccessStatus').textContent='No active school workspace is available. Request one from Premium Membership or ask your school administrator to add your account.';return}selectedSchoolId=selectedSchoolId&&schoolWorkspaces.some(x=>x.schoolId===selectedSchoolId)?selectedSchoolId:schoolWorkspaces[0].schoolId;sel.value=selectedSchoolId;loadSelectedSchool()}catch(e){sel.innerHTML='<option value="">Unable to load</option>';showToast?.(e.message,'error')}}
 
 async function loadSchoolExecutiveOverview(){
   const box=document.getElementById('schoolExecutiveOverview'); if(!box)return;

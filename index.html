@@ -796,6 +796,18 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
   <div id="schoolControlCentre" class="card school-dashboard-overview" style="margin-top:14px;display:block!important;visibility:visible!important" aria-label="School Control Centre">
   <h3>🏫 School Control Centre</h3>
   <p class="small">These are the school functions available directly from your School Plan Dashboard.</p>
+  <div class="card" style="margin-top:12px;border:1px solid #dbe4f0;background:#f8fbff">
+    <h3 style="margin-top:0">👤 School Role Workspaces</h3>
+    <p class="small">Your school membership determines which operational tools you can use. Global learner, teacher and parent dashboards remain available separately.</p>
+    <div class="school-module-grid">
+      <button class="school-module" onclick="openSchoolRoleWorkspace('admin')"><span class="school-module-icon">🛡️</span><b>School Admin</b><small>People, classes, academics, attendance, finance, reports and school settings.</small></button>
+      <button class="school-module" onclick="openSchoolRoleWorkspace('teacher')"><span class="school-module-icon">👩🏽‍🏫</span><b>Teacher</b><small>Teaching classes, attendance, assignments, gradebook, results and resources.</small></button>
+      <button class="school-module" onclick="openSchoolRoleWorkspace('learner')"><span class="school-module-icon">🎓</span><b>Learner</b><small>Assignments, results, fees, timetable, resources and Tusome AI.</small></button>
+      <button class="school-module" onclick="openSchoolRoleWorkspace('parent')"><span class="school-module-icon">👪</span><b>Parent / Guardian</b><small>Linked learner progress, attendance, results, fees and school updates.</small></button>
+      <button class="school-module" onclick="openSchoolRoleWorkspace('bursar')"><span class="school-module-icon">💳</span><b>Bursar / Finance</b><small>Fee charges, payments, balances and finance records for the school.</small></button>
+    </div>
+    <div id="schoolRoleStatus" class="small" style="margin-top:10px"></div>
+  </div>
   <div class="cards" style="margin-top:14px">
     <div class="card"><h3>👩🏽‍🏫 People</h3><p>Manage teachers, learners and parent/guardian links.</p></div>
     <div class="card"><h3>🎓 Classes</h3><p>Create classes, assign teachers and organise learners.</p></div>
@@ -843,7 +855,7 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
     <div class="school-stat-grid" style="margin-top:16px"><div class="card"><h3>👥 Members</h3><p><b id="schoolMemberCount">0</b></p></div><div class="card"><h3>👩🏽‍🏫 Teachers</h3><p><b id="schoolTeacherCount">0</b></p></div><div class="card"><h3>🎓 Learners</h3><p><b id="schoolLearnerCount">0</b></p></div><div class="card"><h3>📚 Classes</h3><p><b id="schoolClassCount">0</b></p></div></div>
     <div class="school-grid" style="margin-top:16px">
       <div class="card"><h3>🏷️ Create Class</h3><label>Class name<input id="schoolClassName" maxlength="100" placeholder="Grade 7 Blue"></label><label>Grade<input id="schoolClassGrade" maxlength="40" placeholder="Grade 7"></label><label>Stream<input id="schoolClassStream" maxlength="40" placeholder="Blue"></label><label>Teacher email (optional)<input id="schoolClassTeacher" type="email" maxlength="160" placeholder="teacher@example.com"></label><button class="btn primary" style="margin-top:10px" onclick="createSchoolClass()">Create Class</button></div>
-      <div class="card"><h3>➕ Add Teacher / Learner</h3><label>Email<input id="schoolInviteEmail" type="email" maxlength="160" placeholder="person@example.com"></label><label>Role<select id="schoolInviteRole"><option value="teacher">Teacher</option><option value="learner">Learner</option></select></label><label>Class (optional)<select id="schoolInviteClass"><option value="">No class</option></select></label><button class="btn primary" style="margin-top:10px" onclick="inviteSchoolMember()">Add / Invite</button><p class="small" style="margin-top:8px">If the account already exists, access is added immediately. Otherwise an invitation is recorded for when the account is created.</p></div>
+      <div class="card"><h3>➕ Add Teacher / Learner</h3><label>Email<input id="schoolInviteEmail" type="email" maxlength="160" placeholder="person@example.com"></label><label>Role<select id="schoolInviteRole"><option value="teacher">Teacher</option><option value="learner">Learner</option><option value="bursar">Bursar / Finance</option></select></label><label>Class (optional)<select id="schoolInviteClass"><option value="">No class</option></select></label><button class="btn primary" style="margin-top:10px" onclick="inviteSchoolMember()">Add / Invite</button><p class="small" style="margin-top:8px">If the account already exists, access is added immediately. Otherwise an invitation is recorded for when the account is created.</p></div>
     </div>
     <div class="card" style="margin-top:16px"><h3>👪 Parent / Guardian Links</h3><p class="small">School administrators can link an existing Parent/Guardian account to an active learner. Parents only see linked learners.</p><div class="school-grid"><label>Parent email<input id="schoolParentEmail" type="email" maxlength="160" placeholder="parent@example.com"></label><label>Learner<select id="schoolParentLearner"><option value="">Select learner</option></select></label></div><button class="btn primary" style="margin-top:10px" onclick="linkSchoolParent()">Link Parent</button><div class="table-like" style="margin-top:12px"><table><thead><tr><th>Parent</th><th>Learner</th><th>Class</th><th>Action</th></tr></thead><tbody id="schoolParentLinksTable"><tr><td colspan="4">Loading…</td></tr></tbody></table></div></div>
     <div class="school-grid" style="margin-top:16px">
@@ -2234,7 +2246,21 @@ async function loadSchoolPlanStatus(){
   }catch(e){status.textContent=e.message;badge.textContent='Unavailable'}
 }
 
-async function loadSchoolManagement(){loadSchoolPlanStatus();loadSchoolExecutiveOverview();const sel=document.getElementById('schoolWorkspaceSelect');if(!sel)return;try{const r=await fetch('/api/schools/mine',{credentials:'include'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load school access.');schoolWorkspaces=d.schools||[];sel.innerHTML=schoolWorkspaces.length?schoolWorkspaces.map(x=>`<option value="${escapeHtml(x.schoolId)}">${escapeHtml(x.schoolName)} — ${escapeHtml(x.memberRole)}</option>`).join(''):'<option value="">No active school workspace</option>';if(!schoolWorkspaces.length){document.getElementById('schoolWorkspace').style.display='none';document.getElementById('schoolAccessStatus').textContent='No active school workspace is available. Request one from Premium Membership or ask your school administrator to add your account.';return}selectedSchoolId=selectedSchoolId&&schoolWorkspaces.some(x=>x.schoolId===selectedSchoolId)?selectedSchoolId:schoolWorkspaces[0].schoolId;sel.value=selectedSchoolId;loadSelectedSchool()}catch(e){sel.innerHTML='<option value="">Unable to load</option>';showToast?.(e.message,'error')}}
+function openSchoolRoleWorkspace(target){
+  const role=getSessionRole();
+  const memberRole=document.getElementById('schoolWorkspaceSelect')?.selectedOptions?.[0]?.dataset?.memberRole||'';
+  const status=document.getElementById('schoolRoleStatus');
+  const allowed = target==='parent' ? role==='parent' : (target==='admin' ? memberRole==='admin'||role==='admin' : target==='bursar' ? memberRole==='bursar'||memberRole==='admin'||role==='admin' : memberRole===target||role===target);
+  if(!allowed){ if(status) status.textContent='This workspace is available only to the matching authorised school role.'; showToast?.('Authorised school role required.','error'); return; }
+  if(status) status.textContent=`Opening ${target==='bursar'?'Bursar / Finance':target} workspace.`;
+  if(target==='parent') return show('parent');
+  if(target==='learner') return show('learner');
+  if(target==='teacher') return show('teacher');
+  if(target==='bursar') return show('fees');
+  if(target==='admin') return document.getElementById('schoolWorkspace')?.scrollIntoView({behavior:'smooth'});
+}
+
+async function loadSchoolManagement(){loadSchoolPlanStatus();loadSchoolExecutiveOverview();const sel=document.getElementById('schoolWorkspaceSelect');if(!sel)return;try{const r=await fetch('/api/schools/mine',{credentials:'include'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load school access.');schoolWorkspaces=d.schools||[];sel.innerHTML=schoolWorkspaces.length?schoolWorkspaces.map(x=>`<option value="${escapeHtml(x.schoolId)}" data-member-role="${escapeHtml(x.memberRole)}">${escapeHtml(x.schoolName)} — ${escapeHtml(x.memberRole)}</option>`).join(''):'<option value="">No active school workspace</option>';if(!schoolWorkspaces.length){document.getElementById('schoolWorkspace').style.display='none';document.getElementById('schoolAccessStatus').textContent='No active school workspace is available. Request one from Premium Membership or ask your school administrator to add your account.';return}selectedSchoolId=selectedSchoolId&&schoolWorkspaces.some(x=>x.schoolId===selectedSchoolId)?selectedSchoolId:schoolWorkspaces[0].schoolId;sel.value=selectedSchoolId;loadSelectedSchool()}catch(e){sel.innerHTML='<option value="">Unable to load</option>';showToast?.(e.message,'error')}}
 
 async function loadSchoolExecutiveOverview(){
   const box=document.getElementById('schoolExecutiveOverview'); if(!box)return;

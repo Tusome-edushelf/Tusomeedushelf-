@@ -771,7 +771,27 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
       <p class="auth-switch">Already have a school account? <button type="button" onclick="openSchoolSignIn()">School Sign In</button></p>
     </div>
   </div>
-  <div id="schoolPlanCard" class="card" style="margin-top:14px"><div class="topline" style="margin:0"><div><h3>💼 School Plan</h3><p id="schoolPlanStatus" class="small">Loading school plan status…</p></div><span id="schoolPlanBadge" class="tag">Checking…</span></div></div>
+  <div id="schoolNameGate" class="card" style="margin-top:14px;border:2px solid #0f766e;background:linear-gradient(135deg,#ecfeff,#ffffff);display:none">
+    <div class="topline" style="margin:0 0 12px"><div><h3 style="margin:0">🔎 Verify Your School</h3><p class="small" style="margin-top:6px">Enter the school name exactly as registered. Tusome will check whether your account is linked to that school and open the correct workspace automatically.</p></div></div>
+    <form onsubmit="verifySchoolAccess(event)" style="display:grid;grid-template-columns:minmax(220px,1fr) auto;gap:10px;align-items:end">
+      <label>School name<input id="schoolNameAccessInput" type="text" required maxlength="160" autocomplete="organization" placeholder="e.g. Tusome Academy"></label>
+      <button id="schoolNameAccessButton" class="btn primary" type="submit">Continue to School →</button>
+    </form>
+    <div id="schoolNameAccessMessage" class="small" style="margin-top:10px"></div>
+  </div>
+  <div id="schoolPlanCard" class="card" style="margin-top:14px;display:none">
+    <div class="topline" style="margin:0 0 12px"><div><h3>💼 School Plan & Payment</h3><p id="schoolPlanStatus" class="small">Loading school plan status…</p></div><span id="schoolPlanBadge" class="tag">Checking…</span></div>
+    <div id="schoolPlanPaymentBox" style="display:none">
+      <div class="notice" style="margin-bottom:12px"><b>School subscription:</b> Choose a school plan and pay securely through the existing M-PESA Daraja connection. The school subscription is attached to this school, not to an individual learner or teacher account.</div>
+      <div id="schoolPlanOptions" class="cards" style="margin-top:10px"></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;align-items:end;margin-top:12px">
+        <label>Billing cycle<select id="schoolPlanBillingCycle"><option value="monthly">Monthly</option><option value="yearly">Yearly</option></select></label>
+        <label>M-PESA phone number<input id="schoolPlanPaymentPhone" type="tel" maxlength="30" placeholder="07XXXXXXXX or 2547XXXXXXXX"></label>
+        <button class="btn primary" type="button" onclick="paySchoolPlan()">Pay School Plan →</button>
+      </div>
+      <div id="schoolPlanPaymentMessage" class="small" style="margin-top:10px"></div>
+    </div>
+  </div>
   <div id="schoolExecutiveOverview" class="card" style="margin-top:14px;border:2px solid #d7e3f4;background:linear-gradient(135deg,#f8fbff,#ffffff)">
     <div class="topline" style="margin:0 0 12px"><div><h3>📊 School Executive Overview</h3><p class="small">A single view of people, classes, attendance, academics, assignments and fee activity.</p></div><button class="btn" type="button" onclick="loadSchoolExecutiveOverview()">↻ Refresh</button></div>
     <div id="schoolExecutiveStats" class="school-stat-grid">
@@ -2170,28 +2190,47 @@ let schoolWorkspaces=[]; let selectedSchoolId='';
 async function openSchoolDashboard(skipHistory=false){
   const role=getSessionRole();
   showPageDirect('schoolDashboard',skipHistory);
-  if(!role){showSchoolAuthGate('Please sign in with a school administrator account or create a school account to continue.');return}
-  if(role==='admin'){hideSchoolAuthGate();loadSchoolManagement();return}
-  try{
-    const r=await fetch('/api/schools/mine',{credentials:'include'}),d=await r.json();
-    if(!r.ok)throw new Error(d.error||'Could not verify school access.');
-    const schools=d.schools||[];
-    const hasSchoolAccess=schools.some(x=>x.status!=='suspended');
-    if(!hasSchoolAccess && role!=='parent'){showSchoolAuthGate('No active school workspace is linked to this account. Sign in with a school account or ask your school administrator to add you.');return}
-    hideSchoolAuthGate();
-    if(role==='parent'&&!schools.length){ updateSchoolRoleCards(); }
-    loadSchoolManagement();
-  }catch(e){showSchoolAuthGate(e.message||'Please sign in or create a school account.')}
+  if(!role){showSchoolAuthGate('Please sign in first. Learners, teachers, school administrators, bursars and parents must use a signed-in account.');return}
+  showSchoolNameGate();
 }
+function showSchoolNameGate(message=''){
+  const gate=document.getElementById('schoolNameGate');if(gate)gate.style.display='block';
+  ['schoolControlCentre','schoolManagementCentre','schoolPlanCard','schoolWorkspaceCard','schoolGlanceCard','schoolExecutiveOverview'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none'});
+  const msg=document.getElementById('schoolNameAccessMessage');if(msg)msg.textContent=message;
+  const input=document.getElementById('schoolNameAccessInput');if(input&&!input.value)input.focus();
+}
+async function verifySchoolAccess(e){
+  e.preventDefault();
+  const input=document.getElementById('schoolNameAccessInput'),button=document.getElementById('schoolNameAccessButton'),msg=document.getElementById('schoolNameAccessMessage');
+  const schoolName=String(input?.value||'').trim(); if(!schoolName)return;
+  if(button){button.disabled=true;button.textContent='Checking school…'}
+  if(msg)msg.textContent='Checking your school membership…';
+  try{
+    const r=await fetch('/api/schools/verify-access',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({schoolName})});
+    const d=await r.json(); if(!r.ok)throw new Error(d.error||'Your account is not linked to this school. Please contact the school administrator.');
+    selectedSchoolId=d.school.schoolId; schoolWorkspaces=[d.school];
+    hideSchoolNameGate();
+    const target=d.school.memberRole==='admin'?'admin':d.school.memberRole;
+    if(['admin','teacher','learner','parent','bursar'].includes(target)){
+      openSchoolRoleWorkspace(target);
+    }else{
+      showSchoolRoleHome();
+      const status=document.getElementById('schoolRoleStatus');if(status)status.textContent='Your school account is linked, but the assigned school role is not recognised. Please contact the school administrator.';
+    }
+  }catch(err){
+    if(msg)msg.textContent=err.message||'Your account is not linked to this school. Please contact the school administrator.';
+    showToast?.(err.message||'School access could not be verified.','error');
+  }finally{if(button){button.disabled=false;button.textContent='Continue to School →'}}
+}
+function hideSchoolNameGate(){const gate=document.getElementById('schoolNameGate');if(gate)gate.style.display='none';}
 function showSchoolAuthGate(message=''){
   const gate=document.getElementById('schoolAuthGate');if(gate)gate.style.display='block';
-  ['schoolControlCentre','schoolManagementCentre','schoolPlanCard','schoolWorkspaceCard','schoolGlanceCard'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none'});
+  ['schoolControlCentre','schoolManagementCentre','schoolPlanCard','schoolWorkspaceCard','schoolGlanceCard','schoolNameGate','schoolExecutiveOverview'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none'});
   const msg=document.getElementById('schoolAuthMessage');if(msg)msg.textContent=message;
 }
 function hideSchoolAuthGate(){
   const gate=document.getElementById('schoolAuthGate');if(gate)gate.style.display='none';
-  const control=document.getElementById('schoolControlCentre');if(control)control.style.display='block';
-  showSchoolRoleHome();
+  showSchoolNameGate();
 }
 function openSchoolSignIn(){
   document.getElementById('schoolSignInBox').style.display='block';document.getElementById('schoolRegisterBox').style.display='none';document.getElementById('schoolSignInEmail')?.focus();
@@ -2238,23 +2277,55 @@ async function updateSchoolDashboardNav(){
 }
 
 async function loadSchoolPlanStatus(){
-  const status=document.getElementById('schoolPlanStatus'),badge=document.getElementById('schoolPlanBadge');
+  const status=document.getElementById('schoolPlanStatus'),badge=document.getElementById('schoolPlanBadge'),box=document.getElementById('schoolPlanPaymentBox');
   if(!status||!badge)return;
   try{
     const r=await fetch('/api/my/subscription',{credentials:'include'}),d=await r.json();
     if(!r.ok)throw new Error(d.error||'Could not load school plan status.');
-    const schoolSubs=(d.subscriptions||[]).filter(x=>x.audience==='school'&&x.schoolId);
+    const sid=selectedSchoolId||document.getElementById('schoolWorkspaceSelect')?.value||'';
+    const schoolSubs=(d.schoolSubscriptions||[]).filter(x=>!sid||x.schoolId===sid);
     const current=schoolSubs.find(x=>['active','trial','requested','pending_payment'].includes(x.status));
-    if(!current){status.textContent='No school plan subscription is currently linked to this workspace.';badge.textContent='No plan';return}
+    if(!current){status.textContent='No school plan subscription is currently linked to this school.';badge.textContent='No plan';if(box)box.style.display=(getCurrentSchoolMemberRole()==='admin')?'block':'none';await loadSchoolPlanOptions();return}
     status.textContent=`${current.name||current.planKey} · ${current.status}${current.endsAt?' · Ends '+new Date(current.endsAt).toLocaleDateString():''}`;
     badge.textContent=current.status==='active'?'Active':current.status.replace('_',' ');
-  }catch(e){status.textContent=e.message;badge.textContent='Unavailable'}
+    if(box)box.style.display=(getCurrentSchoolMemberRole()==='admin')?'block':'none';
+    await loadSchoolPlanOptions();
+  }catch(e){status.textContent=e.message;badge.textContent='Unavailable';if(box)box.style.display='none'}
+}
+function getCurrentSchoolMemberRole(){
+  const opt=document.getElementById('schoolWorkspaceSelect')?.selectedOptions?.[0];
+  return opt?.dataset?.memberRole||window.schoolData?.school?.memberRole||'';
+}
+async function loadSchoolPlanOptions(){
+  const box=document.getElementById('schoolPlanOptions');if(!box)return;
+  try{
+    const r=await fetch('/api/plans',{credentials:'include'}),d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load school plans.');
+    const plans=(d.plans||[]).filter(x=>x.audience==='school');
+    box.innerHTML=plans.length?plans.map((p,i)=>`<label class="card" style="margin:0;cursor:pointer;border:1px solid #dbe5f2"><input type="radio" name="schoolPlanChoice" value="${escapeHtml(p.planKey)}" ${i===0?'checked':''} style="margin-right:8px"><b>${escapeHtml(p.name)}</b><div class="small" style="margin-top:6px">KES ${Number(p.priceMonthly||0).toLocaleString()}/month · KES ${Number(p.priceYearly||0).toLocaleString()}/year</div><div class="small" style="margin-top:6px">${escapeHtml(p.description||'')}</div></label>`).join(''):'<div class="notice">No school plans are currently available.</div>';
+  }catch(e){box.innerHTML='<div class="notice">'+escapeHtml(e.message||'Could not load school plans.')+'</div>'}
+}
+async function paySchoolPlan(){
+  const planKey=document.querySelector('input[name="schoolPlanChoice"]:checked')?.value||'';
+  const cycle=document.getElementById('schoolPlanBillingCycle')?.value||'monthly';
+  const phone=document.getElementById('schoolPlanPaymentPhone')?.value?.trim()||'';
+  const msg=document.getElementById('schoolPlanPaymentMessage');
+  if(!selectedSchoolId||!planKey)return showToast?.('Select a school plan first.','error');
+  if(!phone)return showToast?.('Enter the M-PESA phone number to receive the payment prompt.','error');
+  if(msg)msg.textContent='Starting secure M-PESA payment…';
+  try{
+    const r=await fetch('/api/schools/subscriptions/pay',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({schoolId:selectedSchoolId,planKey,billingCycle:cycle,phone})});
+    const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not start school plan payment.');
+    if(msg)msg.textContent=d.message||'M-PESA prompt sent. Complete the payment on the authorized phone.';
+    showToast?.('M-PESA payment prompt sent.','success');
+    const checkout=d.checkoutRequestId;
+    if(checkout){let attempts=0;const timer=setInterval(async()=>{attempts++;try{const sr=await fetch('/api/schools/subscriptions/payment-status/'+encodeURIComponent(checkout),{credentials:'include'}),sd=await sr.json();if(sr.ok&&(sd.status==='paid'||sd.subscriptionStatus==='active')){clearInterval(timer);if(msg)msg.textContent='School plan payment confirmed. Your school subscription is now active.';await loadSchoolPlanStatus();showToast?.('School plan activated successfully.','success')}else if(sr.ok&&(sd.status==='failed'||sd.subscriptionStatus==='payment_failed')){clearInterval(timer);if(msg)msg.textContent=sd.resultDescription||'The M-PESA payment was not completed.'}}catch(_e){}if(attempts>=30)clearInterval(timer)},4000)}
+  }catch(e){if(msg)msg.textContent=e.message||'School plan payment failed.';showToast?.(e.message||'School plan payment failed.','error')}
 }
 
 function showSchoolRoleHome(){
-  const ids=['schoolRoleChooser','schoolManagementCentre','schoolWorkspaceCard','schoolGlanceCard','schoolWorkspace','schoolPlanCard'];
+  hideSchoolNameGate();
   const chooser=document.getElementById('schoolRoleChooser'); if(chooser)chooser.style.display='grid';
-  ['schoolManagementCentre','schoolWorkspaceCard','schoolGlanceCard','schoolWorkspace'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none'});
+  ['schoolManagementCentre','schoolWorkspaceCard','schoolGlanceCard','schoolWorkspace','schoolPlanCard','schoolExecutiveOverview'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none'});
   const status=document.getElementById('schoolRoleStatus'); if(status)status.textContent='Choose your role to continue.';
   updateSchoolRoleCards();
 }
@@ -2285,12 +2356,12 @@ function openSchoolRoleWorkspace(target){
   if(target==='teacher') return show('teacher');
   if(target==='bursar'){ const el=document.getElementById('schoolRoleChooser'); if(el)el.closest('.card')?.querySelector('h3')?.focus?.(); return show('fees'); }
   if(target==='admin'){
-    ['schoolManagementCentre','schoolWorkspaceCard','schoolGlanceCard','schoolWorkspace'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='block'});
+    ['schoolManagementCentre','schoolWorkspaceCard','schoolGlanceCard','schoolWorkspace','schoolPlanCard','schoolExecutiveOverview'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='block'});
     return loadSchoolManagement();
   }
 }
 
-async function loadSchoolManagement(){loadSchoolPlanStatus();loadSchoolExecutiveOverview();const sel=document.getElementById('schoolWorkspaceSelect');if(!sel)return;try{const r=await fetch('/api/schools/mine',{credentials:'include'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load school access.');schoolWorkspaces=d.schools||[];updateSchoolRoleCards();sel.innerHTML=schoolWorkspaces.length?schoolWorkspaces.map(x=>`<option value="${escapeHtml(x.schoolId)}" data-member-role="${escapeHtml(x.memberRole)}">${escapeHtml(x.schoolName)} — ${escapeHtml(x.memberRole)}</option>`).join(''):'<option value="">No active school workspace</option>';if(!schoolWorkspaces.length){document.getElementById('schoolWorkspace').style.display='none';document.getElementById('schoolAccessStatus').textContent='No active school workspace is available. Request one from Premium Membership or ask your school administrator to add your account.';return}selectedSchoolId=selectedSchoolId&&schoolWorkspaces.some(x=>x.schoolId===selectedSchoolId)?selectedSchoolId:schoolWorkspaces[0].schoolId;sel.value=selectedSchoolId;loadSelectedSchool()}catch(e){sel.innerHTML='<option value="">Unable to load</option>';showToast?.(e.message,'error')}}
+async function loadSchoolManagement(){loadSchoolPlanStatus();loadSchoolExecutiveOverview();const sel=document.getElementById('schoolWorkspaceSelect');if(!sel)return;try{const r=await fetch('/api/schools/mine',{credentials:'include'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load school access.');schoolWorkspaces=d.schools||[];updateSchoolRoleCards();sel.innerHTML=schoolWorkspaces.length?schoolWorkspaces.map(x=>`<option value="${escapeHtml(x.schoolId)}" data-member-role="${escapeHtml(x.memberRole)}">${escapeHtml(x.schoolName)} — ${escapeHtml(x.memberRole)}</option>`).join(''):'<option value="">No active school workspace</option>';if(!schoolWorkspaces.length){document.getElementById('schoolWorkspace').style.display='none';document.getElementById('schoolAccessStatus').textContent='No active school workspace is available. Request one from Premium Membership or ask your school administrator to add your account.';return}selectedSchoolId=selectedSchoolId&&schoolWorkspaces.some(x=>x.schoolId===selectedSchoolId)?selectedSchoolId:schoolWorkspaces[0].schoolId;sel.value=selectedSchoolId;loadSelectedSchool();loadSchoolPlanStatus()}catch(e){sel.innerHTML='<option value="">Unable to load</option>';showToast?.(e.message,'error')}}
 
 async function loadSchoolExecutiveOverview(){
   const box=document.getElementById('schoolExecutiveOverview'); if(!box)return;
@@ -2472,9 +2543,11 @@ async function deleteSchoolCalendarEvent(id){if(!confirm('Delete this calendar e
 <script>
 async function loadFeesPage(){
  const role=getSessionRole(); const a=document.getElementById('feesAdminPanel'),p=document.getElementById('feesParentPanel'),l=document.getElementById('feesLearnerPanel'); if(!a)return; [a,p,l].forEach(x=>x.style.display='none');
- if(role==='admin'||role==='teacher'){a.style.display='block'; await loadFeeSchoolSelectV46(); await loadSchoolFeesV46();}
+ let memberRole='';
+ try{const r=await fetch('/api/schools/mine',{credentials:'include'}),d=await r.json();memberRole=(d.schools||[]).find(x=>!selectedSchoolId||x.schoolId===selectedSchoolId)?.memberRole||'';}catch(_e){}
+ if(role==='admin'||role==='school'||role==='bursar'||memberRole==='admin'||memberRole==='bursar'){a.style.display='block'; await loadFeeSchoolSelectV46(); await loadSchoolFeesV46();}
  if(role==='parent'){p.style.display='block'; await loadParentFeeChildrenV46();}
- if(role==='learner'){l.style.display='block'; await loadLearnerFeesV46();}
+ if(role==='learner' && memberRole!=='bursar'){l.style.display='block'; await loadLearnerFeesV46();}
 }
 async function loadFeeSchoolSelectV46(){const sel=document.getElementById('feesSchoolSelect');if(!sel)return;try{const r=await fetch('/api/schools/mine',{credentials:'include'}),d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load school access.');const schools=d.schools||[];sel.innerHTML=schools.map(x=>`<option value="${escHtml(x.schoolId)}">${escHtml(x.schoolName)}</option>`).join('')||'<option value="">No school workspace</option>';sel.onchange=loadSchoolFeesV46}catch(e){sel.innerHTML='<option value="">Could not load school</option>';showToast?.(e.message,'error')}}
 async function loadSchoolFeesV46(){const sid=document.getElementById('feesSchoolSelect')?.value;if(!sid)return;try{const r=await fetch('/api/schools/fees?schoolId='+encodeURIComponent(sid),{credentials:'include'}),d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load fees.');document.getElementById('feeAccountsRows').innerHTML=(d.accounts||[]).map(x=>`<tr><td>${escHtml(x.learnerEmail)}</td><td>KES ${Number(x.charges||0).toLocaleString()}</td><td>KES ${Number(x.paid||0).toLocaleString()}</td><td><b>KES ${Number(x.balance||0).toLocaleString()}</b></td></tr>`).join('')||'<tr><td colspan="4">No fee accounts yet.</td></tr>';document.getElementById('feeChargesRows').innerHTML=(d.charges||[]).map(x=>`<tr><td>${escHtml(x.learnerEmail)}</td><td>${escHtml(x.feeName)}</td><td>KES ${Number(x.amount||0).toLocaleString()}</td><td>${escHtml(x.dueDate||'—')}</td><td>${escHtml(x.status)}</td></tr>`).join('')||'<tr><td colspan="5">No charges yet.</td></tr>';document.getElementById('feePaymentsRows').innerHTML=(d.payments||[]).map(x=>`<tr><td>${escHtml(x.learnerEmail)}</td><td>KES ${Number(x.amount||0).toLocaleString()}</td><td>${escHtml(x.method)}</td><td>${escHtml(x.reference||'—')}</td><td>${escHtml(x.paidAt||'—')}</td></tr>`).join('')||'<tr><td colspan="5">No payments recorded.</td></tr>'}catch(e){showToast?.(e.message,'error')}}

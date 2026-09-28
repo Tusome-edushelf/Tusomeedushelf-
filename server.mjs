@@ -2151,15 +2151,31 @@ app.get('/api/schools/mine', requireAuth, async (req,res)=>{
   try{const r=await db.query(`SELECT sc.school_id AS "schoolId",sc.school_name AS "schoolName",sc.status,sm.member_role AS "memberRole" FROM school_memberships sm JOIN schools sc ON sc.school_id=sm.school_id WHERE sm.user_email=$1 AND sm.status='active' ORDER BY sc.school_name`,[req.user.email]);res.json({ok:true,schools:r.rows})}catch(e){res.status(500).json({error:'Could not load school access.'})}
 });
 
-app.post('/api/schools/verify-access', requireAuth, async (req,res)=>{
+app.post('/api/schools/admin-access', requireAuth, async (req,res)=>{
+  if(!databaseReady) return res.status(503).json({error:'School database is not ready. Please try again shortly.'});
+  try{
+    const email=String(req.body?.email||'').trim().toLowerCase();
+    if(!email || email!==String(req.user.email||'').toLowerCase()) return res.status(403).json({error:'The school email must match the signed-in account.'});
+    const r=await db.query(`SELECT sc.school_id AS "schoolId",sc.school_name AS "schoolName",sc.status,sm.member_role AS "memberRole" FROM school_memberships sm JOIN schools sc ON sc.school_id=sm.school_id WHERE sm.user_email=$1 AND sm.member_role='admin' AND sm.status='active' AND sc.status='active' ORDER BY sc.school_name LIMIT 1`,[email]);
+    if(!r.rowCount) return res.status(403).json({error:'This school email is not linked to an active school administrator account.'});
+    res.json({ok:true,school:r.rows[0],message:'School administrator verified.'});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not verify school administrator access.'})}
+});
+
+app.post('/api/schools/verify-member-access', requireAuth, async (req,res)=>{
   if(!databaseReady) return res.status(503).json({error:'School database is not ready. Please try again shortly.'});
   try{
     const schoolName=String(req.body?.schoolName||'').trim().replace(/\s+/g,' ').slice(0,160);
+    const email=String(req.body?.email||'').trim().toLowerCase();
+    const memberRole=String(req.body?.memberRole||'').trim().toLowerCase();
     if(!schoolName)return res.status(400).json({error:'Enter your school name first.'});
-    const r=await db.query(`SELECT sc.school_id AS "schoolId",sc.school_name AS "schoolName",sc.status,sm.member_role AS "memberRole" FROM school_memberships sm JOIN schools sc ON sc.school_id=sm.school_id WHERE sm.user_email=$1 AND sm.status='active' AND sc.status='active' AND LOWER(REGEXP_REPLACE(TRIM(sc.school_name),'\\s+',' ','g'))=LOWER($2) LIMIT 1`,[req.user.email,schoolName]);
-    if(!r.rowCount)return res.status(403).json({error:'Your account is not linked to this school. Please contact the school administrator and ask them to link your account.'});
-    res.json({ok:true,school:r.rows[0],message:'School verified. Opening your authorised workspace.'});
-  }catch(e){console.error(e);res.status(500).json({error:'Could not verify the school. Please try again.'})}
+    if(!email)return res.status(400).json({error:'Enter your account email.'});
+    if(email!==String(req.user.email||'').toLowerCase())return res.status(403).json({error:'The email entered must match the signed-in account. Please sign in with the account you want to use.'});
+    if(!['teacher','learner','parent','bursar'].includes(memberRole))return res.status(400).json({error:'Choose a valid school account type.'});
+    const r=await db.query(`SELECT sc.school_id AS "schoolId",sc.school_name AS "schoolName",sc.status,sm.member_role AS "memberRole" FROM school_memberships sm JOIN schools sc ON sc.school_id=sm.school_id WHERE sm.user_email=$1 AND sm.status='active' AND sc.status='active' AND sm.member_role=$2 AND LOWER(REGEXP_REPLACE(TRIM(sc.school_name),'\s+',' ','g'))=LOWER($3) LIMIT 1`,[email,memberRole,schoolName]);
+    if(!r.rowCount)return res.status(403).json({error:'Your account is not linked to this school with that account type. Please contact the school administrator and ask them to link your account.'});
+    res.json({ok:true,user:{email:req.user.email,role:req.user.role},school:r.rows[0],message:'School verified. Opening your authorised workspace.'});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not verify the school link. Please try again.'})}
 });
 
 app.get('/api/schools/dashboard', requireSchoolMembership, async (req,res)=>{

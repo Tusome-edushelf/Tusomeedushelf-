@@ -1654,6 +1654,7 @@ async function adminPreviewMaterial(i){const m=materials[i];if(!m)return;const u
 async function adminMaterialApproval(i,status){if(!materials[i])return;try{const r=await fetch('/api/materials/'+encodeURIComponent(materials[i].id)+'/review',{method:'PATCH',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({approvalStatus:status,price:Number(materials[i].price||0)})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not update material.');materials[i].approvalStatus=status;materials[i].approvedAt=d.material?.approvedAt||null;logActivity(`${status==='approved'?'Approved':'Rejected'} material: ${materials[i].title}`);logNotification(`Material ${materials[i].title}: ${status}`);adminRefreshAll();renderMaterials()}catch(e){alert(e.message)}}
 function setSessionRole(role,email){
   sessionStorage.setItem('tusomeLoggedIn','true');
+  if(role!=='school') sessionStorage.removeItem('tusomeSchoolAccess');
   sessionStorage.setItem('tusomeRole',role);
   sessionStorage.setItem('tusomeCurrentUser',email||role);
   localStorage.setItem('tusomeCurrentUser',email||role);
@@ -1706,6 +1707,8 @@ async function logoutUser(){
   sessionStorage.removeItem('tusomeLoggedIn');
   sessionStorage.removeItem('tusomeRole');
   sessionStorage.removeItem('tusomeCurrentUser');
+  sessionStorage.removeItem('tusomeSchoolAccess');
+  sessionStorage.removeItem('tusomeSchoolMemberRole');
   localStorage.removeItem('tusomeCurrentUser');
   appPageHistory=[];
   show('home',true);
@@ -2193,11 +2196,26 @@ configureAIAssistant(getSessionRole()||'learner');
 let schoolWorkspaces=[]; let selectedSchoolId='';
 async function openSchoolDashboard(skipHistory=false){
   const role=getSessionRole();
+  const schoolAccess=sessionStorage.getItem('tusomeSchoolAccess')==='true';
+  if(!role){
+    showPageDirect('schoolDashboard',skipHistory);
+    showSchoolAuthGate('Sign in with your school email or phone number and password.');
+    return;
+  }
+  // The normal Learner/Teacher/Parent sign-in must never open the School Dashboard.
+  // School workspaces are entered only through the dedicated School Dashboard sign-in.
+  if(!schoolAccess && role!=='school'){
+    const target=role==='teacher'?'teacher':role==='parent'?'parent':role==='admin'?'admin':'learner';
+    show(target, true);
+    showToast?.('Use School Dashboard sign-in to enter your school workspace.','info');
+    return;
+  }
   showPageDirect('schoolDashboard',skipHistory);
-  if(!role){showSchoolAuthGate('Sign in with your school email or phone number and password. Tusome will detect your school role automatically.');return}
   if(role==='school'){showSchoolAdminDashboard();return;}
-  showSchoolAuthGate();
-  openSchoolMemberAccess();
+  // A teacher/learner/parent who used the dedicated school sign-in keeps their school role context.
+  const memberRole=window.schoolLoginMemberRole||sessionStorage.getItem('tusomeSchoolMemberRole')||'';
+  if(memberRole) { hideSchoolAuthGate(); hideSchoolNameGate(); openSchoolRoleWorkspace(memberRole); return; }
+  showSchoolAuthGate('Please sign in through School Dashboard to access your school workspace.');
 }
 function showSchoolAdminDashboard(){
   ['schoolAuthGate','schoolNameGate'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none'});
@@ -2240,6 +2258,8 @@ async function schoolSignIn(e){
     selectedSchoolId=d.school.schoolId;
     schoolWorkspaces=[d.school];
     window.schoolLoginMemberRole=d.school.memberRole;
+    sessionStorage.setItem('tusomeSchoolAccess','true');
+    sessionStorage.setItem('tusomeSchoolMemberRole',d.school.memberRole);
     form.reset();
     hideSchoolAuthGate();
     hideSchoolNameGate();
@@ -2256,7 +2276,7 @@ async function schoolRegister(e){
     const body={schoolName:document.getElementById('schoolRegisterName').value.trim(),email:document.getElementById('schoolRegisterEmail').value.trim(),phone:document.getElementById('schoolRegisterPhone').value.trim(),password:document.getElementById('schoolRegisterPassword').value};
     const r=await fetch('/api/auth/school-register',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(body)});
     const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not create the school account.');
-    setSessionRole(d.user.role,d.user.email);selectedSchoolId=d.school.schoolId;schoolWorkspaces=[{schoolId:d.school.schoolId,schoolName:d.school.schoolName,memberRole:'admin'}];form.reset();showSchoolAdminDashboard();showToast?.('School account created successfully.','success');
+    setSessionRole(d.user.role,d.user.email);selectedSchoolId=d.school.schoolId;schoolWorkspaces=[{schoolId:d.school.schoolId,schoolName:d.school.schoolName,memberRole:'admin'}];sessionStorage.setItem('tusomeSchoolAccess','true');sessionStorage.setItem('tusomeSchoolMemberRole','admin');form.reset();showSchoolAdminDashboard();showToast?.('School account created successfully.','success');
   }catch(err){showToast?.(err.message,'error')}finally{button.disabled=false;button.textContent='Create School Account'}
 }
 

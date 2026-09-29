@@ -9,6 +9,8 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
+const IS_PRODUCTION = process.env.NODE_ENV === 'production' || process.env.RENDER === 'true';
+app.set('trust proxy', 1);
 app.use(express.json({ limit: '18mb' }));
 
 const PORT = Number(process.env.PORT || 3000);
@@ -33,10 +35,16 @@ const db = DATABASE_URL ? new Pool({
 let databaseReady = false;
 
 const AUTH_COOKIE = 'tusome_session';
+if (IS_PRODUCTION && !process.env.AUTH_SESSION_SECRET) {
+  throw new Error('AUTH_SESSION_SECRET must be configured in production. Refusing to start with a temporary session secret.');
+}
 const AUTH_SESSION_SECRET = process.env.AUTH_SESSION_SECRET || crypto.randomBytes(32).toString('hex');
 
 if (!process.env.AUTH_SESSION_SECRET) {
-  console.warn('AUTH_SESSION_SECRET is not configured. A temporary secret will be generated and sessions will reset when the server restarts.');
+  console.warn('AUTH_SESSION_SECRET is not configured. Development mode is using a temporary session secret.');
+}
+if (IS_PRODUCTION && !process.env.ADMIN_PASSWORD) {
+  throw new Error('ADMIN_PASSWORD must be configured in production. Refusing to start with a default administrator password.');
 }
 
 function b64url(value) { return Buffer.from(value).toString('base64url'); }
@@ -68,12 +76,13 @@ function getCookie(req, name) {
 
 function setSessionCookie(res, user) {
   const token = signSession({ email: user.email, role: user.role, exp: Date.now() + 8 * 60 * 60 * 1000 });
-  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
+  const secure = IS_PRODUCTION ? '; Secure' : '';
   res.setHeader('Set-Cookie', `${AUTH_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=28800${secure}`);
 }
 
 function clearSessionCookie(res) {
-  res.setHeader('Set-Cookie', `${AUTH_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
+  const secure = IS_PRODUCTION ? '; Secure' : '';
+  res.setHeader('Set-Cookie', `${AUTH_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`);
 }
 
 function currentUser(req) { return verifySession(getCookie(req, AUTH_COOKIE)); }
@@ -100,12 +109,36 @@ function verifyPassword(password, stored) {
   } catch { return false; }
 }
 
+const loginAttempts = new Map();
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_MAX_ATTEMPTS = 10;
+function loginKey(req, email) { return `${req.ip}|${String(email || '').trim().toLowerCase()}`; }
+function isLoginLimited(req, email) {
+  const key = loginKey(req, email);
+  const now = Date.now();
+  const item = loginAttempts.get(key);
+  if (!item || now - item.startedAt >= LOGIN_WINDOW_MS) { loginAttempts.delete(key); return false; }
+  return item.count >= LOGIN_MAX_ATTEMPTS;
+}
+function recordLoginFailure(req, email) {
+  const key = loginKey(req, email);
+  const now = Date.now();
+  const item = loginAttempts.get(key);
+  if (!item || now - item.startedAt >= LOGIN_WINDOW_MS) loginAttempts.set(key, { startedAt: now, count: 1 });
+  else item.count += 1;
+}
+function clearLoginFailures(req, email) { loginAttempts.delete(loginKey(req, email)); }
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, item] of loginAttempts) if (now - item.startedAt >= LOGIN_WINDOW_MS) loginAttempts.delete(key);
+}, LOGIN_WINDOW_MS).unref?.();
+
 function authUsers() {
+  if (IS_PRODUCTION) return [];
   const adminEmail = String(process.env.ADMIN_EMAIL || 'admin@edushelf.com').trim().toLowerCase();
   const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
   const learnerPassword = process.env.DEMO_LEARNER_PASSWORD || 'learner123';
   const teacherPassword = process.env.DEMO_TEACHER_PASSWORD || 'teacher123';
-  if (!process.env.ADMIN_PASSWORD) console.warn('ADMIN_PASSWORD is not configured. Temporary default admin password is active; set ADMIN_PASSWORD in Render immediately.');
   return [
     { email: adminEmail, role: 'admin', passwordHash: hashPassword(adminPassword, 'edushelf-admin-salt-v1') },
     { email: 'learner@edushelf.com', role: 'learner', passwordHash: hashPassword(learnerPassword, 'edushelf-learner-salt-v1') },
@@ -691,23 +724,25 @@ async function initDatabase() {
   for (const [k,v] of curriculumSeeds) await db.query(`INSERT INTO curriculum_data(curriculum_key,curriculum_value) VALUES($1,$2) ON CONFLICT(curriculum_key) DO NOTHING`,[k,v]);
 
 
-  // Seed/update the three current demo accounts from Render environment variables.
+  // Seed only the configured administrator in production. Demo accounts are development-only.
   const adminEmail = String(process.env.ADMIN_EMAIL || 'admin@edushelf.com').trim().toLowerCase();
-  const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
-  const learnerPassword = process.env.DEMO_LEARNER_PASSWORD || 'learner123';
-  const teacherPassword = process.env.DEMO_TEACHER_PASSWORD || 'teacher123';
-  const seeds = [
-    { email: adminEmail, role: 'admin', passwordHash: hashPassword(adminPassword, 'edushelf-admin-salt-v1') },
-    { email: 'learner@edushelf.com', role: 'learner', passwordHash: hashPassword(learnerPassword, 'edushelf-learner-salt-v1') },
-    { email: 'teacher@edushelf.com', role: 'teacher', passwordHash: hashPassword(teacherPassword, 'edushelf-teacher-salt-v1') }
-  ];
-  for (const user of seeds) {
-    await db.query(`
-      INSERT INTO users (email, role, password_hash)
-      VALUES ($1, $2, $3)
-      ON CONFLICT (email) DO UPDATE
-      SET role = EXCLUDED.role, password_hash = EXCLUDED.password_hash, updated_at = NOW()
-    `, [user.email, user.role, user.passwordHash]);
+  const adminPassword = process.env.ADMIN_PASSWORD || '';
+  if (adminPassword) {
+    const seeds = [{ email: adminEmail, role: 'admin', passwordHash: hashPassword(adminPassword, 'edushelf-admin-salt-v1') }];
+    if (!IS_PRODUCTION) {
+      seeds.push(
+        { email: 'learner@edushelf.com', role: 'learner', passwordHash: hashPassword(process.env.DEMO_LEARNER_PASSWORD || 'learner123', 'edushelf-learner-salt-v1') },
+        { email: 'teacher@edushelf.com', role: 'teacher', passwordHash: hashPassword(process.env.DEMO_TEACHER_PASSWORD || 'teacher123', 'edushelf-teacher-salt-v1') }
+      );
+    }
+    for (const user of seeds) {
+      await db.query(`
+        INSERT INTO users (email, role, password_hash)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (email) DO UPDATE
+        SET role = EXCLUDED.role, password_hash = EXCLUDED.password_hash, updated_at = NOW()
+      `, [user.email, user.role, user.passwordHash]);
+    }
   }
 
   // One-time migration of the old JSON transaction file into PostgreSQL.
@@ -1261,9 +1296,16 @@ app.post('/api/auth/school-register', async (req,res)=>{
 
 app.post('/api/auth/login', async (req, res) => {
   const { email, password, role } = req.body || {};
-  const user = await findUser(email);
-  if (!user || !verifyPassword(password, user.passwordHash)) return res.status(401).json({ error: 'Invalid email or password.' });
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+  if (!normalizedEmail || !password) return res.status(400).json({ error: 'Email and password are required.' });
+  if (isLoginLimited(req, normalizedEmail)) return res.status(429).json({ error: 'Too many unsuccessful login attempts. Please wait 15 minutes and try again.' });
+  const user = await findUser(normalizedEmail);
+  if (!user || !verifyPassword(password, user.passwordHash)) {
+    recordLoginFailure(req, normalizedEmail);
+    return res.status(401).json({ error: 'Invalid email or password.' });
+  }
   if (!['learner', 'teacher', 'admin', 'parent', 'school'].includes(String(role)) || user.role !== role) return res.status(403).json({ error: 'The selected account type does not match this account.' });
+  clearLoginFailures(req, normalizedEmail);
   setSessionCookie(res, user);
   void audit({user}, 'login', 'user', user.email);
   res.json({ ok: true, user: { email: user.email, role: user.role } });
@@ -1299,7 +1341,7 @@ app.patch('/api/account/password', requireAuth, async (req,res)=>{
   const current=String(req.body?.currentPassword||''), next=String(req.body?.newPassword||'');
   if(next.length<8) return res.status(400).json({error:'New password must be at least 8 characters long.'});
   const u=await findUser(req.user.email); if(!u || !verifyPassword(current,u.passwordHash)) return res.status(401).json({error:'Current password is incorrect.'});
-  const hash=passwordHash=hashPassword(next);
+  const hash=hashPassword(next);
   if(db && databaseReady) await db.query('UPDATE users SET password_hash=$1, updated_at=NOW() WHERE email=$2',[hash,req.user.email]);
   else {const users=await readJson(USERS_FILE,[]);const i=users.findIndex(x=>x.email===req.user.email);if(i>=0){users[i].passwordHash=hash;users[i].updatedAt=new Date().toISOString();await writeJson(USERS_FILE,users);}}
   void audit({user:req.user},'change_password','user',req.user.email);

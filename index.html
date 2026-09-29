@@ -1782,6 +1782,13 @@ function navigateBack(fallback='home'){
   show(previous||fallback,true);
 }
 function show(id,skipHistory=false){
+  const schoolSession=sessionStorage.getItem('tusomeSchoolAccess')==='true';
+  if(schoolSession && ['teacher','learner','parent','admin'].includes(id)){
+    showPageDirect('schoolDashboard', true);
+    const memberRole=window.schoolLoginMemberRole||sessionStorage.getItem('tusomeSchoolMemberRole')||'';
+    if(memberRole){ openSchoolRoleWorkspace(memberRole); }
+    return;
+  }
   if(id==='schoolDashboard'){
     openSchoolDashboard(skipHistory);
     return;
@@ -2228,10 +2235,11 @@ async function schoolMemberAccess(e){return schoolSignIn(e)}
 function hideSchoolNameGate(){const gate=document.getElementById('schoolNameGate');if(gate)gate.style.display='none';}
 function showSchoolAuthGate(message=''){
   const gate=document.getElementById('schoolAuthGate');if(gate)gate.style.display='block';
-  ['schoolControlCentre','schoolManagementCentre','schoolPlanCard','schoolWorkspaceCard','schoolGlanceCard','schoolNameGate','schoolExecutiveOverview','schoolGeneralEssentialCards','schoolRoleWorkspacePanel'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none'});
+  const accessPanel=document.getElementById('schoolAccessPanel'); if(accessPanel)accessPanel.style.display='block';
+  ['schoolAccessPanel','schoolControlCentre','schoolManagementCentre','schoolPlanCard','schoolWorkspaceCard','schoolGlanceCard','schoolNameGate','schoolExecutiveOverview','schoolGeneralEssentialCards','schoolRoleWorkspacePanel'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none'});
   const msg=document.getElementById('schoolAuthMessage');if(msg)msg.textContent=message;
 }
-function hideSchoolAuthGate(){const gate=document.getElementById('schoolAuthGate');if(gate)gate.style.display='none';}
+function hideSchoolAuthGate(){const gate=document.getElementById('schoolAuthGate');if(gate)gate.style.display='none'; const access=document.getElementById('schoolAccessPanel'); if(access)access.style.display='none';}
 function openSchoolSignIn(){
   document.getElementById('schoolSignInBox').style.display='block';
   document.getElementById('schoolRegisterBox').style.display='none';
@@ -2375,10 +2383,14 @@ function renderSchoolRoleWorkspace(role){
   panel.style.display='block';
 }
 function openSchoolModule(id){
-  const role=window.schoolLoginMemberRole||getCurrentSchoolMemberRole()||getSessionRole();
+  const role=window.schoolLoginMemberRole||getCurrentSchoolMemberRole()||sessionStorage.getItem('tusomeSchoolMemberRole')||'';
   const allowed={teacher:['attendance','exams','timetable','communication'],learner:['attendance','exams','timetable','fees'],parent:['parent','attendance','fees','communication'],bursar:['fees']}[role]||[];
   if(!allowed.includes(id)){showToast?.('This school function is not available for your role.','error');return;}
-  show(id);
+  showPageDirect('schoolDashboard',true);
+  hideSchoolAuthGate();
+  renderSchoolRoleWorkspace(role);
+  const status=document.getElementById('schoolRoleStatus');
+  if(status)status.textContent='School workspace: '+(id==='fees'?'Finance & Fees':id.charAt(0).toUpperCase()+id.slice(1));
 }
 function updateSchoolRoleCards(){
   const role=getSessionRole();

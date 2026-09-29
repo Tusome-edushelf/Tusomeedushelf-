@@ -830,8 +830,9 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
       <button class="school-module" onclick="openSchoolRoleWorkspace('bursar')"><span class="school-module-icon">💳</span><b>Bursar / Finance</b><small>Fee charges, payments, balances and finance records for the school.</small></button>
     </div>
     <div id="schoolRoleStatus" class="small" style="margin-top:10px"></div>
+    <div id="schoolRoleWorkspacePanel" class="card" style="margin-top:14px;display:none;border:2px solid #dbe5f2;background:#ffffff"></div>
   </div>
-  <div class="cards" style="margin-top:14px">
+  <div id="schoolGeneralEssentialCards" class="cards" style="margin-top:14px">
     <div class="card"><h3>👩🏽‍🏫 People</h3><p>Manage teachers, learners and parent/guardian links.</p></div>
     <div class="card"><h3>🎓 Classes</h3><p>Create classes, assign teachers and organise learners.</p></div>
     <div class="card"><h3>📅 Attendance</h3><p>Record, review and monitor learner attendance.</p></div>
@@ -2200,7 +2201,7 @@ async function openSchoolDashboard(skipHistory=false){
 }
 function showSchoolAdminDashboard(){
   ['schoolAuthGate','schoolNameGate'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none'});
-  ['schoolControlCentre','schoolManagementCentre','schoolPlanCard','schoolWorkspaceCard','schoolGlanceCard','schoolExecutiveOverview'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='block'});
+  ['schoolControlCentre','schoolManagementCentre','schoolPlanCard','schoolWorkspaceCard','schoolGlanceCard','schoolExecutiveOverview','schoolGeneralEssentialCards'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='block'});
   loadSchoolManagement();
 }
 function showSchoolNameGate(message=''){const msg=document.getElementById('schoolNameAccessMessage');if(msg)msg.textContent=message;}
@@ -2209,7 +2210,7 @@ async function schoolMemberAccess(e){return schoolSignIn(e)}
 function hideSchoolNameGate(){const gate=document.getElementById('schoolNameGate');if(gate)gate.style.display='none';}
 function showSchoolAuthGate(message=''){
   const gate=document.getElementById('schoolAuthGate');if(gate)gate.style.display='block';
-  ['schoolControlCentre','schoolManagementCentre','schoolPlanCard','schoolWorkspaceCard','schoolGlanceCard','schoolNameGate','schoolExecutiveOverview'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none'});
+  ['schoolControlCentre','schoolManagementCentre','schoolPlanCard','schoolWorkspaceCard','schoolGlanceCard','schoolNameGate','schoolExecutiveOverview','schoolGeneralEssentialCards','schoolRoleWorkspacePanel'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none'});
   const msg=document.getElementById('schoolAuthMessage');if(msg)msg.textContent=message;
 }
 function hideSchoolAuthGate(){const gate=document.getElementById('schoolAuthGate');if(gate)gate.style.display='none';}
@@ -2328,9 +2329,32 @@ async function paySchoolPlan(){
 function showSchoolRoleHome(){
   hideSchoolNameGate();
   const chooser=document.getElementById('schoolRoleChooser'); if(chooser)chooser.style.display='grid';
-  ['schoolManagementCentre','schoolWorkspaceCard','schoolGlanceCard','schoolWorkspace','schoolPlanCard','schoolExecutiveOverview'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none'});
+  const panel=document.getElementById('schoolRoleWorkspacePanel'); if(panel){panel.style.display='none';panel.innerHTML='';}
+  ['schoolManagementCentre','schoolWorkspaceCard','schoolGlanceCard','schoolWorkspace','schoolPlanCard','schoolExecutiveOverview','schoolGeneralEssentialCards'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none'});
   const status=document.getElementById('schoolRoleStatus'); if(status)status.textContent='Choose your role to continue.';
   updateSchoolRoleCards();
+}
+function renderSchoolRoleWorkspace(role){
+  const panel=document.getElementById('schoolRoleWorkspacePanel');
+  const chooser=document.getElementById('schoolRoleChooser');
+  if(!panel)return;
+  const school=window.schoolData?.school?.schoolName || schoolWorkspaces.find(x=>x.schoolId===selectedSchoolId)?.schoolName || 'Your School';
+  const configs={
+    teacher:{icon:'👩🏽‍🏫',title:'School Teacher Workspace',desc:'Only school teaching functions are shown here. Your normal Tusome Teacher Dashboard remains separate.',items:[['attendance','📅','Attendance','Record and review attendance for your authorised school classes.'],['exams','📝','Exams & Results','Enter and review school assessment results for authorised classes.'],['timetable','🗓️','Timetable','View the school timetable and your assigned lessons.'],['communication','💬','School Communication','School messages and communication relevant to you.']]},
+    learner:{icon:'🎓',title:'School Learner Workspace',desc:'Only school learning information is shown here. Use the normal Tusome sign-in for the broader learner platform.',items:[['attendance','📅','My Attendance','View your attendance records in this school.'],['exams','📊','My Results','View school examinations and published results.'],['timetable','🗓️','My Timetable','View your school lessons and timetable.'],['fees','💰','My School Fees','View school fee charges, payments and balance.']]},
+    parent:{icon:'👪',title:'School Parent / Guardian Workspace',desc:'Only information connected to your authorised learner(s) and this school is shown here.',items:[['parent','📊','Learner Progress','View linked learner academic progress and assignments.'],['attendance','📅','Attendance','View attendance information for linked learners.'],['fees','💰','School Fees','View linked learner fee information and balances.'],['communication','💬','School Communication','View school communication available to parents/guardians.']]},
+    bursar:{icon:'💳',title:'School Finance / Bursar Workspace',desc:'Finance users are restricted to school finance functions rather than learner or teacher dashboards.',items:[['fees','💰','Finance & Fees','Manage school fee charges, payments and balances.'],['fees','🧾','Payment Records','Review school payment records and outstanding balances.'],['fees','📈','Finance Overview','Open the school finance area for financial reporting and reconciliation.']]}};
+  const cfg=configs[role];
+  if(!cfg){panel.style.display='none';return;}
+  if(chooser)chooser.style.display='none';
+  panel.innerHTML=`<div class="topline" style="margin:0 0 12px"><div><h3 style="margin:0">${cfg.icon} ${cfg.title}</h3><p class="small" style="margin-top:6px"><b>${escapeHtml(school)}</b> · ${escapeHtml(cfg.desc)}</p></div><span class="tag">School Space</span></div><div class="school-module-grid">${cfg.items.map(([id,icon,title,desc])=>`<button class="school-module" type="button" onclick="openSchoolModule('${id}')"><span class="school-module-icon">${icon}</span><b>${title}</b><small>${desc}</small></button>`).join('')}</div><div class="notice" style="margin-top:14px"><b>Workspace boundary:</b> This school sign-in does not open the full learner or teacher dashboard. To use the broader Tusome platform, sign out and use the normal Tusome sign-in.</div>`;
+  panel.style.display='block';
+}
+function openSchoolModule(id){
+  const role=window.schoolLoginMemberRole||getCurrentSchoolMemberRole()||getSessionRole();
+  const allowed={teacher:['attendance','exams','timetable','communication'],learner:['attendance','exams','timetable','fees'],parent:['parent','attendance','fees','communication'],bursar:['fees']}[role]||[];
+  if(!allowed.includes(id)){showToast?.('This school function is not available for your role.','error');return;}
+  show(id);
 }
 function updateSchoolRoleCards(){
   const role=getSessionRole();
@@ -2354,10 +2378,7 @@ function openSchoolRoleWorkspace(target){
   const chooser=document.getElementById('schoolRoleChooser'); if(chooser)chooser.style.display='none';
   ['schoolManagementCentre','schoolWorkspaceCard','schoolGlanceCard','schoolWorkspace'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none'});
   if(status) status.textContent=`Opening ${target==='bursar'?'Bursar / Finance':target==='parent'?'Parent / Guardian':target} workspace.`;
-  if(target==='parent') return show('parent');
-  if(target==='learner') return show('learner');
-  if(target==='teacher') return show('teacher');
-  if(target==='bursar'){ const el=document.getElementById('schoolRoleChooser'); if(el)el.closest('.card')?.querySelector('h3')?.focus?.(); return show('fees'); }
+  if(['parent','learner','teacher','bursar'].includes(target)){ renderSchoolRoleWorkspace(target); return; }
   if(target==='admin'){
     ['schoolManagementCentre','schoolWorkspaceCard','schoolGlanceCard','schoolWorkspace','schoolPlanCard','schoolExecutiveOverview'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='block'});
     return loadSchoolManagement();

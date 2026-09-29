@@ -2202,12 +2202,12 @@ async function openSchoolDashboard(skipHistory=false){
     showSchoolAuthGate('Sign in with your school email or phone number and password.');
     return;
   }
-  // The normal Learner/Teacher/Parent sign-in must never open the School Dashboard.
-  // School workspaces are entered only through the dedicated School Dashboard sign-in.
+  // A normal Learner/Teacher/Parent session is deliberately kept separate
+  // from the School Dashboard. If they open School Dashboard, ask them to
+  // use the dedicated school login instead of sending them to their normal dashboard.
   if(!schoolAccess && role!=='school'){
-    const target=role==='teacher'?'teacher':role==='parent'?'parent':role==='admin'?'admin':'learner';
-    show(target, true);
-    showToast?.('Use School Dashboard sign-in to enter your school workspace.','info');
+    showPageDirect('schoolDashboard',skipHistory);
+    showSchoolAuthGate('Sign in with your school email or phone number to enter the school workspace.');
     return;
   }
   showPageDirect('schoolDashboard',skipHistory);
@@ -2261,6 +2261,10 @@ async function schoolSignIn(e){
     sessionStorage.setItem('tusomeSchoolAccess','true');
     sessionStorage.setItem('tusomeSchoolMemberRole',d.school.memberRole);
     form.reset();
+    // Always switch the visible page to the dedicated School Dashboard before
+    // rendering the school member workspace. This prevents a teacher/learner
+    // who was previously on the normal dashboard from remaining on that page.
+    showPageDirect('schoolDashboard', true);
     hideSchoolAuthGate();
     hideSchoolNameGate();
     if(d.school.memberRole==='admin') showSchoolAdminDashboard();
@@ -2276,7 +2280,7 @@ async function schoolRegister(e){
     const body={schoolName:document.getElementById('schoolRegisterName').value.trim(),email:document.getElementById('schoolRegisterEmail').value.trim(),phone:document.getElementById('schoolRegisterPhone').value.trim(),password:document.getElementById('schoolRegisterPassword').value};
     const r=await fetch('/api/auth/school-register',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(body)});
     const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not create the school account.');
-    setSessionRole(d.user.role,d.user.email);selectedSchoolId=d.school.schoolId;schoolWorkspaces=[{schoolId:d.school.schoolId,schoolName:d.school.schoolName,memberRole:'admin'}];sessionStorage.setItem('tusomeSchoolAccess','true');sessionStorage.setItem('tusomeSchoolMemberRole','admin');form.reset();showSchoolAdminDashboard();showToast?.('School account created successfully.','success');
+    setSessionRole(d.user.role,d.user.email);selectedSchoolId=d.school.schoolId;schoolWorkspaces=[{schoolId:d.school.schoolId,schoolName:d.school.schoolName,memberRole:'admin'}];sessionStorage.setItem('tusomeSchoolAccess','true');sessionStorage.setItem('tusomeSchoolMemberRole','admin');form.reset();showPageDirect('schoolDashboard',true);showSchoolAdminDashboard();showToast?.('School account created successfully.','success');
   }catch(err){showToast?.(err.message,'error')}finally{button.disabled=false;button.textContent='Create School Account'}
 }
 
@@ -2390,6 +2394,10 @@ function updateSchoolRoleCards(){
 }
 
 function openSchoolRoleWorkspace(target){
+  // School-role workspaces must always render inside the School Dashboard page.
+  if(document.getElementById('schoolDashboard') && !document.getElementById('schoolDashboard').classList.contains('active')){
+    showPageDirect('schoolDashboard', true);
+  }
   const role=getSessionRole();
   const memberRole=window.schoolLoginMemberRole||document.getElementById('schoolWorkspaceSelect')?.selectedOptions?.[0]?.dataset?.memberRole||role||'';
   const status=document.getElementById('schoolRoleStatus');

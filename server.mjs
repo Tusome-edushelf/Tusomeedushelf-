@@ -458,7 +458,7 @@ async function initDatabase() {
     CREATE TABLE IF NOT EXISTS school_memberships (
       school_id TEXT NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
       user_email TEXT NOT NULL,
-      member_role TEXT NOT NULL CHECK (member_role IN ('teacher','learner','admin')),
+      member_role TEXT NOT NULL CHECK (member_role IN ('teacher','learner','admin','parent','bursar')),
       status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','invited','suspended')),
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       PRIMARY KEY (school_id,user_email)
@@ -482,11 +482,15 @@ async function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_school_classes_school ON school_classes(school_id);
     CREATE TABLE IF NOT EXISTS school_invites (
       invite_id TEXT PRIMARY KEY, school_id TEXT NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
-      email TEXT NOT NULL, member_role TEXT NOT NULL CHECK (member_role IN ('teacher','learner')),
+      email TEXT NOT NULL, member_role TEXT NOT NULL CHECK (member_role IN ('teacher','learner','parent','bursar')),
       class_id TEXT REFERENCES school_classes(class_id) ON DELETE SET NULL, status TEXT NOT NULL DEFAULT 'invited' CHECK (status IN ('invited','joined','cancelled')),
       invited_by TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
     CREATE INDEX IF NOT EXISTS idx_school_invites_email ON school_invites(email,status);
+    ALTER TABLE school_memberships DROP CONSTRAINT IF EXISTS school_memberships_member_role_check;
+    ALTER TABLE school_memberships ADD CONSTRAINT school_memberships_member_role_check CHECK (member_role IN ('teacher','learner','admin','parent','bursar'));
+    ALTER TABLE school_invites DROP CONSTRAINT IF EXISTS school_invites_member_role_check;
+    ALTER TABLE school_invites ADD CONSTRAINT school_invites_member_role_check CHECK (member_role IN ('teacher','learner','parent','bursar'));
     ALTER TABLE school_memberships ADD COLUMN IF NOT EXISTS class_id TEXT REFERENCES school_classes(class_id) ON DELETE SET NULL;
     CREATE INDEX IF NOT EXISTS idx_school_memberships_class ON school_memberships(school_id,class_id,status);
     CREATE TABLE IF NOT EXISTS school_subjects (
@@ -709,6 +713,35 @@ async function initDatabase() {
       SET role = EXCLUDED.role, password_hash = EXCLUDED.password_hash, updated_at = NOW()
     `, [user.email, user.role, user.passwordHash]);
   }
+
+  // Demo school workspace: school@edushelf.com is a permanent no-payment test school.
+  // It is linked to the seeded learner and teacher accounts so the school-link flow can be tested immediately.
+  const demoSchoolId = 'SCH-DEMO-EDUSHELF';
+  const demoSchoolEmail = 'school@edushelf.com';
+  const demoSchoolPassword = process.env.DEMO_SCHOOL_PASSWORD || 'school123';
+  await db.query(`
+    INSERT INTO users(email,role,password_hash) VALUES($1,'school',$2)
+    ON CONFLICT(email) DO UPDATE SET role='school',password_hash=EXCLUDED.password_hash,updated_at=NOW()
+  `,[demoSchoolEmail,hashPassword(demoSchoolPassword,'edushelf-school-demo-salt-v1')]);
+  await db.query(`
+    INSERT INTO schools(school_id,school_name,contact_email,contact_phone,status,created_by)
+    VALUES($1,'Tusome EduShelf Demo School',$2,'','active',$2)
+    ON CONFLICT(school_id) DO UPDATE SET school_name=EXCLUDED.school_name,contact_email=EXCLUDED.contact_email,status='active'
+  `,[demoSchoolId,demoSchoolEmail]);
+  await db.query(`
+    INSERT INTO school_memberships(school_id,user_email,member_role,status) VALUES
+      ($1,$2,'admin','active'),($1,'teacher@edushelf.com','teacher','active'),($1,'learner@edushelf.com','learner','active')
+    ON CONFLICT(school_id,user_email) DO UPDATE SET member_role=EXCLUDED.member_role,status='active'
+  `,[demoSchoolId,demoSchoolEmail]);
+  await db.query(`
+    INSERT INTO subscriptions(subscription_id,user_email,school_id,plan_key,status,billing_cycle,amount,starts_at,ends_at)
+    VALUES($1,$2,$3,'school_starter','active','monthly',0,NOW(),NOW()+INTERVAL '10 years')
+    ON CONFLICT(subscription_id) DO NOTHING
+  `,['SUB-DEMO-SCHOOL',demoSchoolEmail,demoSchoolId]);
+  await db.query(`
+    UPDATE subscriptions SET status='active',amount=0,starts_at=COALESCE(starts_at,NOW()),ends_at=NOW()+INTERVAL '10 years',updated_at=NOW()
+    WHERE school_id=$1 AND plan_key='school_starter'
+  `,[demoSchoolId]);
 
   // One-time migration of the old JSON transaction file into PostgreSQL.
   const legacy = await readTx();
@@ -1721,7 +1754,6 @@ app.post('/api/payments/callback', async (req, res) => {
       if(sp.rowCount){
         const p=sp.rows[0];
         await db.query(`UPDATE subscription_payments SET status=$1,result_code=$2,result_description=$3,mpesa_receipt=$4,paid_amount=$5,paid_phone=$6,transaction_date=$7,updated_at=NOW() WHERE payment_id=$8`,[patch.status,patch.resultCode,patch.resultDescription,patch.mpesaReceipt,patch.paidAmount,patch.paidPhone,patch.transactionDate,p.payment_id]);
-        if(patch.status==='paid') await db.query(`UPDATE subscriptions SET status='cancelled',updated_at=NOW() WHERE school_id=(SELECT school_id FROM subscriptions WHERE subscription_id=$1) AND subscription_id<>$1 AND status IN ('active','pending_payment','requested')`,[p.subscription_id]);
         await db.query(`UPDATE subscriptions SET status=$1,starts_at=CASE WHEN $1='active' THEN NOW() ELSE starts_at END,ends_at=CASE WHEN $1='active' THEN NOW()+CASE billing_cycle WHEN 'yearly' THEN INTERVAL '1 year' ELSE INTERVAL '1 month' END ELSE ends_at END,updated_at=NOW() WHERE subscription_id=$2`,[patch.status==='paid'?'active':'payment_failed',p.subscription_id]);
       }
     } else {
@@ -1976,12 +2008,11 @@ app.get('/api/my/subscription', requireAuth, async (req,res)=>{
   if(!databaseReady) return res.json({ok:true,subscriptions:[],schools:[],trialAvailable:false});
   try{
     await db.query(`UPDATE subscriptions SET status='expired',updated_at=NOW() WHERE user_email=$1 AND status='trial' AND trial_ends_at IS NOT NULL AND trial_ends_at<=NOW()`,[req.user.email]);
-    const s=await db.query(`SELECT s.subscription_id AS "subscriptionId",s.plan_key AS "planKey",p.name,p.audience,s.status,s.billing_cycle AS "billingCycle",s.amount,s.starts_at AS "startsAt",s.ends_at AS "endsAt",s.trial_started_at AS "trialStartedAt",s.trial_ends_at AS "trialEndsAt",s.trial_used_at AS "trialUsedAt",s.requested_at AS "requestedAt",s.school_id AS "schoolId" FROM subscriptions s JOIN subscription_plans p ON p.plan_key=s.plan_key WHERE s.user_email=$1 ORDER BY s.requested_at DESC LIMIT 10`,[req.user.email]);
+    const s=await db.query(`SELECT s.subscription_id AS "subscriptionId",s.plan_key AS "planKey",p.name,p.audience,s.status,s.billing_cycle AS "billingCycle",s.amount,s.starts_at AS "startsAt",s.ends_at AS "endsAt",s.trial_started_at AS "trialStartedAt",s.trial_ends_at AS "trialEndsAt",s.trial_used_at AS "trialUsedAt",s.requested_at AS "requestedAt" FROM subscriptions s JOIN subscription_plans p ON p.plan_key=s.plan_key WHERE s.user_email=$1 ORDER BY s.requested_at DESC LIMIT 10`,[req.user.email]);
     const schools=await db.query(`SELECT sc.school_id AS "schoolId",sc.school_name AS "schoolName",sm.member_role AS "memberRole",sc.status FROM school_memberships sm JOIN schools sc ON sc.school_id=sm.school_id WHERE sm.user_email=$1 AND sm.status='active' ORDER BY sc.school_name`,[req.user.email]);
-    const schoolIds=schools.rows.map(x=>x.schoolId);
-    const schoolSubs=schoolIds.length?await db.query(`SELECT s.subscription_id AS "subscriptionId",s.plan_key AS "planKey",p.name,p.audience,s.status,s.billing_cycle AS "billingCycle",s.amount,s.starts_at AS "startsAt",s.ends_at AS "endsAt",s.requested_at AS "requestedAt",s.school_id AS "schoolId",sc.school_name AS "schoolName" FROM subscriptions s JOIN subscription_plans p ON p.plan_key=s.plan_key JOIN schools sc ON sc.school_id=s.school_id WHERE s.school_id=ANY($1::text[]) ORDER BY s.requested_at DESC LIMIT 20`,[schoolIds]):{rows:[]};
+    const schoolSubscriptions=await db.query(`SELECT s.subscription_id AS "subscriptionId",s.school_id AS "schoolId",s.plan_key AS "planKey",p.name,p.audience,s.status,s.billing_cycle AS "billingCycle",s.amount,s.starts_at AS "startsAt",s.ends_at AS "endsAt" FROM subscriptions s JOIN subscription_plans p ON p.plan_key=s.plan_key WHERE s.school_id IN (SELECT school_id FROM school_memberships WHERE user_email=$1 AND status='active') ORDER BY s.requested_at DESC LIMIT 20`,[req.user.email]);
     const trial=await db.query(`SELECT EXISTS(SELECT 1 FROM subscriptions WHERE user_email=$1 AND trial_used_at IS NOT NULL) AS "used", EXISTS(SELECT 1 FROM subscriptions WHERE user_email=$1 AND status IN ('active','trial') AND COALESCE(ends_at,NOW())>NOW() AND amount>0) AS "paidActive"`,[req.user.email]);
-    res.json({ok:true,subscriptions:s.rows,schoolSubscriptions:schoolSubs.rows,schools:schools.rows,trialAvailable:!trial.rows[0]?.used&&!trial.rows[0]?.paidActive});
+    res.json({ok:true,subscriptions:s.rows,schools:schools.rows,schoolSubscriptions:schoolSubscriptions.rows,trialAvailable:!trial.rows[0]?.used&&!trial.rows[0]?.paidActive});
   }catch(e){console.error(e);res.status(500).json({error:'Could not load membership status.'})}
 });
 
@@ -2002,51 +2033,6 @@ app.post('/api/subscriptions/trial', requireAuth, async (req,res)=>{
     await db.query(`INSERT INTO subscriptions(subscription_id,user_email,plan_key,status,billing_cycle,amount,starts_at,ends_at,trial_started_at,trial_ends_at,trial_used_at) VALUES($1,$2,$3,'trial','monthly',0,NOW(),NOW()+INTERVAL '2 days',NOW(),NOW()+INTERVAL '2 days',NOW())`,[id,req.user.email,plan]);
     res.json({ok:true,subscriptionId:id,trialDays:2,message:'Your 2-day premium trial is active. No payment is required to start the trial.'});
   }catch(e){console.error(e);res.status(500).json({error:e.message||'Could not start premium trial.'});}
-});
-
-app.post('/api/schools/subscriptions/pay', requireAuth, async (req,res)=>{
-  if (!databaseReady) return res.status(503).json({error:'School subscription payments require PostgreSQL.'});
-  const schoolId=String(req.body?.schoolId||'').trim();
-  req.query={schoolId};
-  return requireSchoolMembership(req,res,async()=>{
-    try{
-      if(req.school.memberRole!=='admin'&&req.user.role!=='admin')return res.status(403).json({error:'Only the school administrator can pay for the school plan.'});
-      const plan=String(req.body?.planKey||'').trim();
-      const cycle=req.body?.billingCycle==='yearly'?'yearly':'monthly';
-      const phone=normalizePhone(req.body?.phone);
-      const r=await db.query(`SELECT * FROM subscription_plans WHERE plan_key=$1 AND active=true AND audience='school'`,[plan]);
-      if(!r.rowCount)return res.status(404).json({error:'School plan not found.'});
-      const p=r.rows[0];
-      const amount=Number(cycle==='yearly'?p.price_yearly:p.price_monthly);
-      if(!Number.isFinite(amount)||amount<=0)return res.status(400).json({error:'This school plan has no valid payment amount.'});
-      const id='SUB-'+Date.now().toString(36).toUpperCase()+'-'+Math.random().toString(36).slice(2,7).toUpperCase();
-      await db.query(`UPDATE subscriptions SET status='cancelled',updated_at=NOW() WHERE school_id=$1 AND status IN ('requested','pending_payment')`,[schoolId]);
-      await db.query(`INSERT INTO subscriptions(subscription_id,school_id,plan_key,status,billing_cycle,amount) VALUES($1,$2,$3,'pending_payment',$4,$5)`,[id,schoolId,plan,cycle,amount]);
-      const shortcode=cfg('MPESA_SHORTCODE'); const passkey=cfg('MPESA_PASSKEY');
-      const base=(process.env.MPESA_BASE_URL||'https://sandbox.safaricom.co.ke').replace(/\/$/,'');
-      const ts=timestamp(); const password=Buffer.from(`${shortcode}${passkey}${ts}`).toString('base64');
-      const token=await getAccessToken();
-      const body={BusinessShortCode:shortcode,Password:password,Timestamp:ts,TransactionType:process.env.MPESA_TRANSACTION_TYPE||'CustomerPayBillOnline',Amount:Math.round(amount),PartyA:phone,PartyB:shortcode,PhoneNumber:phone,CallBackURL:cfg('MPESA_CALLBACK_URL'),AccountReference:id.slice(0,20),TransactionDesc:`Tusome School ${p.name} ${cycle}`.slice(0,100)};
-      const r2=await fetch(`${base}/mpesa/stkpush/v1/processrequest`,{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify(body)});
-      const data=await r2.json();
-      if(!r2.ok||data.ResponseCode!=='0'){
-        await db.query(`UPDATE subscriptions SET status='payment_failed',updated_at=NOW() WHERE subscription_id=$1`,[id]);
-        return res.status(502).json({error:data.errorMessage||data.ResponseDescription||'Daraja rejected the school plan STK Push.'});
-      }
-      const paymentId='SP-'+Date.now().toString(36).toUpperCase()+'-'+Math.random().toString(36).slice(2,7).toUpperCase();
-      await db.query(`INSERT INTO subscription_payments(payment_id,subscription_id,checkout_request_id,merchant_request_id,amount,phone) VALUES($1,$2,$3,$4,$5,$6)`,[paymentId,id,data.CheckoutRequestID,data.MerchantRequestID,amount,phone]);
-      res.json({ok:true,schoolId,subscriptionId:id,checkoutRequestId:data.CheckoutRequestID,message:data.CustomerMessage||'M-PESA prompt sent. Complete the payment on the authorized phone.'});
-    }catch(e){console.error(e);res.status(500).json({error:e.message||'School subscription payment setup failed.'});}
-  });
-});
-
-app.get('/api/schools/subscriptions/payment-status/:checkoutRequestId', requireAuth, async (req,res)=>{
-  if(!databaseReady)return res.status(503).json({error:'School subscription payments require PostgreSQL.'});
-  try{
-    const r=await db.query(`SELECT sp.status,sp.subscription_id AS "subscriptionId",sp.mpesa_receipt AS "mpesaReceipt",sp.result_description AS "resultDescription",s.status AS "subscriptionStatus",s.starts_at AS "startsAt",s.ends_at AS "endsAt",s.school_id AS "schoolId" FROM subscription_payments sp JOIN subscriptions s ON s.subscription_id=sp.subscription_id JOIN school_memberships sm ON sm.school_id=s.school_id AND sm.user_email=$2 AND sm.status='active' WHERE sp.checkout_request_id=$1 LIMIT 1`,[req.params.checkoutRequestId,req.user.email]);
-    if(!r.rowCount)return res.status(404).json({error:'School subscription payment not found.'});
-    res.json(r.rows[0]);
-  }catch(e){console.error(e);res.status(500).json({error:'Could not check school plan payment.'});}
 });
 
 app.post('/api/subscriptions/pay', requireAuth, async (req,res)=>{
@@ -2145,37 +2131,36 @@ app.patch('/api/admin/schools/:id/status', requireRole('admin'), async (req,res)
   catch(e){console.error(e);res.status(500).json({error:'Could not update school.'})}
 });
 
-// v38 School Management. School admins are represented by active school memberships with member_role='admin'.
-app.get('/api/schools/mine', requireAuth, async (req,res)=>{
-  if(!databaseReady) return res.json({ok:true,schools:[]});
-  try{const r=await db.query(`SELECT sc.school_id AS "schoolId",sc.school_name AS "schoolName",sc.status,sm.member_role AS "memberRole" FROM school_memberships sm JOIN schools sc ON sc.school_id=sm.school_id WHERE sm.user_email=$1 AND sm.status='active' ORDER BY sc.school_name`,[req.user.email]);res.json({ok:true,schools:r.rows})}catch(e){res.status(500).json({error:'Could not load school access.'})}
-});
-
+// School Dashboard access: administrators authenticate with their school account; members verify their school link.
 app.post('/api/schools/admin-access', requireAuth, async (req,res)=>{
-  if(!databaseReady) return res.status(503).json({error:'School database is not ready. Please try again shortly.'});
+  if(!databaseReady)return res.status(503).json({error:'School database is not ready.'});
   try{
-    const email=String(req.body?.email||'').trim().toLowerCase();
-    if(!email || email!==String(req.user.email||'').toLowerCase()) return res.status(403).json({error:'The school email must match the signed-in account.'});
+    const email=String(req.body?.email||req.user.email).trim().toLowerCase();
+    if(email!==String(req.user.email||'').toLowerCase())return res.status(403).json({error:'The school email must match the signed-in account.'});
     const r=await db.query(`SELECT sc.school_id AS "schoolId",sc.school_name AS "schoolName",sc.status,sm.member_role AS "memberRole" FROM school_memberships sm JOIN schools sc ON sc.school_id=sm.school_id WHERE sm.user_email=$1 AND sm.member_role='admin' AND sm.status='active' AND sc.status='active' ORDER BY sc.school_name LIMIT 1`,[email]);
-    if(!r.rowCount) return res.status(403).json({error:'This school email is not linked to an active school administrator account.'});
-    res.json({ok:true,school:r.rows[0],message:'School administrator verified.'});
+    if(!r.rowCount)return res.status(403).json({error:'This school email is not linked to an active school administrator account.'});
+    res.json({ok:true,school:r.rows[0]});
   }catch(e){console.error(e);res.status(500).json({error:'Could not verify school administrator access.'})}
 });
 
 app.post('/api/schools/verify-member-access', requireAuth, async (req,res)=>{
-  if(!databaseReady) return res.status(503).json({error:'School database is not ready. Please try again shortly.'});
+  if(!databaseReady)return res.status(503).json({error:'School database is not ready.'});
   try{
-    const schoolName=String(req.body?.schoolName||'').trim().replace(/\s+/g,' ').slice(0,160);
-    const email=String(req.body?.email||'').trim().toLowerCase();
-    const memberRole=String(req.body?.memberRole||'').trim().toLowerCase();
-    if(!schoolName)return res.status(400).json({error:'Enter your school name first.'});
-    if(!email)return res.status(400).json({error:'Enter your account email.'});
-    if(email!==String(req.user.email||'').toLowerCase())return res.status(403).json({error:'The email entered must match the signed-in account. Please sign in with the account you want to use.'});
-    if(!['teacher','learner','parent','bursar'].includes(memberRole))return res.status(400).json({error:'Choose a valid school account type.'});
-    const r=await db.query(`SELECT sc.school_id AS "schoolId",sc.school_name AS "schoolName",sc.status,sm.member_role AS "memberRole" FROM school_memberships sm JOIN schools sc ON sc.school_id=sm.school_id WHERE sm.user_email=$1 AND sm.status='active' AND sc.status='active' AND sm.member_role=$2 AND LOWER(REGEXP_REPLACE(TRIM(sc.school_name),'\s+',' ','g'))=LOWER($3) LIMIT 1`,[email,memberRole,schoolName]);
-    if(!r.rowCount)return res.status(403).json({error:'Your account is not linked to this school with that account type. Please contact the school administrator and ask them to link your account.'});
-    res.json({ok:true,user:{email:req.user.email,role:req.user.role},school:r.rows[0],message:'School verified. Opening your authorised workspace.'});
-  }catch(e){console.error(e);res.status(500).json({error:'Could not verify the school link. Please try again.'})}
+    const schoolName=String(req.body?.schoolName||'').trim();
+    const email=String(req.body?.email||req.user.email).trim().toLowerCase();
+    const requestedRole=String(req.body?.memberRole||'').trim().toLowerCase();
+    if(email!==String(req.user.email||'').toLowerCase())return res.status(403).json({error:'The account email must match the signed-in account.'});
+    if(!schoolName||!['teacher','learner','parent','bursar'].includes(requestedRole))return res.status(400).json({error:'School name and a valid school account type are required.'});
+    const r=await db.query(`SELECT sc.school_id AS "schoolId",sc.school_name AS "schoolName",sc.status,sm.member_role AS "memberRole" FROM school_memberships sm JOIN schools sc ON sc.school_id=sm.school_id WHERE LOWER(sc.school_name)=LOWER($1) AND sm.user_email=$2 AND sm.member_role=$3 AND sm.status='active' AND sc.status='active' LIMIT 1`,[schoolName,email,requestedRole]);
+    if(!r.rowCount)return res.status(403).json({error:'This account is not linked to that school with the selected account type. Please contact the school administrator.'});
+    res.json({ok:true,user:{email:req.user.email,role:req.user.role},school:r.rows[0]});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not verify school member access.'})}
+});
+
+// v38 School Management. School admins are represented by active school memberships with member_role='admin'.
+app.get('/api/schools/mine', requireAuth, async (req,res)=>{
+  if(!databaseReady) return res.json({ok:true,schools:[]});
+  try{const r=await db.query(`SELECT sc.school_id AS "schoolId",sc.school_name AS "schoolName",sc.status,sm.member_role AS "memberRole" FROM school_memberships sm JOIN schools sc ON sc.school_id=sm.school_id WHERE sm.user_email=$1 AND sm.status='active' ORDER BY sc.school_name`,[req.user.email]);res.json({ok:true,schools:r.rows})}catch(e){res.status(500).json({error:'Could not load school access.'})}
 });
 
 app.get('/api/schools/dashboard', requireSchoolMembership, async (req,res)=>{
@@ -2204,7 +2189,8 @@ app.delete('/api/schools/classes/:id', requireAuth, async (req,res)=>{
 
 app.post('/api/schools/invites', requireAuth, async (req,res)=>{
   req.query={schoolId:req.body?.schoolId};
-  return requireSchoolMembership(req,res,async()=>{try{if(req.school.memberRole!=='admin'&&req.user.role!=='admin')return res.status(403).json({error:'School admin access is required.'});const email=String(req.body?.email||'').trim().toLowerCase();const role=['teacher','learner'].includes(req.body?.memberRole)?req.body.memberRole:'';if(!email||!email.includes('@')||!role)return res.status(400).json({error:'Valid email and member role are required.'});const existing=await db.query(`SELECT 1 FROM school_memberships WHERE school_id=$1 AND user_email=$2`,[req.school.schoolId,email]);if(existing.rowCount)return res.status(409).json({error:'That user is already a school member.'});const invite='INV-'+Date.now().toString(36).toUpperCase()+'-'+Math.random().toString(36).slice(2,6).toUpperCase();await db.query(`INSERT INTO school_invites(invite_id,school_id,email,member_role,class_id,invited_by) VALUES($1,$2,$3,$4,$5,$6)`,[invite,req.school.schoolId,email,role,req.body?.classId||null,req.user.email]);const u=await db.query(`SELECT email FROM users WHERE email=$1`,[email]);if(u.rowCount) await db.query(`INSERT INTO school_memberships(school_id,user_email,member_role,status,class_id) VALUES($1,$2,$3,'active',$4) ON CONFLICT(school_id,user_email) DO UPDATE SET member_role=EXCLUDED.member_role,status='active',class_id=EXCLUDED.class_id`,[req.school.schoolId,email,role,req.body?.classId||null]);res.status(201).json({ok:true,inviteId:invite,joined:u.rowCount>0,message:u.rowCount?'User added to school. Invite recorded.':'Invite recorded; the account can join when created.'})}catch(e){console.error(e);res.status(500).json({error:'Could not create school invitation.'})}})
+  return requireSchoolMembership(req,res,async()=>{try{if(req.school.memberRole!=='admin'&&req.user.role!=='admin')return res.status(403).json({error:'School admin access is required.'});const email=String(req.body?.email||'').trim().toLowerCase();const role=['teacher','learner','parent','bursar'].includes(req.body?.memberRole)?req.body.memberRole:' ';
+    const cleanRole=role.trim();if(!email||!email.includes('@')||!cleanRole)return res.status(400).json({error:'Valid email and member role are required.'});const existing=await db.query(`SELECT 1 FROM school_memberships WHERE school_id=$1 AND user_email=$2`,[req.school.schoolId,email]);if(existing.rowCount)return res.status(409).json({error:'That user is already a school member.'});const invite='INV-'+Date.now().toString(36).toUpperCase()+'-'+Math.random().toString(36).slice(2,6).toUpperCase();await db.query(`INSERT INTO school_invites(invite_id,school_id,email,member_role,class_id,invited_by) VALUES($1,$2,$3,$4,$5,$6)`,[invite,req.school.schoolId,email,role,req.body?.classId||null,req.user.email]);const u=await db.query(`SELECT email FROM users WHERE email=$1`,[email]);if(u.rowCount) await db.query(`INSERT INTO school_memberships(school_id,user_email,member_role,status,class_id) VALUES($1,$2,$3,'active',$4) ON CONFLICT(school_id,user_email) DO UPDATE SET member_role=EXCLUDED.member_role,status='active',class_id=EXCLUDED.class_id`,[req.school.schoolId,email,cleanRole,req.body?.classId||null]);res.status(201).json({ok:true,inviteId:invite,joined:u.rowCount>0,message:u.rowCount?'User added to school. Invite recorded.':'Invite recorded; the account can join when created.'})}catch(e){console.error(e);res.status(500).json({error:'Could not create school invitation.'})}})
 });
 
 app.delete('/api/schools/members/:email', requireAuth, async (req,res)=>{

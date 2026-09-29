@@ -743,10 +743,11 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
     </div>
   </div>
   <div id="schoolAuthGate" class="card school-auth-gate" style="margin-top:14px;display:block">
-    <div class="topline" style="margin:0 0 14px"><div><h3>🏫 School Dashboard Access</h3><p class="small">School administrators sign in with their school email. Teachers, learners, parents/guardians and bursars enter the school name, their account email and account type so Tusome can verify their school link.</p></div></div>
+    <div class="topline" style="margin:0 0 14px"><div><h3>🏫 School Dashboard Access</h3><p class="small">School administrators sign in with their school email. Finance/Bursar, teachers, learners and parents enter the school name, their account email and account type so Tusome can verify their school link.</p></div></div>
     <div class="school-auth-actions">
-      <button class="btn primary" type="button" onclick="openSchoolSignIn()">🔐 School Administrator Sign In</button>
-      <button class="btn" type="button" onclick="openSchoolMemberAccess()">👤 Teacher / Learner / Parent / Bursar Access</button>
+      <button class="btn primary" type="button" onclick="openSchoolSignIn()">🛡️ School Administrator</button>
+      <button class="btn" type="button" onclick="openSchoolFinanceAccess()">💳 Finance / Bursar</button>
+      <button class="btn" type="button" onclick="openSchoolMemberAccess()">👤 Teacher / Learner / Parent Access</button>
       <button class="btn" type="button" onclick="openSchoolRegister()">➕ Create School Account</button>
     </div>
     <div id="schoolAuthMessage" class="small" style="margin-top:12px"></div>
@@ -828,9 +829,10 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
   <div class="card" style="margin-top:12px;border:1px solid #dbe4f0;background:#f8fbff">
     <h3 style="margin-top:0">👤 Choose your School Workspace</h3>
     <p class="small">Start here. Choose the role that matches your school responsibility. Tusome will take you directly to the tools you need.</p>
-    <div class="notice" style="margin:10px 0 14px"><b>Simple access:</b> Bursar → Finance only · Teacher → Teaching tools · Learner → Learning tools · Parent/Guardian → Child information · School Admin → Full school control.</div>
+    <div class="notice" style="margin:10px 0 14px"><b>Simple access:</b> School Admin → Full school control · Finance/Bursar → Finance only · Teacher → Teaching tools · Learner → Learning tools · Parent/Guardian → Child information.</div>
     <div id="schoolRoleChooser" class="school-module-grid">
       <button class="school-module" onclick="openSchoolRoleWorkspace('admin')"><span class="school-module-icon">🛡️</span><b>School Admin</b><small>People, classes, academics, attendance, finance, reports and school settings.</small></button>
+      <button class="school-module" onclick="openSchoolRoleWorkspace('bursar')"><span class="school-module-icon">💳</span><b>Finance / Bursar</b><small>Finance only: fee charges, payments, balances and school finance records.</small></button>
       <button class="school-module" onclick="openSchoolRoleWorkspace('teacher')"><span class="school-module-icon">👩🏽‍🏫</span><b>Teacher</b><small>Teaching classes, attendance, assignments, gradebook, results and resources.</small></button>
       <button class="school-module" onclick="openSchoolRoleWorkspace('learner')"><span class="school-module-icon">🎓</span><b>Learner</b><small>Assignments, results, fees, timetable, resources and Tusome AI.</small></button>
       <button class="school-module" onclick="openSchoolRoleWorkspace('parent')"><span class="school-module-icon">👪</span><b>Parent / Guardian</b><small>Linked learner progress, attendance, results, fees and school updates.</small></button>
@@ -2256,6 +2258,12 @@ function openSchoolMemberAccess(){
   if(email&&!email.value&&currentEmail)email.value=currentEmail;
   document.getElementById('schoolMemberSchoolName')?.focus();
 }
+function openSchoolFinanceAccess(){
+  openSchoolMemberAccess();
+  const role=document.getElementById('schoolMemberRole');
+  if(role)role.value='bursar';
+  document.getElementById('schoolMemberSchoolName')?.focus();
+}
 function openSchoolRegister(){
   document.getElementById('schoolSignInBox').style.display='none';
   document.getElementById('schoolMemberAccessBox').style.display='none';
@@ -2311,10 +2319,11 @@ async function loadSchoolPlanStatus(){
     const sid=selectedSchoolId||document.getElementById('schoolWorkspaceSelect')?.value||'';
     const schoolSubs=(d.schoolSubscriptions||[]).filter(x=>!sid||x.schoolId===sid);
     const current=schoolSubs.find(x=>['active','trial','requested','pending_payment'].includes(x.status));
-    if(!current){status.textContent='No school plan subscription is currently linked to this school.';badge.textContent='No plan';if(box)box.style.display=(getCurrentSchoolMemberRole()==='admin')?'block':'none';await loadSchoolPlanOptions();return}
-    status.textContent=`${current.name||current.planKey} · ${current.status}${current.endsAt?' · Ends '+new Date(current.endsAt).toLocaleDateString():''}`;
-    badge.textContent=current.status==='active'?'Active':current.status.replace('_',' ');
-    if(box)box.style.display=(getCurrentSchoolMemberRole()==='admin')?'block':'none';
+    const isDemo=String(getSessionUserEmail?.()||'').toLowerCase()==='school@edushelf.com';
+    if(!current){status.textContent=isDemo?'Demo school — no payment is required.':'No school plan subscription is currently linked to this school.';badge.textContent=isDemo?'Demo / Free':'No plan';if(box)box.style.display=(getCurrentSchoolMemberRole()==='admin'&&!isDemo)?'block':'none';if(!isDemo)await loadSchoolPlanOptions();return}
+    status.textContent=isDemo?`${current.name||current.planKey} · Demo school · payment waived${current.endsAt?' · Demo access through '+new Date(current.endsAt).toLocaleDateString():''}`:`${current.name||current.planKey} · ${current.status}${current.endsAt?' · Ends '+new Date(current.endsAt).toLocaleDateString():''}`;
+    badge.textContent=isDemo?'Demo / Free':(current.status==='active'?'Active':current.status.replace('_',' '));
+    if(box)box.style.display=(getCurrentSchoolMemberRole()==='admin'&&!isDemo)?'block':'none';
     await loadSchoolPlanOptions();
   }catch(e){status.textContent=e.message;badge.textContent='Unavailable';if(box)box.style.display='none'}
 }

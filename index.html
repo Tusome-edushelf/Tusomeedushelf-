@@ -223,7 +223,7 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
     <label>Email</label><input type="email" required placeholder="you@example.com">
     <label>Password</label><input type="password" required placeholder="••••••••">
     <label>Account type</label>
-    <select id="role"><option value="learner">Learner</option><option value="teacher">Teacher</option><option value="parent">Parent / Guardian</option><option value="admin">Administrator</option></select>
+    <select id="role"><option value="learner">Learner</option><option value="teacher">Teacher</option><option value="parent">Parent / Guardian</option><option value="admin">Administrator</option><option value="school">School Administrator</option></select>
     <button class="btn primary" type="submit">Sign In</button>
     <p class="auth-switch">New to Tusome EduShelf? <button type="button" onclick="show('signup')">Create an account</button></p>
   </form>
@@ -731,19 +731,12 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
   <div class="topline"><div><h2>🏫 School Plan Dashboard</h2><p>Manage your school plan, school workspace, teachers, learners, classes and shared learning resources.</p></div><button class="btn" onclick="loadSchoolManagement()">↻ Refresh</button></div>
   <div class="notice"><b>School privacy:</b> Only authorised school members should access school records. Keep learner information to what the school needs for education and administration.</div>
   <div class="card" id="schoolAccessPanel" style="margin-top:14px;border:2px solid #1d4ed8;background:linear-gradient(135deg,#eff6ff,#ffffff);padding:22px">
-    <div class="topline" style="margin:0 0 14px"><div><h3 style="margin:0">🏫 School Account Access</h3><p class="small" style="margin-top:6px">Sign in to an existing school administrator account or create a new school account.</p></div></div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px">
-      <div class="card" style="margin:0;box-shadow:none;border:1px solid #bfdbfe">
-        <h3>🔐 School Sign In</h3><p class="small">Already have a school account? Sign in and open your School Plan Dashboard.</p>
-        <button class="btn primary" type="button" onclick="openSchoolSignIn()">Sign In to School Dashboard →</button>
-      </div>
-      <div class="card" style="margin:0;box-shadow:none;border:1px solid #bfdbfe">
-        <h3>➕ Create School Account</h3><p class="small">New school? Create the administrator account and school workspace.</p>
-        <button class="btn" type="button" onclick="openSchoolRegister()">Create School Account →</button>
-      </div>
-    </div>
+    <h3 style="margin:0 0 8px">🔐 School Plan Login</h3>
+    <p class="small">Sign in here with your school email or phone number and password. Your authorised school role is detected automatically.</p>
+    <button class="btn primary" type="button" onclick="openSchoolSignIn()">Sign In to School Plan →</button>
+    <button class="btn" type="button" onclick="openSchoolRegister()">Create School Account →</button>
   </div>
-  <div id="schoolAuthGate" class="card school-auth-gate" style="margin-top:14px;display:block">
+  <div id="schoolAuthGate" class="card school-auth-gate" style="margin-top:14px;display:none">
     <div class="topline" style="margin:0 0 14px"><div><h3>🏫 School Dashboard Login</h3><p class="small">Use your school email <b>or phone number</b> and password. Tusome automatically checks your active school membership and opens the correct school workspace.</p></div></div>
     <div class="school-auth-actions">
       <button class="btn primary" type="button" onclick="openSchoolSignIn()">🛡️ School Administrator</button>
@@ -1696,7 +1689,7 @@ async function login(e){
     if(!res.ok)throw new Error(data.error||'Login failed.');
     setSessionRole(data.user.role,data.user.email);
     appPageHistory=[];
-    show(data.user.role==='admin'?'admin':data.user.role==='teacher'?'teacher':'learner',true);
+    show(data.user.role==='school'?'schoolDashboard':data.user.role==='admin'?'admin':data.user.role==='teacher'?'teacher':data.user.role==='parent'?'parent':'learner',true);
     form.reset();
   }catch(err){alert(err.message)}
   finally{button.disabled=false;button.textContent='Sign In'}
@@ -1783,13 +1776,6 @@ function navigateBack(fallback='home'){
   show(previous||fallback,true);
 }
 function show(id,skipHistory=false){
-  const schoolSession=sessionStorage.getItem('tusomeSchoolAccess')==='true';
-  if(schoolSession && ['teacher','learner','parent','admin'].includes(id)){
-    showPageDirect('schoolDashboard', true);
-    const memberRole=window.schoolLoginMemberRole||sessionStorage.getItem('tusomeSchoolMemberRole')||'';
-    if(memberRole){ openSchoolRoleWorkspace(memberRole); }
-    return;
-  }
   if(id==='schoolDashboard'){
     openSchoolDashboard(skipHistory);
     return;
@@ -2204,29 +2190,28 @@ configureAIAssistant(getSessionRole()||'learner');
 let schoolWorkspaces=[]; let selectedSchoolId='';
 async function openSchoolDashboard(skipHistory=false){
   const role=getSessionRole();
-  const schoolAccess=sessionStorage.getItem('tusomeSchoolAccess')==='true';
+  // School Plan has its own entry point. Normal Tusome login remains separate.
+  // If nobody is authenticated, show the School Plan page and its login form
+  // instead of redirecting to the normal learner/teacher login page.
   if(!role){
     showPageDirect('schoolDashboard',skipHistory);
-    showSchoolAuthGate('Sign in with your school email or phone number and password.');
+    showSchoolAuthGate();
     return;
   }
-  // A normal Learner/Teacher/Parent session is deliberately kept separate
-  // from the School Dashboard. If they open School Dashboard, ask them to
-  // use the dedicated school login instead of sending them to their normal dashboard.
-  if(!schoolAccess && role!=='school'){
+  if(role!=='school' && role!=='admin'){
+    // A normal learner/teacher session should not be converted into a school
+    // session. Show the dedicated School Plan login on the School Plan page.
     showPageDirect('schoolDashboard',skipHistory);
-    showSchoolAuthGate('Sign in with your school email or phone number to enter the school workspace.');
+    showSchoolAuthGate('Please use the School Plan login below to enter the authorised school workspace.');
     return;
   }
   showPageDirect('schoolDashboard',skipHistory);
-  if(role==='school'){showSchoolAdminDashboard();return;}
-  // A teacher/learner/parent who used the dedicated school sign-in keeps their school role context.
-  const memberRole=window.schoolLoginMemberRole||sessionStorage.getItem('tusomeSchoolMemberRole')||'';
-  if(memberRole) { hideSchoolAuthGate(); hideSchoolNameGate(); openSchoolRoleWorkspace(memberRole); return; }
-  showSchoolAuthGate('Please sign in through School Dashboard to access your school workspace.');
+  hideSchoolAuthGate();
+  hideSchoolNameGate();
+  showSchoolAdminDashboard();
 }
 function showSchoolAdminDashboard(){
-  ['schoolAuthGate','schoolNameGate'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none'});
+  ['schoolAuthGate','schoolNameGate','schoolAccessPanel'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none'});
   ['schoolControlCentre','schoolManagementCentre','schoolPlanCard','schoolWorkspaceCard','schoolGlanceCard','schoolExecutiveOverview','schoolGeneralEssentialCards'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='block'});
   loadSchoolManagement();
 }
@@ -2318,12 +2303,10 @@ function showPageDirect(id,skipHistory=false){
 }
 async function updateSchoolDashboardNav(){
   const btn=document.getElementById('schoolDashboardNav');if(!btn)return;
-  btn.style.display='none';
   const role=getSessionRole();
-  if(!role)return;
-  if(role==='admin'){btn.style.display='inline-block';return}
-  try{const r=await fetch('/api/schools/mine',{credentials:'include'});if(!r.ok)return;const d=await r.json();if((d.schools||[]).some(x=>x.memberRole==='admin'))btn.style.display='inline-block';}catch(_e){}
+  btn.style.display=(role==='school'||role==='admin')?'inline-block':'none';
 }
+
 
 async function loadSchoolPlanStatus(){
   const status=document.getElementById('schoolPlanStatus'),badge=document.getElementById('schoolPlanBadge'),box=document.getElementById('schoolPlanPaymentBox');

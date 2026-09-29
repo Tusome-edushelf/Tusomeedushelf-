@@ -1,25 +1,28 @@
-# Tusome EduShelf — Exam Results Upgrade
+# Tusome EduShelf — Exam Results Dashboard & Teacher Upload
+
+Implemented in the existing Tusome EduShelf structure.
 
 ## Learner Dashboard
-- Added **Exam Results** quick action.
-- Added **My Exam Results** directly to the learner dashboard.
-- Shows exam, subject, class, date, marks, grade and teacher feedback.
+- Added an **Exam Results** quick action.
+- Added a visible **My Exam Results** section directly on the learner dashboard.
 - Shows result count, latest grade and average percentage.
-- Shows published report cards in the learner dashboard.
+- Shows exam, subject, class, date, marks, grade and teacher feedback.
+- Shows published report cards.
+- Refreshes from the existing learner exam/report-card API endpoints.
 
 ## Teacher Dashboard
-- Added **Exam Results** quick action.
-- Added **Exam Results Centre** directly to the teacher dashboard.
-- Teachers linked to an active school can select an exam and upload a CSV results sheet.
-- CSV columns: `learnerEmail,marks,comment` (comment optional).
-- A CSV template can be downloaded for the selected exam and class roster.
-- The upload is validated against the selected exam's active learner roster and maximum marks before saving.
-- Results are saved through the existing school exam marks API.
+- Added an **Exam Results** quick action.
+- Added an **Exam Results Centre** directly on the teacher dashboard.
+- Teachers linked to an active school workspace can select an existing school exam.
+- Download a CSV template populated with the selected class learner emails.
+- Upload learner marks using `learnerEmail,marks,comment`.
+- Preview and validate the CSV before saving.
+- Validation checks learner membership in the selected exam class and mark range.
+- Results are saved through the existing school exam marks endpoint.
 
-## Existing structure preserved
-- Existing Exams & Report Cards page remains available.
-- Existing school exam creation and manual marks entry remain available.
-- Existing learner results and report-card APIs are reused.
-- No replacement of the existing dashboard structure.
+## Existing exam system preserved
+The existing Exams & Report Cards page, manual marks entry, report-card generation and school M-PESA/account structure were not replaced.
 
-Deploy `index.html` and `server.mjs` together on Render.
+## Verification
+- `node --check server.mjs` passes.
+- All inline JavaScript blocks in `index.html` pass Node syntax validation.

@@ -260,8 +260,19 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
     <button class="learner-quick-card" type="button" onclick="document.getElementById('search').focus();document.getElementById('search').scrollIntoView({behavior:'smooth',block:'center'})"><span>🔎</span><b>Search Materials</b><small>Find a topic quickly</small></button>
     <button class="learner-quick-card" type="button" onclick="show('practice')"><span>🧠</span><b>Practice Mode</b><small>Test yourself and learn</small></button><button class="learner-quick-card" type="button" onclick="show('discussions')"><span>💬</span><b>Discussions</b><small>Text, voice or video study rooms</small></button>
     <button class="learner-quick-card" type="button" onclick="show('attendance')"><span>📅</span><b>Attendance</b><small>View your attendance history</small></button>
-    <button class="learner-quick-card" type="button" onclick="show('digitalLibrary')"><span>📚</span><b>Digital Library</b><small>Discover digital learning resources</small></button><button class="learner-quick-card" type="button" onclick="show('personalized')"><span>🎯</span><b>Personalized Learning</b><small>Get recommendations for your learning</small></button><button class="learner-quick-card" type="button" onclick="show('portfolio')"><span>🏆</span><b>My Portfolio</b><small>Achievements, badges and certificates</small></button><button class="learner-quick-card" type="button" onclick="show('community')"><span>🌟</span><b>Learning Community</b><small>Groups, discussions and rewards</small></button><button class="learner-quick-card" type="button" onclick="show('timetable')"><span>🗓️</span><b>My Timetable</b><small>View your school schedule</small></button>
+    <button class="learner-quick-card" type="button" onclick="show('digitalLibrary')"><span>📚</span><b>Digital Library</b><small>Discover digital learning resources</small></button><button class="learner-quick-card" type="button" onclick="show('personalized')"><span>🎯</span><b>Personalized Learning</b><small>Get recommendations for your learning</small></button><button class="learner-quick-card" type="button" onclick="show('portfolio')"><span>🏆</span><b>My Portfolio</b><small>Achievements, badges and certificates</small></button><button class="learner-quick-card" type="button" onclick="show('community')"><span>🌟</span><b>Learning Community</b><small>Groups, discussions and rewards</small></button><button class="learner-quick-card" type="button" onclick="show('timetable')"><span>🗓️</span><b>My Timetable</b><small>View your school schedule</small></button><button class="learner-quick-card" type="button" onclick="document.getElementById('learnerExamResultsSection')?.scrollIntoView({behavior:'smooth',block:'start'});loadLearnerResultsV44()"><span>📝</span><b>Exam Results</b><small>View your marks and report cards</small></button>
   </div>
+
+  <section id="learnerExamResultsSection" class="card" style="margin-top:22px;border:2px solid #dbe5f2;background:linear-gradient(135deg,#f8fbff,#ffffff)">
+    <div class="topline"><div><h3>📝 My Exam Results</h3><p class="small">Your published school exam results and report cards appear here. Results are read directly from the school assessment record.</p></div><button class="btn" type="button" onclick="loadLearnerResultsV44()">↻ Refresh Results</button></div>
+    <div class="cards" style="margin-top:12px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
+      <div class="card"><small>Results</small><h3 id="learnerResultsCount">—</h3></div>
+      <div class="card"><small>Latest grade</small><h3 id="learnerLatestGrade">—</h3></div>
+      <div class="card"><small>Average</small><h3 id="learnerAveragePercent">—</h3></div>
+    </div>
+    <div class="table-like" style="margin-top:14px;overflow:auto"><table><thead><tr><th>Exam</th><th>Subject</th><th>Class</th><th>Date</th><th>Marks</th><th>Grade</th><th>Teacher feedback</th></tr></thead><tbody id="learnerDashboardResultsRows"><tr><td colspan="7">Loading results…</td></tr></tbody></table></div>
+    <div id="learnerDashboardReports" style="margin-top:16px"><h3>📄 Published Report Cards</h3><p class="small">Loading report cards…</p></div>
+  </section>
 
   <div class="home-plus-card">
     <div><h3>👑 Learner Plus</h3><p>Unlock premium learner tools and continue your learning journey with extra digital features.</p></div>
@@ -704,7 +715,7 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
     <button class="teacher-quick-card" onclick="show('membership')"><span>👑</span><b>Teacher Plus</b><small>Premium teacher tools and features.</small></button>
     <button class="teacher-quick-card" onclick="show('fees')"><span>💰</span><b>School Fees</b><small>Fee charges, balances and payment records.</small></button>
     <button class="teacher-quick-card" onclick="show('attendance')"><span>✅</span><b>Attendance</b><small>Mark today's class attendance.</small></button>
-    <button class="teacher-quick-card" onclick="show('digitalLibrary')"><span>📚</span><b>Digital Library</b><small>Curate useful digital resources.</small></button><button class="teacher-quick-card" onclick="show('timetable')"><span>🗓️</span><b>Timetable</b><small>View your school teaching schedule.</small></button>
+    <button class="teacher-quick-card" onclick="show('digitalLibrary')"><span>📚</span><b>Digital Library</b><small>Curate useful digital resources.</small></button><button class="teacher-quick-card" onclick="show('timetable')"><span>🗓️</span><b>Timetable</b><small>View your school teaching schedule.</small></button><button class="teacher-quick-card" onclick="document.getElementById('teacherExamResultsSection')?.scrollIntoView({behavior:'smooth',block:'start'});loadTeacherExamResultsCentre()"><span>📝</span><b>Exam Results</b><small>Upload and review learner marks.</small></button>
   </div>
   <div class="cards teacher-stats">
     <div class="card"><h3>📤 Uploaded</h3><p><b id="count">3</b> materials</p></div>
@@ -713,6 +724,25 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
     <div class="card"><h3>💰 Earnings</h3><p><b id="teacherBalance">KES 0.00</b> available</p><small id="teacherRevenueRate">Teacher share: 80%</small></div>
     <div class="card"><h3>🤖 AI Assistant</h3><p>Create lesson plans, assessments, notes and learning activities.</p><button class="btn primary" onclick="openAIAssistant('teacher')">Open AI Assistant</button></div>
   </div>
+  <section id="teacherExamResultsSection" class="card teacher-section-card" style="margin-top:22px;border:2px solid #dbe5f2;background:linear-gradient(135deg,#f8fbff,#ffffff)">
+    <div class="topline"><div><h3>📝 Exam Results Centre</h3><p class="small">Select an existing school exam, download its learner list, upload marks by CSV, preview the data, and save verified results.</p></div><button class="btn" type="button" onclick="loadTeacherExamResultsCentre()">↻ Refresh</button></div>
+    <div id="teacherExamAccessNotice" class="notice" style="margin-top:12px">Checking your school exam access…</div>
+    <div id="teacherExamResultsControls" style="display:none;margin-top:14px">
+      <div class="school-grid">
+        <label>Exam<select id="teacherUploadExam" onchange="loadTeacherUploadExam()"><option value="">Loading exams…</option></select></label>
+        <div><b>CSV format</b><p class="small" style="margin:6px 0 0">learnerEmail, marks, comment</p><p class="small">Use the template so learner emails match the selected class.</p></div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center">
+        <button class="btn" type="button" onclick="downloadTeacherResultsTemplate()">⬇️ Download CSV Template</button>
+        <label class="btn" style="display:inline-flex;align-items:center;gap:8px;cursor:pointer">📤 Choose Results CSV<input id="teacherResultsCsv" type="file" accept=".csv,text/csv" onchange="previewTeacherResultsCsv(event)" style="display:none"></label>
+        <button class="btn primary" type="button" onclick="uploadTeacherResultsCsv()">Upload Results</button>
+      </div>
+      <p id="teacherResultsUploadStatus" class="small" style="margin-top:10px"></p>
+      <div id="teacherResultsCsvPreview" class="table-like" style="margin-top:12px;overflow:auto"></div>
+    </div>
+    <div class="table-like" style="margin-top:16px;overflow:auto"><table><thead><tr><th>Exam</th><th>Class</th><th>Subject</th><th>Date</th><th>Max marks</th><th>Status</th></tr></thead><tbody id="teacherDashboardExamRows"><tr><td colspan="6">Loading school exams…</td></tr></tbody></table></div>
+  </section>
+
   <div id="teacherGoalSection" class="card teacher-goal-card" style="margin-top:22px"><div><span class="teacher-eyebrow">MY TEACHING GOAL</span><h3 id="teacherGoalTitle">No teaching goal set yet.</h3><p id="teacherGoalHint" class="small">Choose one clear focus so the dashboard reminds you what you want to improve.</p></div><button class="btn" onclick="setTeacherFocusGoal()">Set Goal</button></div>
   <div id="teacherAnalyticsSection" class="card teacher-section-card" style="margin-top:22px"><h3>📊 Material Analytics</h3><div id="teacherAnalyticsPanel"><p>Loading analytics...</p></div></div>
   <div id="teacherEarningsSection" class="card teacher-section-card" style="margin-top:22px"><h3>💰 Sales & Earnings</h3><div id="teacherEarningsPanel"><p>Loading earnings...</p></div></div>

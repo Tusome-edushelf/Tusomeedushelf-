@@ -739,9 +739,7 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
   <div id="schoolAuthGate" class="card school-auth-gate" style="margin-top:14px;display:none">
     <div class="topline" style="margin:0 0 14px"><div><h3>🏫 School Dashboard Login</h3><p class="small">Use your school email <b>or phone number</b> and password. Tusome automatically checks your active school membership and opens the correct school workspace.</p></div></div>
     <div class="school-auth-actions">
-      <button class="btn primary" type="button" onclick="openSchoolSignIn()">🛡️ School Administrator</button>
-      <button class="btn" type="button" onclick="openSchoolSignIn()">💳 Finance / Bursar</button>
-      <button class="btn" type="button" onclick="openSchoolSignIn()">👤 Teacher / Learner / Parent</button>
+      <button class="btn primary" type="button" onclick="openSchoolSignIn()">🔐 School Plan Sign In</button>
       <button class="btn" type="button" onclick="openSchoolRegister()">➕ Create School Account</button>
     </div>
     <div id="schoolAuthMessage" class="small" style="margin-top:12px"></div>
@@ -808,21 +806,13 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
       <button class="btn" type="button" onclick="openAIAssistant('admin')">🤖 School AI</button>
     </div>
   </div>
-  <div id="schoolControlCentre" class="card school-dashboard-overview" style="margin-top:14px;display:block!important;visibility:visible!important" aria-label="School Control Centre">
+  <div id="schoolControlCentre" class="card school-dashboard-overview" style="margin-top:14px;display:none" aria-label="School Control Centre">
   <h3>🏫 School Control Centre</h3>
   <p class="small">These are the school functions available directly from your School Plan Dashboard.</p>
   <div class="card" style="margin-top:12px;border:1px solid #dbe4f0;background:#f8fbff">
-    <h3 style="margin-top:0">👤 Choose your School Workspace</h3>
-    <p class="small">Start here. Choose the role that matches your school responsibility. Tusome will take you directly to the tools you need.</p>
-    <div class="notice" style="margin:10px 0 14px"><b>Simple access:</b> School Admin → Full school control · Finance/Bursar → Finance only · Teacher → Teaching tools · Learner → Learning tools · Parent/Guardian → Child information.</div>
-    <div id="schoolRoleChooser" class="school-module-grid">
-      <button class="school-module" onclick="openSchoolRoleWorkspace('admin')"><span class="school-module-icon">🛡️</span><b>School Admin</b><small>People, classes, academics, attendance, finance, reports and school settings.</small></button>
-      <button class="school-module" onclick="openSchoolRoleWorkspace('bursar')"><span class="school-module-icon">💳</span><b>Finance / Bursar</b><small>Finance only: fee charges, payments, balances and school finance records.</small></button>
-      <button class="school-module" onclick="openSchoolRoleWorkspace('teacher')"><span class="school-module-icon">👩🏽‍🏫</span><b>Teacher</b><small>Teaching classes, attendance, assignments, gradebook, results and resources.</small></button>
-      <button class="school-module" onclick="openSchoolRoleWorkspace('learner')"><span class="school-module-icon">🎓</span><b>Learner</b><small>Assignments, results, fees, timetable, resources and Tusome AI.</small></button>
-      <button class="school-module" onclick="openSchoolRoleWorkspace('parent')"><span class="school-module-icon">👪</span><b>Parent / Guardian</b><small>Linked learner progress, attendance, results, fees and school updates.</small></button>
-      <button class="school-module" onclick="openSchoolRoleWorkspace('bursar')"><span class="school-module-icon">💳</span><b>Bursar / Finance</b><small>Fee charges, payments, balances and finance records for the school.</small></button>
-    </div>
+    <h3 style="margin-top:0">🧭 Automatic School Workspace</h3>
+    <p class="small">You do not choose an account type here. After the School Plan login, Tusome checks your active school membership and opens the workspace assigned to your account.</p>
+    <div class="notice" style="margin:10px 0 14px"><b>Automatic routing:</b> School Admin → School Management · Bursar/Finance → Finance · Teacher → School Teacher Workspace · Learner → School Learner Workspace · Parent/Guardian → Parent Workspace.</div>
     <div id="schoolRoleStatus" class="small" style="margin-top:10px"></div>
     <div id="schoolRoleWorkspacePanel" class="card" style="margin-top:14px;display:none;border:2px solid #dbe5f2;background:#ffffff"></div>
   </div>

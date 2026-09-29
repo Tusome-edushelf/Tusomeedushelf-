@@ -743,35 +743,26 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
     </div>
   </div>
   <div id="schoolAuthGate" class="card school-auth-gate" style="margin-top:14px;display:block">
-    <div class="topline" style="margin:0 0 14px"><div><h3>🏫 School Dashboard Access</h3><p class="small">School administrators sign in with their school email. Finance/Bursar, teachers, learners and parents enter the school name, their account email and account type so Tusome can verify their school link.</p></div></div>
+    <div class="topline" style="margin:0 0 14px"><div><h3>🏫 School Dashboard Login</h3><p class="small">Use your school email <b>or phone number</b> and password. Tusome automatically checks your active school membership and opens the correct school workspace.</p></div></div>
     <div class="school-auth-actions">
       <button class="btn primary" type="button" onclick="openSchoolSignIn()">🛡️ School Administrator</button>
-      <button class="btn" type="button" onclick="openSchoolFinanceAccess()">💳 Finance / Bursar</button>
-      <button class="btn" type="button" onclick="openSchoolMemberAccess()">👤 Teacher / Learner / Parent Access</button>
+      <button class="btn" type="button" onclick="openSchoolSignIn()">💳 Finance / Bursar</button>
+      <button class="btn" type="button" onclick="openSchoolSignIn()">👤 Teacher / Learner / Parent</button>
       <button class="btn" type="button" onclick="openSchoolRegister()">➕ Create School Account</button>
     </div>
     <div id="schoolAuthMessage" class="small" style="margin-top:12px"></div>
-    <div id="schoolSignInBox" class="card" style="margin-top:14px;display:none;box-shadow:none;border:1px solid #dbe5f2">
-      <h3>🔐 School Administrator Sign In</h3>
-      <p class="small">Use the school administrator email registered for the school account. A successful sign-in opens the administration dashboard directly.</p>
+    <div id="schoolSignInBox" class="card" style="margin-top:14px;display:block;box-shadow:none;border:1px solid #dbe5f2">
+      <h3>🔐 Sign in to your School Space</h3>
+      <p class="small">No school name or account-type selection is required. Your role is detected automatically after successful authentication.</p>
       <form onsubmit="schoolSignIn(event)">
-        <label>School email<input id="schoolSignInEmail" type="email" required autocomplete="email" placeholder="admin@school.com"></label>
+        <label>School email or phone number<input id="schoolSignInIdentifier" type="text" required autocomplete="username" inputmode="email" placeholder="school@example.com or 0712345678"></label>
         <label>Password<input id="schoolSignInPassword" type="password" required autocomplete="current-password" placeholder="Your password"></label>
-        <button class="btn primary" type="submit">Sign In to School Administration →</button>
+        <button class="btn primary" type="submit">Log In →</button>
       </form>
+      <p class="small" style="margin-top:10px">After login, administrators, finance users, teachers, learners and parents are sent directly to their authorised school data space.</p>
       <p class="auth-switch">Need a new school account? <button type="button" onclick="openSchoolRegister()">Create School Account</button></p>
     </div>
-    <div id="schoolMemberAccessBox" class="card" style="margin-top:14px;display:none;box-shadow:none;border:1px solid #dbe5f2">
-      <h3>👤 School Member Access</h3>
-      <p class="small">Enter your school name, the email on your Tusome account, and your school account type. Tusome will confirm that the account is linked before opening the correct workspace.</p>
-      <form onsubmit="schoolMemberAccess(event)">
-        <label>School name<input id="schoolMemberSchoolName" type="text" required maxlength="160" autocomplete="organization" placeholder="e.g. Tusome Academy"></label>
-        <label>Account email<input id="schoolMemberEmail" type="email" required maxlength="160" autocomplete="email" placeholder="you@example.com"></label>
-        <label>Account type<select id="schoolMemberRole" required><option value="">Choose account type</option><option value="teacher">Teacher</option><option value="learner">Learner</option><option value="parent">Parent / Guardian</option><option value="bursar">Bursar / Finance</option></select></label>
-        <button class="btn primary" type="submit">Verify School Link →</button>
-      </form>
-      <div id="schoolMemberAccessMessage" class="small" style="margin-top:10px"></div>
-    </div>
+    <div id="schoolMemberAccessBox" style="display:none"></div>
     <div id="schoolRegisterBox" class="card" style="margin-top:14px;display:none;box-shadow:none;border:1px solid #dbe5f2">
       <h3>➕ Create School Account</h3>
       <p class="small">Create the school administrator account and school workspace in one step.</p>
@@ -782,7 +773,7 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
         <label>Password<input id="schoolRegisterPassword" type="password" required minlength="8" autocomplete="new-password" placeholder="At least 8 characters"></label>
         <button class="btn primary" type="submit">Create School Account</button>
       </form>
-      <p class="auth-switch">Already have a school account? <button type="button" onclick="openSchoolSignIn()">School Administrator Sign In</button></p>
+      <p class="auth-switch">Already have a school account? <button type="button" onclick="openSchoolSignIn()">School Login</button></p>
     </div>
   </div>
   <div id="schoolNameGate" class="card" style="margin-top:14px;border:2px solid #0f766e;background:linear-gradient(135deg,#ecfeff,#ffffff);display:none">
@@ -1709,6 +1700,7 @@ async function login(e){
 }
 function updatePublicUi(){const b=document.getElementById('communicationLaunch');if(!b)return; b.style.display=getSessionRole()?'block':'none';}
 async function logoutUser(){
+  window.schoolLoginMemberRole='';
   try{await fetch('/api/auth/logout',{method:'POST',credentials:'include'})}catch{}
   sessionStorage.removeItem('tusomeLoggedIn');
   sessionStorage.removeItem('tusomeRole');
@@ -2201,7 +2193,7 @@ let schoolWorkspaces=[]; let selectedSchoolId='';
 async function openSchoolDashboard(skipHistory=false){
   const role=getSessionRole();
   showPageDirect('schoolDashboard',skipHistory);
-  if(!role){showSchoolAuthGate('Please sign in first. School administrators can sign in here with their school email. Other school members must use their existing Tusome account.');return}
+  if(!role){showSchoolAuthGate('Sign in with your school email or phone number and password. Tusome will detect your school role automatically.');return}
   if(role==='school'){showSchoolAdminDashboard();return;}
   showSchoolAuthGate();
   openSchoolMemberAccess();
@@ -2212,30 +2204,8 @@ function showSchoolAdminDashboard(){
   loadSchoolManagement();
 }
 function showSchoolNameGate(message=''){const msg=document.getElementById('schoolNameAccessMessage');if(msg)msg.textContent=message;}
-async function verifySchoolAccess(e){return schoolMemberAccess(e)}
-async function schoolMemberAccess(e){
-  e.preventDefault();
-  const form=e.target,button=form.querySelector('button[type="submit"]'),msg=document.getElementById('schoolMemberAccessMessage');
-  const schoolName=document.getElementById('schoolMemberSchoolName')?.value.trim();
-  const email=document.getElementById('schoolMemberEmail')?.value.trim().toLowerCase();
-  const memberRole=document.getElementById('schoolMemberRole')?.value;
-  if(!schoolName||!email||!memberRole)return;
-  if(button){button.disabled=true;button.textContent='Verifying…'}
-  if(msg)msg.textContent='Checking your school link…';
-  try{
-    const r=await fetch('/api/schools/verify-member-access',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({schoolName,email,memberRole})});
-    const d=await r.json();if(!r.ok)throw new Error(d.error||'Your account is not linked to this school. Please contact the school administrator.');
-    selectedSchoolId=d.school.schoolId;schoolWorkspaces=[d.school];
-    setSessionRole(d.user?.role||memberRole,d.user?.email||email);
-    form.reset();
-    ['schoolAuthGate','schoolNameGate'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none'});
-    openSchoolRoleWorkspace(d.school.memberRole);
-    showToast?.('School verified. Opening your '+(d.school.memberRole==='bursar'?'finance':d.school.memberRole)+' workspace.','success');
-  }catch(err){
-    if(msg)msg.textContent=err.message||'Your account is not linked to this school. Please contact the school administrator.';
-    showToast?.(err.message||'School access could not be verified.','error');
-  }finally{if(button){button.disabled=false;button.textContent='Verify School Link →'}}
-}
+async function verifySchoolAccess(e){return schoolSignIn(e)}
+async function schoolMemberAccess(e){return schoolSignIn(e)}
 function hideSchoolNameGate(){const gate=document.getElementById('schoolNameGate');if(gate)gate.style.display='none';}
 function showSchoolAuthGate(message=''){
   const gate=document.getElementById('schoolAuthGate');if(gate)gate.style.display='block';
@@ -2245,42 +2215,40 @@ function showSchoolAuthGate(message=''){
 function hideSchoolAuthGate(){const gate=document.getElementById('schoolAuthGate');if(gate)gate.style.display='none';}
 function openSchoolSignIn(){
   document.getElementById('schoolSignInBox').style.display='block';
-  document.getElementById('schoolMemberAccessBox').style.display='none';
   document.getElementById('schoolRegisterBox').style.display='none';
-  document.getElementById('schoolSignInEmail')?.focus();
+  document.getElementById('schoolSignInIdentifier')?.focus();
 }
-function openSchoolMemberAccess(){
-  document.getElementById('schoolSignInBox').style.display='none';
-  document.getElementById('schoolMemberAccessBox').style.display='block';
-  document.getElementById('schoolRegisterBox').style.display='none';
-  const currentEmail=getSessionUserEmail?.();
-  const email=document.getElementById('schoolMemberEmail');
-  if(email&&!email.value&&currentEmail)email.value=currentEmail;
-  document.getElementById('schoolMemberSchoolName')?.focus();
-}
-function openSchoolFinanceAccess(){
-  openSchoolMemberAccess();
-  const role=document.getElementById('schoolMemberRole');
-  if(role)role.value='bursar';
-  document.getElementById('schoolMemberSchoolName')?.focus();
-}
+function openSchoolMemberAccess(){openSchoolSignIn()}
+function openSchoolFinanceAccess(){openSchoolSignIn()}
 function openSchoolRegister(){
   document.getElementById('schoolSignInBox').style.display='none';
-  document.getElementById('schoolMemberAccessBox').style.display='none';
   document.getElementById('schoolRegisterBox').style.display='block';
   document.getElementById('schoolRegisterName')?.focus();
 }
 async function schoolSignIn(e){
-  e.preventDefault();const form=e.target,button=form.querySelector('button[type="submit"]');button.disabled=true;button.textContent='Signing in...';
+  e.preventDefault();
+  const form=e.target,button=form.querySelector('button[type="submit"]');
+  button.disabled=true;button.textContent='Logging in…';
   try{
-    const email=document.getElementById('schoolSignInEmail').value.trim(),password=document.getElementById('schoolSignInPassword').value;
-    const r=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({email,password,role:'school'})});
-    const d=await r.json();if(!r.ok)throw new Error(d.error||'School administrator sign in failed.');
-    const vr=await fetch('/api/schools/admin-access',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({email})});
-    const vd=await vr.json();if(!vr.ok)throw new Error(vd.error||'This school email is not linked to an active school administrator account.');
-    setSessionRole(d.user.role,d.user.email);selectedSchoolId=vd.school.schoolId;schoolWorkspaces=[vd.school];form.reset();showSchoolAdminDashboard();showToast?.('School administrator sign in successful.','success');
-  }catch(err){showToast?.(err.message,'error')}finally{button.disabled=false;button.textContent='Sign In to School Administration →'}
+    const identifier=document.getElementById('schoolSignInIdentifier').value.trim();
+    const password=document.getElementById('schoolSignInPassword').value;
+    const r=await fetch('/api/schools/login',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({identifier,password})});
+    const d=await r.json();
+    if(!r.ok)throw new Error(d.error||'School login failed.');
+    setSessionRole(d.user.role,d.user.email);
+    selectedSchoolId=d.school.schoolId;
+    schoolWorkspaces=[d.school];
+    window.schoolLoginMemberRole=d.school.memberRole;
+    form.reset();
+    hideSchoolAuthGate();
+    hideSchoolNameGate();
+    if(d.school.memberRole==='admin') showSchoolAdminDashboard();
+    else openSchoolRoleWorkspace(d.school.memberRole);
+    showToast?.(`Signed in. Opening ${d.school.memberRole==='bursar'?'Finance':d.school.memberRole} workspace.`, 'success');
+  }catch(err){showToast?.(err.message,'error')}
+  finally{button.disabled=false;button.textContent='Log In →'}
 }
+
 async function schoolRegister(e){
   e.preventDefault();const form=e.target,button=form.querySelector('button[type="submit"]');button.disabled=true;button.textContent='Creating school account...';
   try{
@@ -2379,7 +2347,7 @@ function updateSchoolRoleCards(){
 
 function openSchoolRoleWorkspace(target){
   const role=getSessionRole();
-  const memberRole=document.getElementById('schoolWorkspaceSelect')?.selectedOptions?.[0]?.dataset?.memberRole||role||'';
+  const memberRole=window.schoolLoginMemberRole||document.getElementById('schoolWorkspaceSelect')?.selectedOptions?.[0]?.dataset?.memberRole||role||'';
   const status=document.getElementById('schoolRoleStatus');
   const allowed = target==='parent' ? (role==='parent'||memberRole==='parent') : (target==='admin' ? memberRole==='admin'||role==='admin' : target==='bursar' ? memberRole==='bursar'||memberRole==='admin'||role==='admin' : memberRole===target||role===target||role==='admin');
   if(!allowed){ if(status) status.textContent='This workspace is locked for your account. Ask the school administrator to assign the correct role.'; showToast?.('Authorised school role required.','error'); return; }

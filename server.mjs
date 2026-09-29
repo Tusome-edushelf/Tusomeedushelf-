@@ -154,6 +154,8 @@ async function initDatabase() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS notification_preferences JSONB NOT NULL DEFAULT '{"email":true,"platform":true}'::jsonb;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_users_phone_unique ON users(phone) WHERE phone IS NOT NULL AND phone <> '';
     ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
     ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('learner','teacher','admin','parent','school'));
 
@@ -458,11 +460,13 @@ async function initDatabase() {
     CREATE TABLE IF NOT EXISTS school_memberships (
       school_id TEXT NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
       user_email TEXT NOT NULL,
-      member_role TEXT NOT NULL CHECK (member_role IN ('teacher','learner','admin')),
+      member_role TEXT NOT NULL CHECK (member_role IN ('teacher','learner','admin','parent','bursar')),
       status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','invited','suspended')),
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       PRIMARY KEY (school_id,user_email)
     );
+    ALTER TABLE school_memberships DROP CONSTRAINT IF EXISTS school_memberships_member_role_check;
+    ALTER TABLE school_memberships ADD CONSTRAINT school_memberships_member_role_check CHECK (member_role IN ('teacher','learner','admin','parent','bursar'));
     CREATE INDEX IF NOT EXISTS idx_school_memberships_user ON school_memberships(user_email,status);
     CREATE TABLE IF NOT EXISTS parent_guardian_links (
       link_id TEXT PRIMARY KEY,
@@ -482,10 +486,12 @@ async function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_school_classes_school ON school_classes(school_id);
     CREATE TABLE IF NOT EXISTS school_invites (
       invite_id TEXT PRIMARY KEY, school_id TEXT NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
-      email TEXT NOT NULL, member_role TEXT NOT NULL CHECK (member_role IN ('teacher','learner')),
+      email TEXT NOT NULL, member_role TEXT NOT NULL CHECK (member_role IN ('teacher','learner','parent','bursar')),
       class_id TEXT REFERENCES school_classes(class_id) ON DELETE SET NULL, status TEXT NOT NULL DEFAULT 'invited' CHECK (status IN ('invited','joined','cancelled')),
       invited_by TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+    ALTER TABLE school_invites DROP CONSTRAINT IF EXISTS school_invites_member_role_check;
+    ALTER TABLE school_invites ADD CONSTRAINT school_invites_member_role_check CHECK (member_role IN ('teacher','learner','parent','bursar'));
     CREATE INDEX IF NOT EXISTS idx_school_invites_email ON school_invites(email,status);
     ALTER TABLE school_memberships ADD COLUMN IF NOT EXISTS class_id TEXT REFERENCES school_classes(class_id) ON DELETE SET NULL;
     CREATE INDEX IF NOT EXISTS idx_school_memberships_class ON school_memberships(school_id,class_id,status);
@@ -824,6 +830,19 @@ async function restoreBackup(backupId) {
 async function dbFindUser(email) {
   if (!db || !databaseReady) return null;
   const result = await db.query('SELECT email, role, password_hash AS "passwordHash", display_name AS "displayName", avatar_url AS "avatarUrl", notification_preferences AS "notificationPreferences" FROM users WHERE email = $1 LIMIT 1', [String(email || '').trim().toLowerCase()]);
+  return result.rows[0] || null;
+}
+
+async function dbFindUserByIdentifier(identifier) {
+  if (!db || !databaseReady) return null;
+  const raw=String(identifier||'').trim();
+  if(!raw) return null;
+  let phone=null;
+  try { phone=normalizePhone(raw); } catch (_) {}
+  const email=raw.toLowerCase();
+  const result = phone
+    ? await db.query('SELECT email, role, password_hash AS "passwordHash", display_name AS "displayName", avatar_url AS "avatarUrl", notification_preferences AS "notificationPreferences" FROM users WHERE lower(email)=$1 OR phone=$2 LIMIT 1',[email,phone])
+    : await db.query('SELECT email, role, password_hash AS "passwordHash", display_name AS "displayName", avatar_url AS "avatarUrl", notification_preferences AS "notificationPreferences" FROM users WHERE lower(email)=$1 LIMIT 1',[email]);
   return result.rows[0] || null;
 }
 
@@ -1246,7 +1265,7 @@ app.post('/api/auth/school-register', async (req,res)=>{
     const user={email,role:'school'};
     await db.query('BEGIN');
     try{
-      await db.query(`INSERT INTO users(email,role,password_hash) VALUES($1,'school',$2)`,[email,passwordHash]);
+      await db.query(`INSERT INTO users(email,phone,role,password_hash) VALUES($1,$2,'school',$3)`,[email,phone?normalizePhone(phone):null,passwordHash]);
       await db.query(`INSERT INTO schools(school_id,school_name,contact_email,contact_phone,status,created_by) VALUES($1,$2,$3,$4,'active',$3)`,[schoolId,schoolName,email,phone]);
       await db.query(`INSERT INTO school_memberships(school_id,user_email,member_role,status) VALUES($1,$2,'admin','active')`,[schoolId,email]);
       await db.query(`INSERT INTO subscriptions(subscription_id,school_id,plan_key,status,billing_cycle,amount) VALUES($1,$2,$3,'requested','monthly',$4)`,[subId,schoolId,planKey,amount]);
@@ -2056,6 +2075,23 @@ app.post('/api/subscriptions/request', requireAuth, async (req,res)=>{
   }catch(e){console.error(e);res.status(500).json({error:'Could not create membership request.'})}
 });
 
+app.post('/api/schools/login', async (req,res)=>{
+  const identifier=String(req.body?.identifier||'').trim();
+  const password=String(req.body?.password||'');
+  if(!identifier||!password) return res.status(400).json({error:'School email/phone and password are required.'});
+  if(!databaseReady) return res.status(503).json({error:'The school database is not ready. Please try again shortly.'});
+  try{
+    const user=await dbFindUserByIdentifier(identifier);
+    if(!user || !verifyPassword(password,user.passwordHash)) return res.status(401).json({error:'Invalid school email/phone or password.'});
+    const r=await db.query(`SELECT sm.school_id AS "schoolId",sc.school_name AS "schoolName",sm.member_role AS "memberRole",sm.status,sc.status AS "schoolStatus" FROM school_memberships sm JOIN schools sc ON sc.school_id=sm.school_id WHERE sm.user_email=$1 AND sm.status='active' AND sc.status='active' ORDER BY sc.school_name`,[user.email]);
+    if(!r.rowCount) return res.status(403).json({error:'This account is not linked to an active school. Ask the school administrator to add your account.'});
+    const school=r.rows[0];
+    setSessionCookie(res,user);
+    void audit({user},'school_login','school',school.schoolId,{memberRole:school.memberRole,method:identifier.includes('@')?'email':'phone'});
+    res.json({ok:true,user:{email:user.email,role:user.role},school});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not complete school login.'});}
+});
+
 app.post('/api/schools/request', requireRole('teacher','admin'), async (req,res)=>{
   if(!databaseReady) return res.status(503).json({error:'School database is not ready.'});
   try{
@@ -2101,6 +2137,23 @@ app.patch('/api/admin/schools/:id/status', requireRole('admin'), async (req,res)
 app.get('/api/schools/mine', requireAuth, async (req,res)=>{
   if(!databaseReady) return res.json({ok:true,schools:[]});
   try{const r=await db.query(`SELECT sc.school_id AS "schoolId",sc.school_name AS "schoolName",sc.status,sm.member_role AS "memberRole" FROM school_memberships sm JOIN schools sc ON sc.school_id=sm.school_id WHERE sm.user_email=$1 AND sm.status='active' ORDER BY sc.school_name`,[req.user.email]);res.json({ok:true,schools:r.rows})}catch(e){res.status(500).json({error:'Could not load school access.'})}
+});
+
+app.get('/api/schools/overview', requireSchoolMembership, async (req,res)=>{
+  try{
+    const sid=req.school.schoolId;
+    const [teachers,learners,classes,parents,attendance,exams,assignments,fees]=await Promise.all([
+      db.query(`SELECT COUNT(*)::int AS n FROM school_memberships WHERE school_id=$1 AND member_role='teacher' AND status='active'`,[sid]),
+      db.query(`SELECT COUNT(*)::int AS n FROM school_memberships WHERE school_id=$1 AND member_role='learner' AND status='active'`,[sid]),
+      db.query(`SELECT COUNT(*)::int AS n FROM school_classes WHERE school_id=$1`,[sid]),
+      db.query(`SELECT COUNT(DISTINCT parent_email)::int AS n FROM parent_guardian_links WHERE school_id=$1`,[sid]),
+      db.query(`SELECT COALESCE(AVG(CASE WHEN status='present' THEN 100.0 ELSE 0.0 END),0) AS pct FROM school_attendance WHERE school_id=$1 AND attendance_date >= CURRENT_DATE-INTERVAL '30 days'`,[sid]),
+      db.query(`SELECT COUNT(*)::int AS n FROM school_exams WHERE school_id=$1`,[sid]),
+      db.query(`SELECT COUNT(*)::int AS n FROM school_assignments WHERE school_id=$1`,[sid]),
+      db.query(`SELECT COALESCE(SUM(amount),0) AS total FROM school_fee_charges WHERE school_id=$1`,[sid])
+    ]);
+    res.json({ok:true,summary:{teachers:teachers.rows[0].n,learners:learners.rows[0].n,classes:classes.rows[0].n,parents:parents.rows[0].n,attendancePercent:Number(attendance.rows[0].pct||0),exams:exams.rows[0].n,assignments:assignments.rows[0].n,feesBilled:Number(fees.rows[0].total||0)}});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not load school overview.'});}
 });
 
 app.get('/api/schools/dashboard', requireSchoolMembership, async (req,res)=>{

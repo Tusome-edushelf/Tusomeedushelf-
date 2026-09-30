@@ -107,17 +107,17 @@ function authUsers() {
   const teacherPassword = process.env.DEMO_TEACHER_PASSWORD || 'teacher123';
   if (!process.env.ADMIN_PASSWORD) console.warn('ADMIN_PASSWORD is not configured. Temporary default admin password is active; set ADMIN_PASSWORD in Render immediately.');
   return [
-    { email: adminEmail, username: 'admin', role: 'admin', passwordHash: hashPassword(adminPassword, 'edushelf-admin-salt-v1') },
-    { email: 'learner@edushelf.com', username: 'learner', role: 'learner', passwordHash: hashPassword(learnerPassword, 'edushelf-learner-salt-v1') },
-    { email: 'teacher@edushelf.com', username: 'teacher', role: 'teacher', passwordHash: hashPassword(teacherPassword, 'edushelf-teacher-salt-v1') }
+    { email: adminEmail, role: 'admin', passwordHash: hashPassword(adminPassword, 'edushelf-admin-salt-v1') },
+    { email: 'learner@edushelf.com', role: 'learner', passwordHash: hashPassword(learnerPassword, 'edushelf-learner-salt-v1') },
+    { email: 'teacher@edushelf.com', role: 'teacher', passwordHash: hashPassword(teacherPassword, 'edushelf-teacher-salt-v1') }
   ];
 }
 
-async function findUser(identifier) {
-  const normalized = String(identifier || '').trim().toLowerCase();
+async function findUser(email) {
+  const normalized = String(email || '').trim().toLowerCase();
   const fromDb = await dbFindUser(normalized);
   if (fromDb) return fromDb;
-  return authUsers().find(u => [u.email, u.username, u.phone].filter(Boolean).map(x => String(x).toLowerCase()).includes(normalized));
+  return authUsers().find(u => u.email === normalized);
 }
 
 await fs.mkdir(DATA_DIR, { recursive: true });
@@ -148,18 +148,14 @@ async function initDatabase() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       display_name TEXT,
       avatar_url TEXT,
-      notification_preferences JSONB NOT NULL DEFAULT '{"email":true,"platform":true}'::jsonb,
-      username TEXT,
-      phone TEXT
+      notification_preferences JSONB NOT NULL DEFAULT '{"email":true,"platform":true}'::jsonb
     );
 
     ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_unique ON users(username) WHERE username IS NOT NULL;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS notification_preferences JSONB NOT NULL DEFAULT '{"email":true,"platform":true}'::jsonb;
-    ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT;
-    ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT;
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_unique ON users(lower(username)) WHERE username IS NOT NULL AND username <> '';
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_users_phone_unique ON users(phone) WHERE phone IS NOT NULL AND phone <> '';
     ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
     ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('learner','teacher','admin','parent','school'));
 
@@ -464,13 +460,11 @@ async function initDatabase() {
     CREATE TABLE IF NOT EXISTS school_memberships (
       school_id TEXT NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
       user_email TEXT NOT NULL,
-      member_role TEXT NOT NULL CHECK (member_role IN ('teacher','learner','admin','bursar','parent')),
+      member_role TEXT NOT NULL CHECK (member_role IN ('teacher','learner','admin')),
       status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','invited','suspended')),
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       PRIMARY KEY (school_id,user_email)
     );
-    ALTER TABLE school_memberships DROP CONSTRAINT IF EXISTS school_memberships_member_role_check;
-    ALTER TABLE school_memberships ADD CONSTRAINT school_memberships_member_role_check CHECK (member_role IN ('teacher','learner','admin','bursar','parent'));
     CREATE INDEX IF NOT EXISTS idx_school_memberships_user ON school_memberships(user_email,status);
     CREATE TABLE IF NOT EXISTS parent_guardian_links (
       link_id TEXT PRIMARY KEY,
@@ -497,21 +491,7 @@ async function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_school_invites_email ON school_invites(email,status);
     ALTER TABLE school_memberships ADD COLUMN IF NOT EXISTS class_id TEXT REFERENCES school_classes(class_id) ON DELETE SET NULL;
     CREATE INDEX IF NOT EXISTS idx_school_memberships_class ON school_memberships(school_id,class_id,status);
-
-    CREATE TABLE IF NOT EXISTS school_learner_profiles (
-      profile_id TEXT PRIMARY KEY,
-      school_id TEXT NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
-      learner_email TEXT NOT NULL,
-      admission_number TEXT NOT NULL,
-      gender TEXT,
-      date_of_birth DATE,
-      guardian_name TEXT,
-      guardian_phone TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      UNIQUE(school_id, admission_number),
-      UNIQUE(school_id, learner_email)
-    );
+    CREATE TABLE IF NOT EXISTS school_learner_profiles (profile_id TEXT PRIMARY KEY, school_id TEXT NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE, learner_email TEXT NOT NULL, admission_number TEXT NOT NULL, gender TEXT, date_of_birth DATE, guardian_name TEXT, guardian_phone TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), UNIQUE(school_id,admission_number), UNIQUE(school_id,learner_email));
     CREATE INDEX IF NOT EXISTS idx_school_learner_profiles_school ON school_learner_profiles(school_id);
     CREATE TABLE IF NOT EXISTS school_subjects (
       subject_id TEXT PRIMARY KEY, school_id TEXT NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
@@ -721,17 +701,17 @@ async function initDatabase() {
   const learnerPassword = process.env.DEMO_LEARNER_PASSWORD || 'learner123';
   const teacherPassword = process.env.DEMO_TEACHER_PASSWORD || 'teacher123';
   const seeds = [
-    { email: adminEmail, username: 'admin', role: 'admin', passwordHash: hashPassword(adminPassword, 'edushelf-admin-salt-v1') },
-    { email: 'learner@edushelf.com', username: 'learner', role: 'learner', passwordHash: hashPassword(learnerPassword, 'edushelf-learner-salt-v1') },
-    { email: 'teacher@edushelf.com', username: 'teacher', role: 'teacher', passwordHash: hashPassword(teacherPassword, 'edushelf-teacher-salt-v1') }
+    { email: adminEmail, role: 'admin', passwordHash: hashPassword(adminPassword, 'edushelf-admin-salt-v1') },
+    { email: 'learner@edushelf.com', role: 'learner', passwordHash: hashPassword(learnerPassword, 'edushelf-learner-salt-v1') },
+    { email: 'teacher@edushelf.com', role: 'teacher', passwordHash: hashPassword(teacherPassword, 'edushelf-teacher-salt-v1') }
   ];
   for (const user of seeds) {
     await db.query(`
-      INSERT INTO users (email, role, password_hash, username)
-      VALUES ($1, $2, $3, $4)
+      INSERT INTO users (email, role, password_hash)
+      VALUES ($1, $2, $3)
       ON CONFLICT (email) DO UPDATE
-      SET role = EXCLUDED.role, password_hash = EXCLUDED.password_hash, username = EXCLUDED.username, updated_at = NOW()
-    `, [user.email, user.role, user.passwordHash, user.username]);
+      SET role = EXCLUDED.role, password_hash = EXCLUDED.password_hash, updated_at = NOW()
+    `, [user.email, user.role, user.passwordHash]);
   }
 
   // One-time migration of the old JSON transaction file into PostgreSQL.
@@ -845,15 +825,9 @@ async function restoreBackup(backupId) {
   } catch (e) { await db.query('ROLLBACK'); throw e; }
 }
 
-async function dbFindUser(identifier) {
+async function dbFindUser(email) {
   if (!db || !databaseReady) return null;
-  const value = String(identifier || '').trim().toLowerCase();
-  const result = await db.query(`
-    SELECT email, role, username, phone, password_hash AS "passwordHash", display_name AS "displayName", avatar_url AS "avatarUrl", notification_preferences AS "notificationPreferences"
-    FROM users
-    WHERE lower(email) = $1 OR lower(COALESCE(username,'')) = $1 OR phone = $2
-    LIMIT 1
-  `, [value, String(identifier || '').trim()]);
+  const result = await db.query('SELECT email, username, role, password_hash AS "passwordHash", display_name AS "displayName", avatar_url AS "avatarUrl", notification_preferences AS "notificationPreferences" FROM users WHERE lower(email) = lower($1) OR lower(username) = lower($1) LIMIT 1', [String(email || '').trim().toLowerCase()]);
   return result.rows[0] || null;
 }
 
@@ -1242,17 +1216,13 @@ app.post('/api/auth/register', async (req, res) => {
   if (existing) return res.status(409).json({ error: 'An account with that email already exists. Please use Sign In instead.' });
   const passwordHash = hashPassword(password);
   if (db) {
-    const baseUsername = normalizedEmail.split('@')[0].replace(/[^a-z0-9._-]/g,'').slice(0,40) || normalizedRole;
-    let username = baseUsername;
-    let n = 1;
-    while ((await db.query('SELECT 1 FROM users WHERE lower(username)=lower($1) LIMIT 1',[username])).rowCount) username = `${baseUsername}${++n}`;
-    await db.query('INSERT INTO users (email, role, password_hash, username) VALUES ($1,$2,$3,$4)', [normalizedEmail, normalizedRole, passwordHash, username]);
+    await db.query('INSERT INTO users (email, role, password_hash) VALUES ($1,$2,$3)', [normalizedEmail, normalizedRole, passwordHash]);
   } else {
     const users = await readJson(USERS_FILE, []);
     users.push({ email: normalizedEmail, role: normalizedRole, passwordHash, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
     await writeJson(USERS_FILE, users);
   }
-  const user = { email: normalizedEmail, role: normalizedRole, username: normalizedEmail.split('@')[0] };
+  const user = { email: normalizedEmail, role: normalizedRole };
   setSessionCookie(res, user);
   void audit({user}, 'register', 'user', normalizedEmail);
   void createNotification(normalizedEmail, 'Welcome to Tusome EduShelf', 'Your account is ready. Explore learning materials and your role-specific tools.', 'success');
@@ -1280,7 +1250,7 @@ app.post('/api/auth/school-register', async (req,res)=>{
     const user={email,role:'school'};
     await db.query('BEGIN');
     try{
-      await db.query(`INSERT INTO users(email,role,password_hash,username,phone) VALUES($1,'school',$2,$3,$4)`,[email,passwordHash,email.split('@')[0],phone||null]);
+      await db.query(`INSERT INTO users(email,role,password_hash) VALUES($1,'school',$2)`,[email,passwordHash]);
       await db.query(`INSERT INTO schools(school_id,school_name,contact_email,contact_phone,status,created_by) VALUES($1,$2,$3,$4,'active',$3)`,[schoolId,schoolName,email,phone]);
       await db.query(`INSERT INTO school_memberships(school_id,user_email,member_role,status) VALUES($1,$2,'admin','active')`,[schoolId,email]);
       await db.query(`INSERT INTO subscriptions(subscription_id,school_id,plan_key,status,billing_cycle,amount) VALUES($1,$2,$3,'requested','monthly',$4)`,[subId,schoolId,planKey,amount]);
@@ -1293,43 +1263,15 @@ app.post('/api/auth/school-register', async (req,res)=>{
   }catch(e){console.error(e);res.status(500).json({error:'Could not create the school account.'})}
 });
 
-app.post('/api/schools/login', async (req,res)=>{
-  const identifier=String(req.body?.identifier||req.body?.email||req.body?.username||'').trim();
-  const password=String(req.body?.password||'');
-  if(!identifier || !password) return res.status(400).json({error:'Username, email or phone and password are required.'});
-  if(!db || !databaseReady) return res.status(503).json({error:'The school database is not ready. Please try again shortly.'});
-  try{
-    const user=await findUser(identifier);
-    if(!user || !verifyPassword(password,user.passwordHash)) return res.status(401).json({error:'Invalid school username/email/phone or password.'});
-    let member=null;
-    const memberships=await db.query(`
-      SELECT sm.school_id AS "schoolId", sm.member_role AS "memberRole", sm.status, sc.school_name AS "schoolName", sc.status AS "schoolStatus"
-      FROM school_memberships sm JOIN schools sc ON sc.school_id=sm.school_id
-      WHERE sm.user_email=$1 AND sm.status='active' AND sc.status='active'
-      ORDER BY sm.created_at DESC
-    `,[user.email]);
-    if(memberships.rowCount) member=memberships.rows[0];
-    if(!member && user.role==='parent'){
-      const links=await db.query(`SELECT p.school_id AS "schoolId", sc.school_name AS "schoolName" FROM parent_guardian_links p JOIN schools sc ON sc.school_id=p.school_id WHERE p.parent_email=$1 AND sc.status='active' ORDER BY p.created_at DESC LIMIT 1`,[user.email]);
-      if(links.rowCount) member={schoolId:links.rows[0].schoolId,schoolName:links.rows[0].schoolName,memberRole:'parent',status:'active',schoolStatus:'active'};
-    }
-    if(!member) return res.status(403).json({error:'This account does not have an active school membership.'});
-    setSessionCookie(res,user);
-    void audit({user},'school_login','school',member.schoolId,{memberRole:member.memberRole});
-    res.json({ok:true,user:{email:user.email,role:user.role,username:user.username||''},school:{schoolId:member.schoolId,schoolName:member.schoolName,memberRole:member.memberRole}});
-  }catch(e){console.error('School login failed:',e);res.status(500).json({error:'Could not complete school login.'})}
-});
-
 app.post('/api/auth/login', async (req, res) => {
-  const identifier = req.body?.identifier ?? req.body?.username ?? req.body?.email;
-  const password = req.body?.password;
-  const role = String(req.body?.role || '').trim().toLowerCase();
+  const { email, username, password, role } = req.body || {};
+  const identifier = String(username || email || '').trim();
   const user = await findUser(identifier);
-  if (!user || !verifyPassword(password, user.passwordHash)) return res.status(401).json({ error: 'Invalid username/email or password.' });
-  if (!['learner', 'teacher', 'admin', 'parent', 'school'].includes(role) || user.role !== role) return res.status(403).json({ error: 'The selected account type does not match this account.' });
+  if (!user || !verifyPassword(password, user.passwordHash)) return res.status(401).json({ error: 'Invalid email or password.' });
+  if (!['learner', 'teacher', 'admin', 'parent', 'school'].includes(String(role)) || user.role !== role) return res.status(403).json({ error: 'The selected account type does not match this account.' });
   setSessionCookie(res, user);
   void audit({user}, 'login', 'user', user.email);
-  res.json({ ok: true, user: { email: user.email, role: user.role, username: user.username || '' } });
+  res.json({ ok: true, user: { email: user.email, username: user.username || null, role: user.role } });
 });
 
 app.get('/api/auth/me', (req, res) => {
@@ -2192,46 +2134,55 @@ app.delete('/api/schools/classes/:id', requireAuth, async (req,res)=>{
 
 app.post('/api/schools/learners/register', requireAuth, async (req,res)=>{
   req.query={schoolId:req.body?.schoolId};
-  return requireSchoolMembership({...req,query:req.query},res,async()=>{
+  return requireSchoolMembership(req,res,async()=>{
     try{
-      if(req.school.memberRole!=='admin'&&req.user.role!=='admin') return res.status(403).json({error:'School administrator access is required.'});
-      if(!db||!databaseReady) return res.status(503).json({error:'The school database is not ready. Please try again shortly.'});
-      const fullName=String(req.body?.fullName||'').trim().slice(0,160);
-      const admissionNumber=String(req.body?.admissionNumber||'').trim().slice(0,60);
-      const classId=String(req.body?.classId||'').trim();
-      const gender=String(req.body?.gender||'').trim().slice(0,40)||null;
-      const dateOfBirth=String(req.body?.dateOfBirth||'').trim()||null;
-      const phone=String(req.body?.phone||'').trim().slice(0,40)||null;
-      const suppliedEmail=String(req.body?.email||'').trim().toLowerCase().slice(0,160);
-      const guardianName=String(req.body?.guardianName||'').trim().slice(0,160)||null;
-      const guardianPhone=String(req.body?.guardianPhone||'').trim().slice(0,40)||null;
-      if(!fullName||!admissionNumber||!classId) return res.status(400).json({error:'Full name, admission number and class/stream are required.'});
+      if(req.school.memberRole!=='admin'&&req.user.role!=='admin')return res.status(403).json({error:'School admin access is required.'});
+      if(!db||!databaseReady)return res.status(503).json({error:'The school database is not ready. Please try again shortly.'});
+      const fullName=String(req.body?.fullName||'').trim().slice(0,160), admissionNumber=String(req.body?.admissionNumber||'').trim().slice(0,60), classId=String(req.body?.classId||'').trim();
+      if(!fullName||!admissionNumber||!classId)return res.status(400).json({error:'Full name, admission number and class are required.'});
       const cls=await db.query(`SELECT class_id AS "classId",class_name AS "className",grade,stream FROM school_classes WHERE class_id=$1 AND school_id=$2 LIMIT 1`,[classId,req.school.schoolId]);
-      if(!cls.rowCount) return res.status(400).json({error:'The selected class/stream does not belong to this school.'});
+      if(!cls.rowCount)return res.status(400).json({error:'Selected class does not belong to this school.'});
       const dup=await db.query(`SELECT 1 FROM school_learner_profiles WHERE school_id=$1 AND admission_number=$2 LIMIT 1`,[req.school.schoolId,admissionNumber]);
-      if(dup.rowCount) return res.status(409).json({error:'That admission number is already registered in this school.'});
-      if(suppliedEmail){const existing=await db.query(`SELECT 1 FROM users WHERE lower(email)=lower($1) LIMIT 1`,[suppliedEmail]);if(existing.rowCount)return res.status(409).json({error:'That learner email already belongs to an account.'});}
-      const base=fullName.toLowerCase().replace(/[^a-z0-9]+/g,' ').trim().split(/\s+/).filter(Boolean).slice(0,3).join('.');
-      const suffix=admissionNumber.toLowerCase().replace(/[^a-z0-9]+/g,'').slice(-8)||Date.now().toString(36);
-      let username=`${base||'learner'}.${suffix}`.slice(0,80);
-      let n=1;
-      while((await db.query(`SELECT 1 FROM users WHERE lower(username)=lower($1) LIMIT 1`,[username])).rowCount){username=`${(base||'learner').slice(0,50)}.${suffix}.${n++}`.slice(0,80)}
-      const email=suppliedEmail||`${username}@learner.tusome.local`;
-      const temporaryPassword=crypto.randomBytes(7).toString('base64url');
-      const passwordHash=hashPassword(temporaryPassword);
-      const profileId='LRP-'+Date.now().toString(36).toUpperCase()+'-'+Math.random().toString(36).slice(2,6).toUpperCase();
+      if(dup.rowCount)return res.status(409).json({error:'That admission number is already registered in this school.'});
+      const suppliedEmail=String(req.body?.email||'').trim().toLowerCase();
+      if(suppliedEmail){const eu=await db.query(`SELECT 1 FROM users WHERE lower(email)=lower($1) LIMIT 1`,[suppliedEmail]);if(eu.rowCount)return res.status(409).json({error:'That email already has a Tusome account.'});}
+      const base=fullName.toLowerCase().replace(/[^a-z0-9]+/g,'.').replace(/^\.|\.$/g,'').slice(0,40)||'learner';
+      let username=`${base}.${admissionNumber.toLowerCase().replace(/[^a-z0-9]+/g,'')}`.slice(0,70), n=1;
+      while((await db.query(`SELECT 1 FROM users WHERE lower(username)=lower($1) LIMIT 1`,[username])).rowCount){username=`${base}.${admissionNumber.replace(/[^a-z0-9]+/gi,'')}.${n++}`.slice(0,70)}
+      const email=suppliedEmail||`${username}@learner.tusome.local`, temporaryPassword=crypto.randomBytes(9).toString('base64url'), passwordHash=hashPassword(temporaryPassword);
       await db.query('BEGIN');
       try{
-        await db.query(`INSERT INTO users(email,role,password_hash,display_name,username,phone) VALUES($1,'learner',$2,$3,$4,$5)`,[email,passwordHash,fullName,username,phone]);
-        await db.query(`INSERT INTO school_learner_profiles(profile_id,school_id,learner_email,admission_number,gender,date_of_birth,guardian_name,guardian_phone) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,[profileId,req.school.schoolId,email,admissionNumber,gender,dateOfBirth,guardianName,guardianPhone]);
-        await db.query(`INSERT INTO school_memberships(school_id,user_email,member_role,status,class_id) VALUES($1,$2,'learner','active',$3) ON CONFLICT(school_id,user_email) DO UPDATE SET member_role='learner',status='active',class_id=EXCLUDED.class_id`,[req.school.schoolId,email,classId]);
+        await db.query(`INSERT INTO users(email,username,role,password_hash,display_name) VALUES($1,$2,'learner',$3,$4)`,[email,username,passwordHash,fullName]);
+        await db.query(`INSERT INTO school_learner_profiles(profile_id,school_id,learner_email,admission_number,gender,date_of_birth,guardian_name,guardian_phone) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,['LRN-'+Date.now().toString(36).toUpperCase()+'-'+crypto.randomBytes(3).toString('hex'),req.school.schoolId,email,admissionNumber,String(req.body?.gender||'').trim()||null,req.body?.dateOfBirth||null,String(req.body?.guardianName||'').trim()||null,String(req.body?.guardianPhone||'').trim()||null]);
+        await db.query(`INSERT INTO school_memberships(school_id,user_email,member_role,status,class_id) VALUES($1,$2,'learner','active',$3)`,[req.school.schoolId,email,classId]);
+        if(req.body?.phone)await db.query(`UPDATE users SET notification_preferences=notification_preferences || $2::jsonb WHERE email=$1`,[email,JSON.stringify({phone:String(req.body.phone).trim()})]);
         await db.query('COMMIT');
       }catch(e){await db.query('ROLLBACK');throw e}
-      void audit({user:req.user},'register_school_learner','school_learner',email,{schoolId:req.school.schoolId,admissionNumber,classId,username});
-      void createNotification(email,'Tusome EduShelf learner account created',`Your school account username is ${username}. Use the temporary password supplied by your school administrator.`,'success');
-      res.status(201).json({ok:true,learner:{email,username,fullName,admissionNumber,classId,className:cls.rows[0].className,grade:cls.rows[0].grade,stream:cls.rows[0].stream},temporaryPassword});
-    }catch(e){console.error('School learner registration failed:',e);res.status(500).json({error:'Could not register learner and create the account.'})}
+      void audit({user:req.user},'school_learner_registered','school_learner',email);
+      res.status(201).json({ok:true,learner:{email,username,fullName,admissionNumber,classId,className:cls.rows[0].className,grade:cls.rows[0].grade,stream:cls.rows[0].stream||null},temporaryPassword});
+    }catch(e){console.error(e);res.status(500).json({error:'Could not register learner.'})}
   });
+});
+
+app.get('/api/schools/learners', requireAuth, async (req,res)=>{
+  req.query={schoolId:req.query.schoolId};
+  return requireSchoolMembership(req,res,async()=>{try{
+    const r=await db.query(`SELECT u.email,u.username,u.display_name AS "fullName",slp.admission_number AS "admissionNumber",slp.gender,slp.date_of_birth AS "dateOfBirth",sm.class_id AS "classId",c.class_name AS "className",c.grade,c.stream,sm.status FROM school_memberships sm JOIN users u ON u.email=sm.user_email LEFT JOIN school_learner_profiles slp ON slp.school_id=sm.school_id AND slp.learner_email=sm.user_email LEFT JOIN school_classes c ON c.class_id=sm.class_id WHERE sm.school_id=$1 AND sm.member_role='learner' ORDER BY c.grade,c.class_name,u.display_name`,[req.school.schoolId]);
+    res.json({ok:true,learners:r.rows});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not load registered learners.'})}});
+});
+
+app.patch('/api/schools/learners/:email/placement', requireAuth, async (req,res)=>{
+  req.query={schoolId:req.body?.schoolId||req.query.schoolId};
+  return requireSchoolMembership(req,res,async()=>{try{
+    if(req.school.memberRole!=='admin'&&req.user.role!=='admin')return res.status(403).json({error:'School admin access is required.'});
+    const email=decodeURIComponent(req.params.email).toLowerCase(), classId=String(req.body?.classId||'').trim();
+    const c=await db.query(`SELECT class_id,class_name,grade,stream FROM school_classes WHERE class_id=$1 AND school_id=$2 LIMIT 1`,[classId,req.school.schoolId]);
+    if(!c.rowCount)return res.status(400).json({error:'Select a valid class/stream.'});
+    const r=await db.query(`UPDATE school_memberships SET class_id=$1 WHERE school_id=$2 AND user_email=$3 AND member_role='learner' RETURNING user_email`,[classId,req.school.schoolId,email]);
+    if(!r.rowCount)return res.status(404).json({error:'Registered learner not found.'});
+    res.json({ok:true,message:'Learner class/stream updated.',class:c.rows[0]});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not update learner placement.'})}});
 });
 
 app.post('/api/schools/invites', requireAuth, async (req,res)=>{

@@ -762,7 +762,7 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
 
 
 <section id="schoolDashboard" class="page">
-  <div class="topline"><div><h2>🏫 School Plan Dashboard</h2><p>Manage your school plan, school workspace, teachers, learners, classes and shared learning resources.</p></div><button class="btn" onclick="loadSchoolManagement()">↻ Refresh</button></div>
+  <div class="topline"><div><h2>🏫 School Plan Dashboard</h2><p>Manage your school plan, school workspace, teachers, learners, classes and shared learning resources.</p></div><div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end"><button class="btn" type="button" onclick="loadSchoolManagement()">↻ Refresh</button><button class="btn" type="button" onclick="logoutUser()">🚪 Log Out</button></div></div>
   <div class="notice"><b>School privacy:</b> Only authorised school members should access school records. Keep learner information to what the school needs for education and administration.</div>
   <div class="card" id="schoolAccessPanel" style="margin-top:14px;border:2px solid #1d4ed8;background:linear-gradient(135deg,#eff6ff,#ffffff);padding:22px">
     <h3 style="margin:0 0 8px">🔐 School Plan Login</h3>
@@ -2257,17 +2257,15 @@ configureAIAssistant(getSessionRole()||'learner');
 let schoolWorkspaces=[]; let selectedSchoolId='';
 async function openSchoolDashboard(skipHistory=false){
   const role=getSessionRole();
-  // School Plan has its own entry point. Normal Tusome login remains separate.
-  // If nobody is authenticated, show the School Plan page and its login form
-  // instead of redirecting to the normal learner/teacher login page.
-  if(!role){
+  const schoolAccess=sessionStorage.getItem('tusomeSchoolAccess')==='true';
+  // School Plan has its own entry point. A teacher/learner/parent can have a
+  // valid school membership while keeping their normal Tusome role.
+  if(!role && !schoolAccess){
     showPageDirect('schoolDashboard',skipHistory);
     showSchoolAuthGate();
     return;
   }
-  if(role!=='school' && role!=='admin'){
-    // A normal learner/teacher session should not be converted into a school
-    // session. Show the dedicated School Plan login on the School Plan page.
+  if(role!=='school' && role!=='admin' && !schoolAccess){
     showPageDirect('schoolDashboard',skipHistory);
     showSchoolAuthGate('Please use the School Plan login below to enter the authorised school workspace.');
     return;

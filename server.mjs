@@ -107,17 +107,17 @@ function authUsers() {
   const teacherPassword = process.env.DEMO_TEACHER_PASSWORD || 'teacher123';
   if (!process.env.ADMIN_PASSWORD) console.warn('ADMIN_PASSWORD is not configured. Temporary default admin password is active; set ADMIN_PASSWORD in Render immediately.');
   return [
-    { email: adminEmail, role: 'admin', passwordHash: hashPassword(adminPassword, 'edushelf-admin-salt-v1') },
-    { email: 'learner@edushelf.com', role: 'learner', passwordHash: hashPassword(learnerPassword, 'edushelf-learner-salt-v1') },
-    { email: 'teacher@edushelf.com', role: 'teacher', passwordHash: hashPassword(teacherPassword, 'edushelf-teacher-salt-v1') }
+    { email: adminEmail, username: 'admin', role: 'admin', passwordHash: hashPassword(adminPassword, 'edushelf-admin-salt-v1') },
+    { email: 'learner@edushelf.com', username: 'learner', role: 'learner', passwordHash: hashPassword(learnerPassword, 'edushelf-learner-salt-v1') },
+    { email: 'teacher@edushelf.com', username: 'teacher', role: 'teacher', passwordHash: hashPassword(teacherPassword, 'edushelf-teacher-salt-v1') }
   ];
 }
 
-async function findUser(email) {
-  const normalized = String(email || '').trim().toLowerCase();
+async function findUser(identifier) {
+  const normalized = String(identifier || '').trim().toLowerCase();
   const fromDb = await dbFindUser(normalized);
   if (fromDb) return fromDb;
-  return authUsers().find(u => u.email === normalized);
+  return authUsers().find(u => [u.email, u.username, u.phone].filter(Boolean).map(x => String(x).toLowerCase()).includes(normalized));
 }
 
 await fs.mkdir(DATA_DIR, { recursive: true });
@@ -148,12 +148,18 @@ async function initDatabase() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       display_name TEXT,
       avatar_url TEXT,
-      notification_preferences JSONB NOT NULL DEFAULT '{"email":true,"platform":true}'::jsonb
+      notification_preferences JSONB NOT NULL DEFAULT '{"email":true,"platform":true}'::jsonb,
+      username TEXT,
+      phone TEXT
     );
 
     ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS notification_preferences JSONB NOT NULL DEFAULT '{"email":true,"platform":true}'::jsonb;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_unique ON users(lower(username)) WHERE username IS NOT NULL AND username <> '';
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_users_phone_unique ON users(phone) WHERE phone IS NOT NULL AND phone <> '';
     ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
     ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('learner','teacher','admin','parent','school'));
 
@@ -458,11 +464,13 @@ async function initDatabase() {
     CREATE TABLE IF NOT EXISTS school_memberships (
       school_id TEXT NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
       user_email TEXT NOT NULL,
-      member_role TEXT NOT NULL CHECK (member_role IN ('teacher','learner','admin')),
+      member_role TEXT NOT NULL CHECK (member_role IN ('teacher','learner','admin','bursar','parent')),
       status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','invited','suspended')),
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       PRIMARY KEY (school_id,user_email)
     );
+    ALTER TABLE school_memberships DROP CONSTRAINT IF EXISTS school_memberships_member_role_check;
+    ALTER TABLE school_memberships ADD CONSTRAINT school_memberships_member_role_check CHECK (member_role IN ('teacher','learner','admin','bursar','parent'));
     CREATE INDEX IF NOT EXISTS idx_school_memberships_user ON school_memberships(user_email,status);
     CREATE TABLE IF NOT EXISTS parent_guardian_links (
       link_id TEXT PRIMARY KEY,
@@ -697,17 +705,17 @@ async function initDatabase() {
   const learnerPassword = process.env.DEMO_LEARNER_PASSWORD || 'learner123';
   const teacherPassword = process.env.DEMO_TEACHER_PASSWORD || 'teacher123';
   const seeds = [
-    { email: adminEmail, role: 'admin', passwordHash: hashPassword(adminPassword, 'edushelf-admin-salt-v1') },
-    { email: 'learner@edushelf.com', role: 'learner', passwordHash: hashPassword(learnerPassword, 'edushelf-learner-salt-v1') },
-    { email: 'teacher@edushelf.com', role: 'teacher', passwordHash: hashPassword(teacherPassword, 'edushelf-teacher-salt-v1') }
+    { email: adminEmail, username: 'admin', role: 'admin', passwordHash: hashPassword(adminPassword, 'edushelf-admin-salt-v1') },
+    { email: 'learner@edushelf.com', username: 'learner', role: 'learner', passwordHash: hashPassword(learnerPassword, 'edushelf-learner-salt-v1') },
+    { email: 'teacher@edushelf.com', username: 'teacher', role: 'teacher', passwordHash: hashPassword(teacherPassword, 'edushelf-teacher-salt-v1') }
   ];
   for (const user of seeds) {
     await db.query(`
-      INSERT INTO users (email, role, password_hash)
-      VALUES ($1, $2, $3)
+      INSERT INTO users (email, role, password_hash, username)
+      VALUES ($1, $2, $3, $4)
       ON CONFLICT (email) DO UPDATE
-      SET role = EXCLUDED.role, password_hash = EXCLUDED.password_hash, updated_at = NOW()
-    `, [user.email, user.role, user.passwordHash]);
+      SET role = EXCLUDED.role, password_hash = EXCLUDED.password_hash, username = EXCLUDED.username, updated_at = NOW()
+    `, [user.email, user.role, user.passwordHash, user.username]);
   }
 
   // One-time migration of the old JSON transaction file into PostgreSQL.
@@ -821,9 +829,15 @@ async function restoreBackup(backupId) {
   } catch (e) { await db.query('ROLLBACK'); throw e; }
 }
 
-async function dbFindUser(email) {
+async function dbFindUser(identifier) {
   if (!db || !databaseReady) return null;
-  const result = await db.query('SELECT email, role, password_hash AS "passwordHash", display_name AS "displayName", avatar_url AS "avatarUrl", notification_preferences AS "notificationPreferences" FROM users WHERE email = $1 LIMIT 1', [String(email || '').trim().toLowerCase()]);
+  const value = String(identifier || '').trim().toLowerCase();
+  const result = await db.query(`
+    SELECT email, role, username, phone, password_hash AS "passwordHash", display_name AS "displayName", avatar_url AS "avatarUrl", notification_preferences AS "notificationPreferences"
+    FROM users
+    WHERE lower(email) = $1 OR lower(COALESCE(username,'')) = $1 OR phone = $2
+    LIMIT 1
+  `, [value, String(identifier || '').trim()]);
   return result.rows[0] || null;
 }
 
@@ -1212,13 +1226,17 @@ app.post('/api/auth/register', async (req, res) => {
   if (existing) return res.status(409).json({ error: 'An account with that email already exists. Please use Sign In instead.' });
   const passwordHash = hashPassword(password);
   if (db) {
-    await db.query('INSERT INTO users (email, role, password_hash) VALUES ($1,$2,$3)', [normalizedEmail, normalizedRole, passwordHash]);
+    const baseUsername = normalizedEmail.split('@')[0].replace(/[^a-z0-9._-]/g,'').slice(0,40) || normalizedRole;
+    let username = baseUsername;
+    let n = 1;
+    while ((await db.query('SELECT 1 FROM users WHERE lower(username)=lower($1) LIMIT 1',[username])).rowCount) username = `${baseUsername}${++n}`;
+    await db.query('INSERT INTO users (email, role, password_hash, username) VALUES ($1,$2,$3,$4)', [normalizedEmail, normalizedRole, passwordHash, username]);
   } else {
     const users = await readJson(USERS_FILE, []);
     users.push({ email: normalizedEmail, role: normalizedRole, passwordHash, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
     await writeJson(USERS_FILE, users);
   }
-  const user = { email: normalizedEmail, role: normalizedRole };
+  const user = { email: normalizedEmail, role: normalizedRole, username: normalizedEmail.split('@')[0] };
   setSessionCookie(res, user);
   void audit({user}, 'register', 'user', normalizedEmail);
   void createNotification(normalizedEmail, 'Welcome to Tusome EduShelf', 'Your account is ready. Explore learning materials and your role-specific tools.', 'success');
@@ -1246,7 +1264,7 @@ app.post('/api/auth/school-register', async (req,res)=>{
     const user={email,role:'school'};
     await db.query('BEGIN');
     try{
-      await db.query(`INSERT INTO users(email,role,password_hash) VALUES($1,'school',$2)`,[email,passwordHash]);
+      await db.query(`INSERT INTO users(email,role,password_hash,username,phone) VALUES($1,'school',$2,$3,$4)`,[email,passwordHash,email.split('@')[0],phone||null]);
       await db.query(`INSERT INTO schools(school_id,school_name,contact_email,contact_phone,status,created_by) VALUES($1,$2,$3,$4,'active',$3)`,[schoolId,schoolName,email,phone]);
       await db.query(`INSERT INTO school_memberships(school_id,user_email,member_role,status) VALUES($1,$2,'admin','active')`,[schoolId,email]);
       await db.query(`INSERT INTO subscriptions(subscription_id,school_id,plan_key,status,billing_cycle,amount) VALUES($1,$2,$3,'requested','monthly',$4)`,[subId,schoolId,planKey,amount]);
@@ -1259,59 +1277,43 @@ app.post('/api/auth/school-register', async (req,res)=>{
   }catch(e){console.error(e);res.status(500).json({error:'Could not create the school account.'})}
 });
 
-app.post('/api/schools/login', async (req, res) => {
-  const identifier = String(req.body?.identifier || '').trim();
-  const password = String(req.body?.password || '');
-  if (!identifier || !password) return res.status(400).json({ error: 'School username/email/phone and password are required.' });
-  if (!databaseReady) return res.status(503).json({ error: 'The school database is not ready. Please try again shortly.' });
-  try {
-    const emailKey = identifier.toLowerCase();
-    const phoneKey = identifier.replace(/\s+/g, '').replace(/^\+254/, '254');
-    const r = await db.query(`
-      SELECT u.email, u.role, u.password_hash AS "passwordHash",
-             sm.school_id AS "schoolId", sm.member_role AS "memberRole",
-             sc.school_name AS "schoolName", sc.status AS "schoolStatus"
-      FROM school_memberships sm
-      JOIN users u ON lower(u.email)=lower(sm.user_email)
-      JOIN schools sc ON sc.school_id=sm.school_id
-      WHERE sm.status='active'
-        AND sc.status='active'
-        AND (lower(u.email)=$1 OR lower(sc.contact_email)=$1
-             OR regexp_replace(COALESCE(sc.contact_phone,''),'[^0-9]','','g')=$2)
-      ORDER BY CASE WHEN sm.member_role='admin' THEN 0 ELSE 1 END, sc.school_name
-      LIMIT 1
-    `, [emailKey, phoneKey]);
-    if (!r.rowCount || !verifyPassword(password, r.rows[0].passwordHash)) {
-      return res.status(401).json({ error: 'Invalid school username/email/phone or password.' });
+app.post('/api/schools/login', async (req,res)=>{
+  const identifier=String(req.body?.identifier||req.body?.email||req.body?.username||'').trim();
+  const password=String(req.body?.password||'');
+  if(!identifier || !password) return res.status(400).json({error:'Username, email or phone and password are required.'});
+  if(!db || !databaseReady) return res.status(503).json({error:'The school database is not ready. Please try again shortly.'});
+  try{
+    const user=await findUser(identifier);
+    if(!user || !verifyPassword(password,user.passwordHash)) return res.status(401).json({error:'Invalid school username/email/phone or password.'});
+    let member=null;
+    const memberships=await db.query(`
+      SELECT sm.school_id AS "schoolId", sm.member_role AS "memberRole", sm.status, sc.school_name AS "schoolName", sc.status AS "schoolStatus"
+      FROM school_memberships sm JOIN schools sc ON sc.school_id=sm.school_id
+      WHERE sm.user_email=$1 AND sm.status='active' AND sc.status='active'
+      ORDER BY sm.created_at DESC
+    `,[user.email]);
+    if(memberships.rowCount) member=memberships.rows[0];
+    if(!member && user.role==='parent'){
+      const links=await db.query(`SELECT p.school_id AS "schoolId", sc.school_name AS "schoolName" FROM parent_guardian_links p JOIN schools sc ON sc.school_id=p.school_id WHERE p.parent_email=$1 AND sc.status='active' ORDER BY p.created_at DESC LIMIT 1`,[user.email]);
+      if(links.rowCount) member={schoolId:links.rows[0].schoolId,schoolName:links.rows[0].schoolName,memberRole:'parent',status:'active',schoolStatus:'active'};
     }
-    const row = r.rows[0];
-    const user = { email: row.email, role: row.role };
-    setSessionCookie(res, user);
-    void audit({ user }, 'school_login', 'school', row.schoolId, { memberRole: row.memberRole });
-    res.json({
-      ok: true,
-      user,
-      school: {
-        schoolId: row.schoolId,
-        schoolName: row.schoolName,
-        memberRole: row.memberRole,
-        status: row.schoolStatus
-      }
-    });
-  } catch (e) {
-    console.error('School login error:', e);
-    res.status(500).json({ error: 'Could not complete school login. Please try again.' });
-  }
+    if(!member) return res.status(403).json({error:'This account does not have an active school membership.'});
+    setSessionCookie(res,user);
+    void audit({user},'school_login','school',member.schoolId,{memberRole:member.memberRole});
+    res.json({ok:true,user:{email:user.email,role:user.role,username:user.username||''},school:{schoolId:member.schoolId,schoolName:member.schoolName,memberRole:member.memberRole}});
+  }catch(e){console.error('School login failed:',e);res.status(500).json({error:'Could not complete school login.'})}
 });
 
 app.post('/api/auth/login', async (req, res) => {
-  const { email, password, role } = req.body || {};
-  const user = await findUser(email);
-  if (!user || !verifyPassword(password, user.passwordHash)) return res.status(401).json({ error: 'Invalid email or password.' });
-  if (!['learner', 'teacher', 'admin', 'parent', 'school'].includes(String(role)) || user.role !== role) return res.status(403).json({ error: 'The selected account type does not match this account.' });
+  const identifier = req.body?.identifier ?? req.body?.username ?? req.body?.email;
+  const password = req.body?.password;
+  const role = String(req.body?.role || '').trim().toLowerCase();
+  const user = await findUser(identifier);
+  if (!user || !verifyPassword(password, user.passwordHash)) return res.status(401).json({ error: 'Invalid username/email or password.' });
+  if (!['learner', 'teacher', 'admin', 'parent', 'school'].includes(role) || user.role !== role) return res.status(403).json({ error: 'The selected account type does not match this account.' });
   setSessionCookie(res, user);
   void audit({user}, 'login', 'user', user.email);
-  res.json({ ok: true, user: { email: user.email, role: user.role } });
+  res.json({ ok: true, user: { email: user.email, role: user.role, username: user.username || '' } });
 });
 
 app.get('/api/auth/me', (req, res) => {

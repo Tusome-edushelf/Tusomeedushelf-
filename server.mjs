@@ -497,6 +497,22 @@ async function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_school_invites_email ON school_invites(email,status);
     ALTER TABLE school_memberships ADD COLUMN IF NOT EXISTS class_id TEXT REFERENCES school_classes(class_id) ON DELETE SET NULL;
     CREATE INDEX IF NOT EXISTS idx_school_memberships_class ON school_memberships(school_id,class_id,status);
+
+    CREATE TABLE IF NOT EXISTS school_learner_profiles (
+      profile_id TEXT PRIMARY KEY,
+      school_id TEXT NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
+      learner_email TEXT NOT NULL,
+      admission_number TEXT NOT NULL,
+      gender TEXT,
+      date_of_birth DATE,
+      guardian_name TEXT,
+      guardian_phone TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(school_id, admission_number),
+      UNIQUE(school_id, learner_email)
+    );
+    CREATE INDEX IF NOT EXISTS idx_school_learner_profiles_school ON school_learner_profiles(school_id);
     CREATE TABLE IF NOT EXISTS school_subjects (
       subject_id TEXT PRIMARY KEY, school_id TEXT NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
       subject_name TEXT NOT NULL, learning_area TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -2172,6 +2188,50 @@ app.post('/api/schools/classes', requireAuth, async (req,res)=>{
 app.delete('/api/schools/classes/:id', requireAuth, async (req,res)=>{
   req.query={schoolId:req.body?.schoolId||req.query.schoolId};
   return requireSchoolMembership(req,res,async()=>{try{if(req.school.memberRole!=='admin'&&req.user.role!=='admin')return res.status(403).json({error:'School admin access is required.'});const r=await db.query(`DELETE FROM school_classes WHERE class_id=$1 AND school_id=$2 RETURNING class_id`,[req.params.id,req.school.schoolId]);if(!r.rowCount)return res.status(404).json({error:'Class not found.'});res.json({ok:true})}catch(e){res.status(500).json({error:'Could not remove class.'})}})
+});
+
+app.post('/api/schools/learners/register', requireAuth, async (req,res)=>{
+  req.query={schoolId:req.body?.schoolId};
+  return requireSchoolMembership({...req,query:req.query},res,async()=>{
+    try{
+      if(req.school.memberRole!=='admin'&&req.user.role!=='admin') return res.status(403).json({error:'School administrator access is required.'});
+      if(!db||!databaseReady) return res.status(503).json({error:'The school database is not ready. Please try again shortly.'});
+      const fullName=String(req.body?.fullName||'').trim().slice(0,160);
+      const admissionNumber=String(req.body?.admissionNumber||'').trim().slice(0,60);
+      const classId=String(req.body?.classId||'').trim();
+      const gender=String(req.body?.gender||'').trim().slice(0,40)||null;
+      const dateOfBirth=String(req.body?.dateOfBirth||'').trim()||null;
+      const phone=String(req.body?.phone||'').trim().slice(0,40)||null;
+      const suppliedEmail=String(req.body?.email||'').trim().toLowerCase().slice(0,160);
+      const guardianName=String(req.body?.guardianName||'').trim().slice(0,160)||null;
+      const guardianPhone=String(req.body?.guardianPhone||'').trim().slice(0,40)||null;
+      if(!fullName||!admissionNumber||!classId) return res.status(400).json({error:'Full name, admission number and class/stream are required.'});
+      const cls=await db.query(`SELECT class_id AS "classId",class_name AS "className",grade,stream FROM school_classes WHERE class_id=$1 AND school_id=$2 LIMIT 1`,[classId,req.school.schoolId]);
+      if(!cls.rowCount) return res.status(400).json({error:'The selected class/stream does not belong to this school.'});
+      const dup=await db.query(`SELECT 1 FROM school_learner_profiles WHERE school_id=$1 AND admission_number=$2 LIMIT 1`,[req.school.schoolId,admissionNumber]);
+      if(dup.rowCount) return res.status(409).json({error:'That admission number is already registered in this school.'});
+      if(suppliedEmail){const existing=await db.query(`SELECT 1 FROM users WHERE lower(email)=lower($1) LIMIT 1`,[suppliedEmail]);if(existing.rowCount)return res.status(409).json({error:'That learner email already belongs to an account.'});}
+      const base=fullName.toLowerCase().replace(/[^a-z0-9]+/g,' ').trim().split(/\s+/).filter(Boolean).slice(0,3).join('.');
+      const suffix=admissionNumber.toLowerCase().replace(/[^a-z0-9]+/g,'').slice(-8)||Date.now().toString(36);
+      let username=`${base||'learner'}.${suffix}`.slice(0,80);
+      let n=1;
+      while((await db.query(`SELECT 1 FROM users WHERE lower(username)=lower($1) LIMIT 1`,[username])).rowCount){username=`${(base||'learner').slice(0,50)}.${suffix}.${n++}`.slice(0,80)}
+      const email=suppliedEmail||`${username}@learner.tusome.local`;
+      const temporaryPassword=crypto.randomBytes(7).toString('base64url');
+      const passwordHash=hashPassword(temporaryPassword);
+      const profileId='LRP-'+Date.now().toString(36).toUpperCase()+'-'+Math.random().toString(36).slice(2,6).toUpperCase();
+      await db.query('BEGIN');
+      try{
+        await db.query(`INSERT INTO users(email,role,password_hash,display_name,username,phone) VALUES($1,'learner',$2,$3,$4,$5)`,[email,passwordHash,fullName,username,phone]);
+        await db.query(`INSERT INTO school_learner_profiles(profile_id,school_id,learner_email,admission_number,gender,date_of_birth,guardian_name,guardian_phone) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,[profileId,req.school.schoolId,email,admissionNumber,gender,dateOfBirth,guardianName,guardianPhone]);
+        await db.query(`INSERT INTO school_memberships(school_id,user_email,member_role,status,class_id) VALUES($1,$2,'learner','active',$3) ON CONFLICT(school_id,user_email) DO UPDATE SET member_role='learner',status='active',class_id=EXCLUDED.class_id`,[req.school.schoolId,email,classId]);
+        await db.query('COMMIT');
+      }catch(e){await db.query('ROLLBACK');throw e}
+      void audit({user:req.user},'register_school_learner','school_learner',email,{schoolId:req.school.schoolId,admissionNumber,classId,username});
+      void createNotification(email,'Tusome EduShelf learner account created',`Your school account username is ${username}. Use the temporary password supplied by your school administrator.`,'success');
+      res.status(201).json({ok:true,learner:{email,username,fullName,admissionNumber,classId,className:cls.rows[0].className,grade:cls.rows[0].grade,stream:cls.rows[0].stream},temporaryPassword});
+    }catch(e){console.error('School learner registration failed:',e);res.status(500).json({error:'Could not register learner and create the account.'})}
+  });
 });
 
 app.post('/api/schools/invites', requireAuth, async (req,res)=>{

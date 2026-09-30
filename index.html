@@ -876,10 +876,28 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
     </div>
     <div class="school-content-columns">
       <div class="card" style="box-shadow:none;border:1px solid #e1e7f0"><h3>📋 What you can manage here</h3><ul class="school-dashboard-list"><li>👩🏽‍🏫 Teachers and learners</li><li>🎓 Classes, subjects and teacher allocations</li><li>👪 Parent/guardian links</li><li>📘 Assignments, submissions and gradebook</li><li>📅 Attendance, timetable and school calendar</li><li>💳 School fees and payment records</li><li>📊 Exams, marks and report cards</li><li>📢 School announcements and authorized messages</li><li>📚 Shared digital learning resources</li></ul></div>
-      <div class="card" style="box-shadow:none;border:1px solid #e1e7f0"><h3>⚡ Quick Actions</h3><p class="small">Common school administrator tasks.</p><button class="btn primary" onclick="document.getElementById('schoolClassName')?.focus();document.getElementById('schoolWorkspace')?.scrollIntoView({behavior:'smooth'})">＋ Create Class</button><button class="btn" onclick="document.getElementById('schoolInviteEmail')?.focus();document.getElementById('schoolWorkspace')?.scrollIntoView({behavior:'smooth'})">＋ Add Teacher/Learner</button><button class="btn" onclick="show('communication')">📢 Publish Announcement</button><button class="btn" onclick="show('attendance')">✅ Open Attendance</button></div>
+      <div class="card" style="box-shadow:none;border:1px solid #e1e7f0"><h3>⚡ Quick Actions</h3><p class="small">Common school administrator tasks.</p><button class="btn primary" onclick="openVisibleLearnerRegistration()">＋ Register Learner</button><button class="btn primary" onclick="document.getElementById('schoolClassName')?.focus();document.getElementById('schoolWorkspace')?.scrollIntoView({behavior:'smooth'})">＋ Create Class</button><button class="btn" onclick="document.getElementById('schoolInviteEmail')?.focus();document.getElementById('schoolWorkspace')?.scrollIntoView({behavior:'smooth'})">＋ Add Teacher/Learner</button><button class="btn" onclick="show('communication')">📢 Publish Announcement</button><button class="btn" onclick="show('attendance')">✅ Open Attendance</button></div>
     </div>
   </div>
-  <div id="schoolWorkspaceCard" class="card" style="margin-top:14px;display:none"><label>School workspace<select id="schoolWorkspaceSelect" onchange="loadSelectedSchool()"><option value="">Loading school access...</option></select></label><p id="schoolAccessStatus" class="small" style="margin-top:8px"></p></div>
+  <div id="schoolLearnerRegistrationQuick" class="card" style="margin-top:14px;border:2px solid #2563eb;background:#f8fbff;display:none">
+    <div class="topline"><div><h3>🎓 Register Learner</h3><p class="small">Register a learner by name, admission number and class/stream. Tusome automatically creates the learner account and username.</p></div><button class="btn primary" type="button" onclick="openVisibleLearnerRegistration()">Open Registration</button></div>
+    <div id="visibleLearnerRegistration" style="display:none;margin-top:14px">
+      <div class="school-grid">
+        <label>Full name *<input id="visibleLearnerRegName" maxlength="160" placeholder="e.g. Amina Wanjiku"></label>
+        <label>Admission number *<input id="visibleLearnerRegAdmission" maxlength="60" placeholder="e.g. ADM-2026-014"></label>
+        <label>Class / Stream *<select id="visibleLearnerRegClass"><option value="">Select class / stream</option></select></label>
+        <label>Gender<select id="visibleLearnerRegGender"><option value="">Select</option><option>Female</option><option>Male</option><option>Prefer not to say</option></select></label>
+        <label>Date of birth<input id="visibleLearnerRegDob" type="date"></label>
+        <label>Learner phone (optional)<input id="visibleLearnerRegPhone" maxlength="40" type="tel" placeholder="0712..."></label>
+        <label>Email (optional)<input id="visibleLearnerRegEmail" maxlength="160" type="email" placeholder="learner@example.com"></label>
+        <label>Guardian name (optional)<input id="visibleLearnerRegGuardianName" maxlength="160" placeholder="Parent / Guardian"></label>
+        <label>Guardian phone (optional)<input id="visibleLearnerRegGuardianPhone" maxlength="40" type="tel" placeholder="0712..."></label>
+      </div>
+      <button class="btn primary" style="margin-top:12px" type="button" onclick="registerVisibleSchoolLearner()">＋ Register Learner & Create Account</button>
+      <div id="visibleLearnerRegCredentialNotice" class="notice" style="display:none;margin-top:12px"></div>
+    </div>
+  </div>
+    <div id="schoolWorkspaceCard" class="card" style="margin-top:14px;display:none"><label>School workspace<select id="schoolWorkspaceSelect" onchange="loadSelectedSchool()"><option value="">Loading school access...</option></select></label><p id="schoolAccessStatus" class="small" style="margin-top:8px"></p></div>
   <div id="schoolGlanceCard" class="card" style="margin-top:14px;border:2px solid #dce7f7;background:#f8fbff;display:none">
     <h3 style="margin-top:0;color:#173f8a">📌 School Dashboard at a Glance</h3>
     <div class="cards" style="margin-top:12px">
@@ -2549,6 +2567,28 @@ async function loadParentDashboard(){const learner=document.getElementById('pare
 async function loadSchoolParentLinks(){if(!selectedSchoolId||!['admin'].includes(window.schoolData?.school?.memberRole)&&getSessionRole()!=='admin')return;try{const r=await fetch('/api/schools/parent-links?schoolId='+encodeURIComponent(selectedSchoolId),{credentials:'include'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load parent links.');const tb=document.getElementById('schoolParentLinksTable');if(tb)tb.innerHTML=d.links?.length?d.links.map(x=>`<tr><td>${escapeHtml(x.parentEmail)}</td><td>${escapeHtml(x.learnerEmail)}</td><td>${escapeHtml(x.className||'—')}</td><td><button class="btn" onclick="removeSchoolParentLink('${escapeHtml(x.linkId)}')">Remove</button></td></tr>`).join(''):'<tr><td colspan="4">No parent links yet.</td></tr>'}catch(e){const tb=document.getElementById('schoolParentLinksTable');if(tb)tb.innerHTML='<tr><td colspan="4">'+escapeHtml(e.message)+'</td></tr>'}}
 async function linkSchoolParent(){const parentEmail=document.getElementById('schoolParentEmail')?.value.trim(),learnerEmail=document.getElementById('schoolParentLearner')?.value;if(!parentEmail||!learnerEmail)return showToast?.('Enter the parent email and select a learner.','error');try{const r=await fetch('/api/schools/parent-links',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({schoolId:selectedSchoolId,parentEmail,learnerEmail})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not link parent.');showToast?.('Parent linked to learner.','success');document.getElementById('schoolParentEmail').value='';loadSchoolParentLinks()}catch(e){showToast?.(e.message,'error')}}
 async function removeSchoolParentLink(id){if(!confirm('Remove this parent-learner link?'))return;try{const r=await fetch('/api/schools/parent-links/'+encodeURIComponent(id),{method:'DELETE',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({schoolId:selectedSchoolId})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not remove link.');loadSchoolParentLinks()}catch(e){showToast?.(e.message,'error')}}
+
+function openVisibleLearnerRegistration(){
+  const box=document.getElementById('visibleLearnerRegistration');
+  const card=document.getElementById('schoolLearnerRegistrationQuick');
+  if(card) card.style.display='block';
+  if(box) box.style.display=box.style.display==='none'?'block':'none';
+  const source=document.getElementById('learnerRegClass');
+  const target=document.getElementById('visibleLearnerRegClass');
+  if(source&&target&&source.options.length>1){target.innerHTML=source.innerHTML;}
+  if(target&&target.options.length<=1){loadSchoolRegistrationClasses();}
+  document.getElementById('visibleLearnerRegName')?.focus();
+}
+async function loadSchoolRegistrationClasses(){
+  const target=document.getElementById('visibleLearnerRegClass'); if(!target)return;
+  const sid=selectedSchoolId||document.getElementById('schoolWorkspaceSelect')?.value||''; if(!sid)return;
+  try{const r=await fetch('/api/schools/dashboard?schoolId='+encodeURIComponent(sid),{credentials:'include'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load classes.');const classes=d.classes||[];target.innerHTML='<option value="">Select class / stream</option>'+classes.map(c=>`<option value="${escapeHtml(c.classId)}">${escapeHtml(c.className)}${c.stream?' — '+escapeHtml(c.stream):''}</option>`).join('');}catch(e){showToast?.(e.message,'error')}
+}
+async function registerVisibleSchoolLearner(){
+  const sid=selectedSchoolId||document.getElementById('schoolWorkspaceSelect')?.value||'';
+  const body={schoolId:sid,fullName:document.getElementById('visibleLearnerRegName')?.value.trim(),admissionNumber:document.getElementById('visibleLearnerRegAdmission')?.value.trim(),classId:document.getElementById('visibleLearnerRegClass')?.value,gender:document.getElementById('visibleLearnerRegGender')?.value,dateOfBirth:document.getElementById('visibleLearnerRegDob')?.value||null,phone:document.getElementById('visibleLearnerRegPhone')?.value.trim(),email:document.getElementById('visibleLearnerRegEmail')?.value.trim(),guardianName:document.getElementById('visibleLearnerRegGuardianName')?.value.trim(),guardianPhone:document.getElementById('visibleLearnerRegGuardianPhone')?.value.trim()};
+  try{const r=await fetch('/api/schools/learners/register',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(body)});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not register learner.');const n=document.getElementById('visibleLearnerRegCredentialNotice');if(n){n.style.display='block';n.innerHTML='<b>Account created successfully.</b><br>Username: <b>'+escapeHtml(d.learner.username)+'</b><br>Temporary password: <b>'+escapeHtml(d.temporaryPassword)+'</b><br><span class="small">Give these credentials securely to the learner or authorised guardian.</span>';}showToast?.('Learner registered and account created.','success');await loadSchoolRegistrationClasses();['visibleLearnerRegName','visibleLearnerRegAdmission','visibleLearnerRegDob','visibleLearnerRegPhone','visibleLearnerRegEmail','visibleLearnerRegGuardianName','visibleLearnerRegGuardianPhone'].forEach(id=>{const e=document.getElementById(id);if(e)e.value=''});document.getElementById('visibleLearnerRegGender').value='';document.getElementById('visibleLearnerRegClass').value='';}catch(e){showToast?.(e.message,'error')}
+}
 
 async function registerSchoolLearner(){
   if(!selectedSchoolId)return showToast?.('Select a school workspace first.','error');

@@ -1263,11 +1263,33 @@ app.post('/api/auth/school-register', async (req,res)=>{
   }catch(e){console.error(e);res.status(500).json({error:'Could not create the school account.'})}
 });
 
+app.post('/api/schools/login', async (req,res)=>{
+  const identifier=String(req.body?.identifier||req.body?.email||req.body?.username||'').trim();
+  const password=String(req.body?.password||'');
+  if(!identifier||!password)return res.status(400).json({error:'School email, username or phone number and password are required.'});
+  try{
+    let user=await findUser(identifier);
+    // School administrators may sign in with the school's registered phone number.
+    if(!user && db && databaseReady){
+      const sr=await db.query(`SELECT contact_email FROM schools WHERE contact_phone=$1 LIMIT 1`,[identifier]);
+      if(sr.rowCount) user=await findUser(sr.rows[0].contact_email);
+    }
+    if(!user || !verifyPassword(password,user.passwordHash))return res.status(401).json({error:'Invalid school login details.'});
+    if(!['school','learner','teacher','parent'].includes(String(user.role)))return res.status(403).json({error:'This account is not a school member account.'});
+    if(!db || !databaseReady)return res.status(503).json({error:'The school database is not ready. Please try again shortly.'});
+    const mr=await db.query(`SELECT sc.school_id AS "schoolId",sc.school_name AS "schoolName",sc.status,sm.member_role AS "memberRole" FROM school_memberships sm JOIN schools sc ON sc.school_id=sm.school_id WHERE sm.user_email=$1 AND sm.status='active' AND sc.status IN ('active','pending') ORDER BY CASE WHEN sm.member_role='admin' THEN 0 ELSE 1 END,sc.school_name LIMIT 1`,[user.email]);
+    if(!mr.rowCount)return res.status(403).json({error:'This account is not linked to an active school workspace.'});
+    setSessionCookie(res,user);
+    void audit({user},'school_login','school',mr.rows[0].schoolId);
+    res.json({ok:true,user:{email:user.email,username:user.username||null,role:user.role},school:mr.rows[0]});
+  }catch(e){console.error('School login failed:',e);res.status(500).json({error:'Could not complete school login.'})}
+});
+
 app.post('/api/auth/login', async (req, res) => {
-  const { email, username, password, role } = req.body || {};
-  const identifier = String(username || email || '').trim();
-  const user = await findUser(identifier);
-  if (!user || !verifyPassword(password, user.passwordHash)) return res.status(401).json({ error: 'Invalid email or password.' });
+  const { email, username, identifier, password, role } = req.body || {};
+  const loginIdentifier = String(identifier || username || email || '').trim();
+  const user = await findUser(loginIdentifier);
+  if (!user || !verifyPassword(password, user.passwordHash)) return res.status(401).json({ error: 'Invalid username/email or password.' });
   if (!['learner', 'teacher', 'admin', 'parent', 'school'].includes(String(role)) || user.role !== role) return res.status(403).json({ error: 'The selected account type does not match this account.' });
   setSessionCookie(res, user);
   void audit({user}, 'login', 'user', user.email);
@@ -2922,6 +2944,23 @@ app.post('/api/admin/certificates', requireRole('admin'), async (req,res)=>{
 
 app.get('/api/certificates/verify/:code', async (req,res)=>{
   try{const r=await db.query(`SELECT c.title,c.description,c.issuer_name AS "issuerName",c.verification_code AS "verificationCode",c.issued_at AS "issuedAt",c.revoked_at AS "revokedAt",COALESCE(u.display_name,u.email) AS "learnerName" FROM learner_certificates c JOIN users u ON u.email=c.learner_email WHERE c.verification_code=$1 LIMIT 1`,[String(req.params.code||'').trim().toUpperCase()]);if(!r.rowCount)return res.status(404).json({valid:false,error:'Certificate not found.'});const x=r.rows[0];res.json({valid:!x.revokedAt,...x})}catch(e){res.status(500).json({error:'Could not verify certificate.'})}
+});
+
+// API safety: never return index.html for an unknown /api/* request.
+// This prevents browser errors such as `Unexpected token '<'` when an API path
+// is missing or a frontend/backend deployment is temporarily out of sync.
+app.use('/api', (req, res) => {
+  res.status(404).json({ error: `API endpoint not found: ${req.method} ${req.path}` });
+});
+
+// API errors should also remain JSON rather than Express's HTML error page.
+app.use((err, req, res, next) => {
+  if (req.path.startsWith('/api')) {
+    console.error('API error:', err);
+    if (res.headersSent) return next(err);
+    return res.status(Number(err?.status) || 500).json({ error: err?.message || 'API request failed.' });
+  }
+  next(err);
 });
 
 app.use(express.static(__dirname));

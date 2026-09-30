@@ -1727,7 +1727,7 @@ async function login(e){
   const password=form.querySelector('input[type="password"]').value;
   button.disabled=true;button.textContent='Logging in...';
   try{
-    const res=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({identifier,password,role})});
+    const res=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({identifier,username:identifier,email:identifier,password,role})});
     const raw=await res.text();
     let data={};
     try{data=JSON.parse(raw)}catch{throw new Error('The EduShelf server returned an unexpected response. Please redeploy the latest EduShelf files on Render and try again.')} 
@@ -2343,7 +2343,7 @@ async function schoolSignIn(e){
     const identifier=document.getElementById('schoolSignInIdentifier').value.trim();
     const password=document.getElementById('schoolSignInPassword').value;
     const r=await fetch('/api/schools/login',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({identifier,password})});
-    const d=await r.json();
+    const raw=await r.text(); let d={}; try{d=JSON.parse(raw)}catch{throw new Error('The school server returned an unexpected response. Please redeploy the latest EduShelf files on Render.');}
     if(!r.ok)throw new Error(d.error||'School login failed.');
     setSessionRole(d.user.role,d.user.email);
     selectedSchoolId=d.school.schoolId;
@@ -2506,7 +2506,7 @@ function openSchoolRoleWorkspace(target){
   }
 }
 
-async function loadSchoolManagement(){loadSchoolPlanStatus();loadSchoolExecutiveOverview();const sel=document.getElementById('schoolWorkspaceSelect');if(!sel)return;try{const r=await fetch('/api/schools/mine',{credentials:'include'});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not load school access.');schoolWorkspaces=d.schools||[];updateSchoolRoleCards();sel.innerHTML=schoolWorkspaces.length?schoolWorkspaces.map(x=>`<option value="${escapeHtml(x.schoolId)}" data-member-role="${escapeHtml(x.memberRole)}">${escapeHtml(x.schoolName)} — ${escapeHtml(x.memberRole)}</option>`).join(''):'<option value="">No active school workspace</option>';if(!schoolWorkspaces.length){document.getElementById('schoolWorkspace').style.display='none';document.getElementById('schoolAccessStatus').textContent='No active school workspace is available. Request one from Premium Membership or ask your school administrator to add your account.';return}selectedSchoolId=selectedSchoolId&&schoolWorkspaces.some(x=>x.schoolId===selectedSchoolId)?selectedSchoolId:schoolWorkspaces[0].schoolId;sel.value=selectedSchoolId;loadSelectedSchool();loadSchoolPlanStatus()}catch(e){sel.innerHTML='<option value="">Unable to load</option>';showToast?.(e.message,'error')}}
+async function loadSchoolManagement(){loadSchoolPlanStatus();loadSchoolExecutiveOverview();const sel=document.getElementById('schoolWorkspaceSelect');if(!sel)return;try{const r=await fetch('/api/schools/mine',{credentials:'include'});const raw=await r.text();let d={};try{d=JSON.parse(raw)}catch{throw new Error('The school API returned HTML instead of JSON. Redeploy index.html and server.mjs together on Render.')}if(!r.ok)throw new Error(d.error||'Could not load school access.');schoolWorkspaces=d.schools||[];updateSchoolRoleCards();sel.innerHTML=schoolWorkspaces.length?schoolWorkspaces.map(x=>`<option value="${escapeHtml(x.schoolId)}" data-member-role="${escapeHtml(x.memberRole)}">${escapeHtml(x.schoolName)} — ${escapeHtml(x.memberRole)}</option>`).join(''):'<option value="">No active school workspace</option>';if(!schoolWorkspaces.length){document.getElementById('schoolWorkspace').style.display='none';document.getElementById('schoolAccessStatus').textContent='No active school workspace is available. Request one from Premium Membership or ask your school administrator to add your account.';return}selectedSchoolId=selectedSchoolId&&schoolWorkspaces.some(x=>x.schoolId===selectedSchoolId)?selectedSchoolId:schoolWorkspaces[0].schoolId;sel.value=selectedSchoolId;loadSelectedSchool();loadSchoolPlanStatus()}catch(e){sel.innerHTML='<option value="">Unable to load</option>';showToast?.(e.message,'error')}}
 
 async function loadSchoolExecutiveOverview(){
   const box=document.getElementById('schoolExecutiveOverview'); if(!box)return;

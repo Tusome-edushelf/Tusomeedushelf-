@@ -696,7 +696,10 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
 
 <section id="teacher" class="page">
   <div class="topline"><div><h2>👨‍🏫 Teacher Dashboard</h2><p>Plan, create, monitor and manage your teaching work from one place.</p></div>
-  <button class="btn primary" onclick="show(&quot;upload&quot;)">+ Upload Material</button></div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+    <button class="btn primary" type="button" onclick="show(&quot;upload&quot;)">+ Upload Material</button>
+    <button class="btn" type="button" onclick="logoutUser()">🚪 Log Out</button>
+  </div></div>
   <div class="teacher-welcome">
     <div><span class="teacher-eyebrow">TEACHER WORKSPACE</span><h2>Teach smarter. Create confidently.</h2><p>Use quick actions for your most common teaching tasks and personalize the dashboard around your workflow.</p></div>
     <button class="btn light" type="button" onclick="openTeacherCustomizer()">⚙️ Customize Dashboard</button>

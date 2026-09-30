@@ -654,7 +654,7 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
 </section>
 
 <section id="parent" class="page">
-  <div class="topline"><div><h2>👪 Parent / Guardian Dashboard</h2><p>View only the learners that an authorised school has linked to your account.</p></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" onclick="show('attendance')">📅 Attendance</button><button class="btn" onclick="show('fees')">💰 Fees</button><button class="btn primary" onclick="loadParentChildren()">↻ Refresh</button></div></div>
+  <div class="topline"><div><h2>👪 Parent / Guardian Dashboard</h2><p>View only the learners that an authorised school has linked to your account.</p></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" onclick="show('attendance')">📅 Attendance</button><button class="btn" onclick="show('fees')">💰 Fees</button><button class="btn primary" onclick="loadParentChildren()">↻ Refresh</button><button class="btn" onclick="logoutUser()">🚪 Log Out</button></div></div>
   <div class="parent-safety"><b>Privacy:</b> This portal is read-only. It shows academic information for linked learners only. Do not share your login with other people.</div>
   <div class="card parent-child-picker"><label>Linked learner<select id="parentChildSelect" onchange="loadParentDashboard()"><option value="">Loading linked learners…</option></select></label><span id="parentChildStatus" class="small"></span></div>
   <div id="parentDashboardContent" style="display:none">
@@ -1143,7 +1143,7 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
 </section>
 
 <section id="admin" class="page">
-  <div class="topline"><div><h2>🛡️ Administrator Control Center</h2><p>Central control for approvals, users, AI-generated notes, pricing, reports, transactions and platform revenue.</p></div><button class="btn primary" onclick="adminRefreshAll()">Refresh</button></div>
+  <div class="topline"><div><h2>🛡️ Administrator Control Center</h2><p>Central control for approvals, users, AI-generated notes, pricing, reports, transactions and platform revenue.</p></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" onclick="adminRefreshAll()">Refresh</button><button class="btn" onclick="logoutUser()">🚪 Log Out</button></div></div>
   <div class="admin-command">
     <div class="command-hero"><h3>👋 Admin Command Centre</h3><p>One place to see what needs attention, jump to common tasks and monitor the platform. Use the detailed tabs below when you need deeper records.</p><div class="admin-action-row" style="margin-top:12px"><button class="btn light" onclick="adminTab('analytics')">Open Full Analytics</button><button class="btn light" onclick="openAIAssistant('admin')">Ask Admin AI</button></div></div>
     <div class="command-kpis">
@@ -1671,12 +1671,13 @@ async function adminRefreshAll(){
 async function adminSetMaterialPrice(i,value){if(!materials[i])return;const price=Math.max(0,Number(value)||0);try{const r=await fetch('/api/materials/'+encodeURIComponent(materials[i].id)+'/review',{method:'PATCH',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({approvalStatus:materials[i].approvalStatus||'pending',price})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not update price.');materials[i].price=price;logActivity(`Set material price: ${materials[i].title} = KES ${price.toFixed(2)}`);adminRefreshAll();renderMaterials()}catch(e){alert(e.message)}}
 async function adminPreviewMaterial(i){const m=materials[i];if(!m)return;const url='/api/materials/'+encodeURIComponent(m.id)+'/file';const opened=window.open(url,'_blank');if(!opened){alert('Your browser blocked the document tab. Please allow pop-ups for EduShelf and click Review / Open again.')}else{logActivity('Admin reviewed material: '+m.title)}}
 async function adminMaterialApproval(i,status){if(!materials[i])return;try{const r=await fetch('/api/materials/'+encodeURIComponent(materials[i].id)+'/review',{method:'PATCH',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({approvalStatus:status,price:Number(materials[i].price||0)})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not update material.');materials[i].approvalStatus=status;materials[i].approvedAt=d.material?.approvedAt||null;logActivity(`${status==='approved'?'Approved':'Rejected'} material: ${materials[i].title}`);logNotification(`Material ${materials[i].title}: ${status}`);adminRefreshAll();renderMaterials()}catch(e){alert(e.message)}}
-function setSessionRole(role,email){
+function setSessionRole(role,email,username=''){
   sessionStorage.setItem('tusomeLoggedIn','true');
   if(role!=='school') sessionStorage.removeItem('tusomeSchoolAccess');
   sessionStorage.setItem('tusomeRole',role);
-  sessionStorage.setItem('tusomeCurrentUser',email||role);
-  localStorage.setItem('tusomeCurrentUser',email||role);
+  sessionStorage.setItem('tusomeCurrentUser',email||username||role);
+  if(username){sessionStorage.setItem('tusomeUsername',username);localStorage.setItem('tusomeUsername',username)}else{sessionStorage.removeItem('tusomeUsername');localStorage.removeItem('tusomeUsername')}
+  localStorage.setItem('tusomeCurrentUser',email||username||role);
 }
 function getSessionRole(){return sessionStorage.getItem('tusomeLoggedIn')==='true'?sessionStorage.getItem('tusomeRole'):null}
 async function registerUser(e){
@@ -1691,7 +1692,7 @@ async function registerUser(e){
     const raw=await res.text(); let data={};
     try{data=JSON.parse(raw)}catch{throw new Error('The EduShelf server returned an unexpected response. Please try again.');}
     if(!res.ok)throw new Error(data.error||'Could not create the account.');
-    setSessionRole(data.user.role,data.user.email);
+    setSessionRole(data.user.role,data.user.email,data.user.username||'');
     form.reset();
     alert('Account created successfully. Welcome to Tusome EduShelf!');
     appPageHistory=[];
@@ -1712,7 +1713,7 @@ async function login(e){
     let data={};
     try{data=JSON.parse(raw)}catch{throw new Error('The EduShelf server returned an unexpected response. Please redeploy the latest EduShelf files on Render and try again.')} 
     if(!res.ok)throw new Error(data.error||'Login failed.');
-    setSessionRole(data.user.role,data.user.email);
+    setSessionRole(data.user.role,data.user.email,data.user.username||'');
     appPageHistory=[];
     show(data.user.role==='school'?'schoolDashboard':data.user.role==='admin'?'admin':data.user.role==='teacher'?'teacher':data.user.role==='parent'?'parent':'learner',true);
     form.reset();
@@ -1726,9 +1727,11 @@ async function logoutUser(){
   sessionStorage.removeItem('tusomeLoggedIn');
   sessionStorage.removeItem('tusomeRole');
   sessionStorage.removeItem('tusomeCurrentUser');
+  sessionStorage.removeItem('tusomeUsername');
   sessionStorage.removeItem('tusomeSchoolAccess');
   sessionStorage.removeItem('tusomeSchoolMemberRole');
   localStorage.removeItem('tusomeCurrentUser');
+  localStorage.removeItem('tusomeUsername');
   appPageHistory=[];
   show('home',true);
 }

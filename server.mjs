@@ -12,7 +12,7 @@ const app = express();
 app.use(express.json({ limit: '18mb' }));
 
 const PORT = Number(process.env.PORT || 3000);
-const APP_VERSION = 'v76-bulk-registration-visible';
+const APP_VERSION = 'v80-bulk-parent-required-class-required';
 const DATA_DIR = path.join(__dirname, 'data');
 const TX_FILE = path.join(DATA_DIR, 'transactions.json');
 const BACKUP_DIR = process.env.BACKUP_DIR || path.join(DATA_DIR, 'backups');
@@ -2259,38 +2259,49 @@ app.post('/api/schools/learners/bulk-register', requireAuth, async (req,res)=>{
     if(req.school.memberRole!=='admin'&&req.user.role!=='admin') return res.status(403).json({error:'School admin access is required.'});
     if(!databaseReady) return res.status(503).json({error:'School database is not ready.'});
     const rows=Array.isArray(req.body?.rows)?req.body.rows:[];
-    const defaultClassId=String(req.body?.defaultClassId||'').trim();
     if(!rows.length) return res.status(400).json({error:'No learner rows were supplied.'});
     if(rows.length>500) return res.status(400).json({error:'Bulk registration is limited to 500 learners per upload.'});
     try{
       const classes=(await db.query('SELECT class_id AS "classId",class_name AS "className",grade,stream FROM school_classes WHERE school_id=$1 ORDER BY grade,class_name',[req.school.schoolId])).rows;
-      const byId=new Map(classes.map(c=>[String(c.classId),c]));
       const errors=[], prepared=[], admissions=new Set(), emails=new Set();
-      const defaultClass=defaultClassId ? byId.get(defaultClassId) : null;
-      const defaultStream=String(req.body?.defaultStream||'').trim();
-      if(defaultClassId && !defaultClass) errors.push({row:0,error:'The selected Default Class / Grade does not belong to this school.'});
-      if(defaultClass && defaultStream && String(defaultClass.stream||'').toLowerCase()!==defaultStream.toLowerCase()) errors.push({row:0,error:'The selected Default Stream does not match the selected Default Class / Grade.'});
       for(let i=0;i<rows.length;i++){
-        const x=rows[i]||{}, row=i+2, fullName=String(x.fullName||'').trim().slice(0,160), admissionNumber=String(x.admissionNumber||'').trim().slice(0,60), className=String(x.className||'').trim(), stream=String(x.stream||'').trim();
-        if(!fullName||!admissionNumber){errors.push({row,error:'Full name and admission number are required.'});continue;}
-        const ak=admissionNumber.toLowerCase(); if(admissions.has(ak)){errors.push({row,error:'Duplicate admission number in this file.'});continue;} admissions.add(ak);
+        const x=rows[i]||{}, row=i+2;
+        const fullName=String(x.fullName||'').trim().slice(0,160);
+        const admissionNumber=String(x.admissionNumber||'').trim().slice(0,60);
+        const className=String(x.className||'').trim().slice(0,120);
+        const stream=String(x.stream||'').trim().slice(0,80);
+        const guardianName=String(x.guardianName||'').trim().slice(0,160);
+        const guardianPhone=String(x.guardianPhone||'').trim().slice(0,40);
+        if(!fullName||!admissionNumber) errors.push({row,error:'Full name and admission number are required.'});
+        if(!className) errors.push({row,error:'Class/Grade is required in every CSV row.'});
+        if(!guardianName||!guardianPhone) errors.push({row,error:'Parent/Guardian Name and Parent/Guardian Phone are required.'});
+        if(errors.some(e=>e.row===row)) continue;
+        const ak=admissionNumber.toLowerCase();
+        if(admissions.has(ak)){errors.push({row,error:'Duplicate admission number in this file.'});continue;}
+        admissions.add(ak);
+        const candidates=classes.filter(c=>String(c.className||'').toLowerCase()===className.toLowerCase() || String(c.grade||'').toLowerCase()===className.toLowerCase());
         let cls=null;
-        if(className){
-          const candidates=classes.filter(c=>String(c.className).toLowerCase()===className.toLowerCase() || String(c.grade||'').toLowerCase()===className.toLowerCase());
-          if(stream){cls=candidates.find(c=>String(c.stream||'').toLowerCase()===stream.toLowerCase())||null; if(!cls) errors.push({row,error:'The Class/Grade and Stream combination does not match a school class.'});}
-          else if(candidates.length===1){cls=candidates[0];}
-          else if(candidates.length>1){errors.push({row,error:'Class/grade matches multiple streams; specify Stream or leave Class/Grade blank to use Default Class.'});continue;}
+        if(stream){
+          cls=candidates.find(c=>String(c.stream||'').toLowerCase()===stream.toLowerCase())||null;
+          if(!cls){errors.push({row,error:'The Class/Grade and Stream combination does not match a school class.'});continue;}
+        }else if(candidates.length===1){
+          cls=candidates[0];
+        }else if(candidates.length===0){
+          errors.push({row,error:'Class/Grade does not match a class configured for this school.'});continue;
         }
-        if(!cls && defaultClass) cls=defaultClass;
-        if(!cls){errors.push({row,error:'A valid Class/Grade is required, either in the CSV or through Default Class / Grade.'});continue;}
-        if(!stream && !className && defaultStream && String(cls.stream||'').toLowerCase()!==defaultStream.toLowerCase()){errors.push({row,error:'Default Stream does not match the selected Default Class / Grade.'});continue;}
+        const classId=cls?.classId||null;
+        const resolvedClassName=cls?.className||className;
+        const resolvedGrade=cls?.grade||null;
+        const resolvedStream=cls?.stream||'';
         const email=String(x.email||'').trim().toLowerCase();
         if(email){
           if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){errors.push({row,error:'Learner email is not valid.'});continue;}
-          if(emails.has(email)){errors.push({row,error:'Duplicate learner email in this file.'});continue;} emails.add(email);
+          if(emails.has(email)){errors.push({row,error:'Duplicate learner email in this file.'});continue;}
+          emails.add(email);
         }
-        if(x.dateOfBirth && !/^\d{4}-\d{2}-\d{2}$/.test(String(x.dateOfBirth))) {errors.push({row,error:'DOB must be YYYY-MM-DD.'});continue;}
-        prepared.push({row,fullName,admissionNumber,classId:cls.classId,className:cls.className,grade:cls.grade,stream:cls.stream||'',email,gender:String(x.gender||'').trim()||null,dateOfBirth:String(x.dateOfBirth||'').trim()||null,phone:String(x.phone||'').trim()||null,guardianName:String(x.guardianName||'').trim()||null,guardianPhone:String(x.guardianPhone||'').trim()||null});
+        const dob=String(x.dateOfBirth||'').trim();
+        if(dob && !/^\d{4}-\d{2}-\d{2}$/.test(dob)){errors.push({row,error:'DOB must be YYYY-MM-DD.'});continue;}
+        prepared.push({row,fullName,admissionNumber,classId,className:resolvedClassName,grade:resolvedGrade,stream:resolvedStream,email,gender:String(x.gender||'').trim()||null,dateOfBirth:dob||null,phone:String(x.phone||'').trim()||null,guardianName,guardianPhone});
       }
       if(errors.length) return res.status(400).json({error:'Please correct the highlighted rows before registering.',errors});
       const existingAdmissions=await db.query('SELECT admission_number FROM school_learner_profiles WHERE school_id=$1 AND lower(admission_number)=ANY($2::text[])',[req.school.schoolId,prepared.map(x=>x.admissionNumber.toLowerCase())]);
@@ -2311,13 +2322,13 @@ app.post('/api/schools/learners/bulk-register', requireAuth, async (req,res)=>{
           const email=x.email||`${username}@learner.tusome.local`;
           const temporaryPassword=crypto.randomBytes(9).toString('base64url');
           await db.query('INSERT INTO users(email,username,role,password_hash,display_name) VALUES($1,$2,\'learner\',$3,$4)',[email,username,hashPassword(temporaryPassword),x.fullName]);
-          await db.query('INSERT INTO school_learner_profiles(school_id,learner_email,admission_number,gender,date_of_birth,phone,guardian_name,guardian_phone) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',[req.school.schoolId,email,x.admissionNumber,x.gender,x.dateOfBirth||null,x.phone,x.guardianName,x.guardianPhone]);
+          await db.query('INSERT INTO school_learner_profiles(school_id,learner_email,admission_number,gender,date_of_birth,phone,guardian_name,guardian_phone) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',[req.school.schoolId,email,x.admissionNumber,x.gender,x.dateOfBirth,x.phone,x.guardianName,x.guardianPhone]);
           await db.query("INSERT INTO school_memberships(school_id,user_email,member_role,status,class_id) VALUES($1,$2,'learner','active',$3)",[req.school.schoolId,email,x.classId]);
-          credentials.push({fullName:x.fullName,admissionNumber:x.admissionNumber,username,password:temporaryPassword,className:x.className,stream:x.stream});
+          credentials.push({fullName:x.fullName,admissionNumber:x.admissionNumber,username,password:temporaryPassword,className:x.className,stream:x.stream,guardianName:x.guardianName,guardianPhone:x.guardianPhone});
         }
         await db.query('COMMIT');
       }catch(e){await db.query('ROLLBACK');throw e}
-      const csv=['Full Name,Admission Number,Username,Temporary Password,Class,Stream',...credentials.map(x=>[x.fullName,x.admissionNumber,x.username,x.password,x.className,x.stream].map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(','))].join('\n');
+      const csv=['Full Name,Admission Number,Username,Temporary Password,Class,Stream,Parent/Guardian Name,Parent/Guardian Phone',...credentials.map(x=>[x.fullName,x.admissionNumber,x.username,x.password,x.className,x.stream,x.guardianName,x.guardianPhone].map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(','))].join('\n');
       void audit({user:req.user},'bulk_register_school_learners','school',req.school.schoolId,{count:credentials.length});
       res.status(201).json({ok:true,count:credentials.length,credentialsCsv:csv});
     }catch(e){console.error(e);res.status(500).json({error:'Could not complete bulk learner registration.'})}

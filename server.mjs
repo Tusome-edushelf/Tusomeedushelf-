@@ -12,7 +12,7 @@ const app = express();
 app.use(express.json({ limit: '18mb' }));
 
 const PORT = Number(process.env.PORT || 3000);
-const APP_VERSION = 'v74-school-login-fix';
+const APP_VERSION = 'v75-bulk-registration-fix';
 const DATA_DIR = path.join(__dirname, 'data');
 const TX_FILE = path.join(DATA_DIR, 'transactions.json');
 const BACKUP_DIR = process.env.BACKUP_DIR || path.join(DATA_DIR, 'backups');
@@ -2266,6 +2266,10 @@ app.post('/api/schools/learners/bulk-register', requireAuth, async (req,res)=>{
       const classes=(await db.query('SELECT class_id AS "classId",class_name AS "className",grade,stream FROM school_classes WHERE school_id=$1 ORDER BY grade,class_name',[req.school.schoolId])).rows;
       const byId=new Map(classes.map(c=>[String(c.classId),c]));
       const errors=[], prepared=[], admissions=new Set(), emails=new Set();
+      const defaultClass=defaultClassId ? byId.get(defaultClassId) : null;
+      const defaultStream=String(req.body?.defaultStream||'').trim();
+      if(defaultClassId && !defaultClass) errors.push({row:0,error:'The selected Default Class / Grade does not belong to this school.'});
+      if(defaultClass && defaultStream && String(defaultClass.stream||'').toLowerCase()!==defaultStream.toLowerCase()) errors.push({row:0,error:'The selected Default Stream does not match the selected Default Class / Grade.'});
       for(let i=0;i<rows.length;i++){
         const x=rows[i]||{}, row=i+2, fullName=String(x.fullName||'').trim().slice(0,160), admissionNumber=String(x.admissionNumber||'').trim().slice(0,60), className=String(x.className||'').trim(), stream=String(x.stream||'').trim();
         if(!fullName||!admissionNumber){errors.push({row,error:'Full name and admission number are required.'});continue;}
@@ -2273,11 +2277,18 @@ app.post('/api/schools/learners/bulk-register', requireAuth, async (req,res)=>{
         let cls=null;
         if(className){
           const candidates=classes.filter(c=>String(c.className).toLowerCase()===className.toLowerCase() || String(c.grade||'').toLowerCase()===className.toLowerCase());
-          if(stream){cls=candidates.find(c=>String(c.stream||'').toLowerCase()===stream.toLowerCase())||null;} else if(candidates.length===1){cls=candidates[0];} else if(candidates.length>1){errors.push({row,error:'Class/grade matches multiple streams; specify Stream or use Default Class.'});continue;}
+          if(stream){cls=candidates.find(c=>String(c.stream||'').toLowerCase()===stream.toLowerCase())||null; if(!cls) errors.push({row,error:'The Class/Grade and Stream combination does not match a school class.'});}
+          else if(candidates.length===1){cls=candidates[0];}
+          else if(candidates.length>1){errors.push({row,error:'Class/grade matches multiple streams; specify Stream or leave Class/Grade blank to use Default Class.'});continue;}
         }
-        if(!cls && defaultClassId) cls=byId.get(defaultClassId)||null;
-        if(!cls){errors.push({row,error:'A valid Class/Grade is required.'});continue;}
-        const email=String(x.email||'').trim().toLowerCase(); if(email){if(emails.has(email)){errors.push({row,error:'Duplicate learner email in this file.'});continue;}emails.add(email);}
+        if(!cls && defaultClass) cls=defaultClass;
+        if(!cls){errors.push({row,error:'A valid Class/Grade is required, either in the CSV or through Default Class / Grade.'});continue;}
+        if(!stream && !className && defaultStream && String(cls.stream||'').toLowerCase()!==defaultStream.toLowerCase()){errors.push({row,error:'Default Stream does not match the selected Default Class / Grade.'});continue;}
+        const email=String(x.email||'').trim().toLowerCase();
+        if(email){
+          if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){errors.push({row,error:'Learner email is not valid.'});continue;}
+          if(emails.has(email)){errors.push({row,error:'Duplicate learner email in this file.'});continue;} emails.add(email);
+        }
         if(x.dateOfBirth && !/^\d{4}-\d{2}-\d{2}$/.test(String(x.dateOfBirth))) {errors.push({row,error:'DOB must be YYYY-MM-DD.'});continue;}
         prepared.push({row,fullName,admissionNumber,classId:cls.classId,className:cls.className,grade:cls.grade,stream:cls.stream||'',email,gender:String(x.gender||'').trim()||null,dateOfBirth:String(x.dateOfBirth||'').trim()||null,phone:String(x.phone||'').trim()||null,guardianName:String(x.guardianName||'').trim()||null,guardianPhone:String(x.guardianPhone||'').trim()||null});
       }
@@ -2287,6 +2298,12 @@ app.post('/api/schools/learners/bulk-register', requireAuth, async (req,res)=>{
       const existingEmails=prepared.filter(x=>x.email).length?await db.query('SELECT email FROM users WHERE lower(email)=ANY($1::text[])',[prepared.filter(x=>x.email).map(x=>x.email)]):{rowCount:0,rows:[]};
       if(existingEmails.rowCount) return res.status(409).json({error:'One or more learner emails already belong to existing accounts.',errors:existingEmails.rows.map(x=>({row:0,error:`Email ${x.email} already exists.`}))});
       const credentials=[];
+      const generatedUsernames=new Set();
+      for(const x of prepared){
+        const base=makeLearnerUsername(x.fullName,x.admissionNumber).toLowerCase();
+        if(generatedUsernames.has(base)) return res.status(400).json({error:'Two learner rows produce the same username. Please use distinct names/admission numbers.',errors:[{row:x.row,error:'Duplicate generated username.'}]});
+        generatedUsernames.add(base);
+      }
       await db.query('BEGIN');
       try{
         for(const x of prepared){

@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
-const APP_VERSION='v84-school-login-and-bulk-button-fix';
+const APP_VERSION='v85-bulk-registration-open-fix';
 app.get('/api/version',(_req,res)=>{res.setHeader('Cache-Control','no-store');res.json({ok:true,version:APP_VERSION,build:'dashboard-sequential-bulk-transaction-parent-required',timestamp:new Date().toISOString()});});
 app.use(express.json({ limit: '18mb' }));
 
@@ -1279,26 +1279,6 @@ app.post('/api/auth/school-register', async (req,res)=>{
     void createNotification(email,'Welcome to Tusome EduShelf School','Your school administrator account and school workspace are ready.','success');
     res.status(201).json({ok:true,user,school:{schoolId,schoolName},message:'School account created successfully.'});
   }catch(e){console.error(e);res.status(500).json({error:'Could not create the school account.'})}
-});
-
-app.post('/api/schools/login', async (req,res)=>{
-  const identifier=String(req.body?.identifier||req.body?.username||req.body?.email||'').trim();
-  const password=String(req.body?.password||'');
-  if(!identifier||!password) return res.status(400).json({error:'Username/email and password are required.'});
-  try{
-    const user=await findUser(identifier);
-    if(!user || !verifyPassword(password,user.passwordHash)) return res.status(401).json({error:'Invalid username/email and password.'});
-    if(!db || !databaseReady) return res.status(503).json({error:'The school database is not ready. Please try again shortly.'});
-    const memberships=await db.query(`SELECT sc.school_id AS "schoolId",sc.school_name AS "schoolName",sc.status,sm.member_role AS "memberRole" FROM school_memberships sm JOIN schools sc ON sc.school_id=sm.school_id WHERE sm.user_email=$1 AND sm.status='active' AND sc.status='active' ORDER BY CASE sm.member_role WHEN 'admin' THEN 0 ELSE 1 END,sc.school_name`,[user.email]);
-    if(!memberships.rowCount) return res.status(403).json({error:'This account does not have an active school workspace.'});
-    const school=memberships.rows[0];
-    setSessionCookie(res,user);
-    void audit({user},'school_login','school',school.schoolId,{memberRole:school.memberRole});
-    res.json({ok:true,user:{email:user.email,username:user.username||null,role:user.role},school});
-  }catch(e){
-    console.error('school login failed:',e);
-    res.status(500).json({error:'Could not complete school login.'});
-  }
 });
 
 app.post('/api/auth/login', async (req, res) => {

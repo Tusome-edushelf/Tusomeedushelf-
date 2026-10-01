@@ -877,7 +877,7 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
     <div class="school-content-columns">
       <div class="card" style="box-shadow:none;border:1px solid #e1e7f0"><h3>📋 What you can manage here</h3><ul class="school-dashboard-list"><li>👩🏽‍🏫 Teachers and learners</li><li>🎓 Classes, subjects and teacher allocations</li><li>👪 Parent/guardian links</li><li>📘 Assignments, submissions and gradebook</li><li>📅 Attendance, timetable and school calendar</li><li>💳 School fees and payment records</li><li>📊 Exams, marks and report cards</li><li>📢 School announcements and authorized messages</li><li>📚 Shared digital learning resources</li></ul></div>
       <div class="card" style="box-shadow:none;border:1px solid #e1e7f0"><h3>⚡ Quick Actions</h3><p class="small">Common school administrator tasks.</p><button class="btn primary" onclick="openVisibleLearnerRegistration()">＋ Register Learner</button>
-<button class="btn primary" type="button" onclick="document.getElementById('bulkLearnerCsvFile')?.scrollIntoView({behavior:'smooth',block:'center'})">📥 Bulk Register Learners</button><button class="btn primary" onclick="document.getElementById('schoolClassName')?.focus();document.getElementById('schoolWorkspace')?.scrollIntoView({behavior:'smooth'})">＋ Create Class</button><button class="btn" onclick="document.getElementById('schoolInviteEmail')?.focus();document.getElementById('schoolWorkspace')?.scrollIntoView({behavior:'smooth'})">＋ Add Teacher/Learner</button><button class="btn" onclick="show('communication')">📢 Publish Announcement</button><button class="btn" onclick="show('attendance')">✅ Open Attendance</button></div>
+<button class="btn primary" type="button" onclick="openBulkLearnerRegistration()">📥 Bulk Register Learners</button><button class="btn primary" onclick="document.getElementById('schoolClassName')?.focus();document.getElementById('schoolWorkspace')?.scrollIntoView({behavior:'smooth'})">＋ Create Class</button><button class="btn" onclick="document.getElementById('schoolInviteEmail')?.focus();document.getElementById('schoolWorkspace')?.scrollIntoView({behavior:'smooth'})">＋ Add Teacher/Learner</button><button class="btn" onclick="show('communication')">📢 Publish Announcement</button><button class="btn" onclick="show('attendance')">✅ Open Attendance</button></div>
     </div>
   </div>
   <div id="schoolLearnerRegistrationQuick" class="card" style="margin-top:14px;border:2px solid #2563eb;background:#f8fbff;display:none">
@@ -2608,6 +2608,24 @@ async function registerSchoolLearner(){
   const body={schoolId:selectedSchoolId,fullName:document.getElementById('learnerRegName')?.value.trim(),admissionNumber:document.getElementById('learnerRegAdmission')?.value.trim(),classId:document.getElementById('learnerRegClass')?.value,gender:document.getElementById('learnerRegGender')?.value,dateOfBirth:document.getElementById('learnerRegDob')?.value||null,phone:document.getElementById('learnerRegPhone')?.value.trim(),email:document.getElementById('learnerRegEmail')?.value.trim(),guardianName:document.getElementById('learnerRegGuardianName')?.value.trim(),guardianPhone:document.getElementById('learnerRegGuardianPhone')?.value.trim()};
   if(!body.fullName||!body.admissionNumber||!body.classId)return showToast?.('Enter the learner name, admission number and class/stream.','error');
   try{const r=await fetch('/api/schools/learners/register',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(body)});const d=await r.json();if(!r.ok)throw new Error(d.error||'Could not register learner.');const n=document.getElementById('learnerRegCredentialNotice');if(n){n.style.display='block';n.innerHTML='<b>Account created successfully.</b><br>Username: <b>'+escapeHtml(d.learner.username)+'</b><br>Temporary password: <b>'+escapeHtml(d.temporaryPassword)+'</b><br><span class="small">Give these credentials securely to the learner/authorised guardian. The learner must change the temporary password after first login.</span>';}showToast?.('Learner registered and account created.','success');['learnerRegName','learnerRegAdmission','learnerRegDob','learnerRegPhone','learnerRegEmail','learnerRegGuardianName','learnerRegGuardianPhone'].forEach(id=>{const e=document.getElementById(id);if(e)e.value=''});document.getElementById('learnerRegGender').value='';document.getElementById('learnerRegClass').value='';await loadSelectedSchool();}catch(e){showToast?.(e.message,'error')}
+}
+
+async function openBulkLearnerRegistration(){
+  try{
+    const workspace=document.getElementById('schoolWorkspace');
+    const sel=document.getElementById('schoolWorkspaceSelect');
+    if(sel?.value) selectedSchoolId=sel.value;
+    if(workspace && workspace.style.display==='none'){
+      if(selectedSchoolId){
+        await loadSelectedSchool();
+      }else{
+        const first=schoolWorkspaces?.[0]?.schoolId||'';
+        if(first){selectedSchoolId=first;await loadSelectedSchool();}
+      }
+    }
+    const target=document.getElementById('bulkLearnerCsvFile');
+    if(target){target.scrollIntoView({behavior:'smooth',block:'center'});setTimeout(()=>target.focus({preventScroll:true}),350);}
+  }catch(e){showToast?.(e.message||'Could not open bulk learner registration.','error')}
 }
 
 let bulkLearnerRows=[];

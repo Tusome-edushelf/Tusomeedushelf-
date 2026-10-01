@@ -12,7 +12,7 @@ const app = express();
 app.use(express.json({ limit: '18mb' }));
 
 const PORT = Number(process.env.PORT || 3000);
-const APP_VERSION = 'v73-api-cache-fix';
+const APP_VERSION = 'v74-school-login-fix';
 const DATA_DIR = path.join(__dirname, 'data');
 const TX_FILE = path.join(DATA_DIR, 'transactions.json');
 const BACKUP_DIR = process.env.BACKUP_DIR || path.join(DATA_DIR, 'backups');
@@ -1278,6 +1278,30 @@ app.post('/api/auth/school-register', async (req,res)=>{
     void createNotification(email,'Welcome to Tusome EduShelf School','Your school administrator account and school workspace are ready.','success');
     res.status(201).json({ok:true,user,school:{schoolId,schoolName},message:'School account created successfully.'});
   }catch(e){console.error(e);res.status(500).json({error:'Could not create the school account.'})}
+});
+
+// School Dashboard sign-in. The frontend uses this dedicated endpoint for
+// school workspace access. Keep it separate from /api/auth/login so a school
+// member can be authenticated and the exact school membership can be returned.
+app.post('/api/schools/login', async (req,res)=>{
+  const identifier=String(req.body?.identifier||req.body?.username||req.body?.email||'').trim();
+  const password=String(req.body?.password||'');
+  if(!identifier||!password) return res.status(400).json({error:'Username/email and password are required.'});
+  if(!databaseReady) return res.status(503).json({error:'The school database is not ready. Please try again shortly.'});
+  try{
+    const user=await findUser(identifier);
+    if(!user || !verifyPassword(password,user.passwordHash)) return res.status(401).json({error:'Invalid school username/email and password.'});
+    const membership=await db.query(`SELECT sm.school_id AS "schoolId",sm.member_role AS "memberRole",sm.status,sc.school_name AS "schoolName",sc.status AS "schoolStatus" FROM school_memberships sm JOIN schools sc ON sc.school_id=sm.school_id WHERE sm.user_email=$1 AND sm.status='active' AND sc.status='active' ORDER BY CASE WHEN sm.member_role='admin' THEN 0 ELSE 1 END,sc.school_name LIMIT 1`,[user.email]);
+    if(!membership.rowCount) return res.status(403).json({error:'This account does not have active access to a school workspace.'});
+    const school=membership.rows[0];
+    const sessionUser={email:user.email,role:user.role};
+    setSessionCookie(res,sessionUser);
+    void audit({user:sessionUser},'school_login','school',school.schoolId,{memberRole:school.memberRole});
+    res.json({ok:true,user:sessionUser,school:{schoolId:school.schoolId,schoolName:school.schoolName,memberRole:school.memberRole}});
+  }catch(e){
+    console.error(e);
+    res.status(500).json({error:'Could not sign in to the school workspace.'});
+  }
 });
 
 app.post('/api/auth/login', async (req, res) => {

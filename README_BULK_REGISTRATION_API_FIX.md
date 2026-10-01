@@ -27,7 +27,7 @@ The database migrations are executed by `initDatabase()` at startup. PostgreSQL 
 This package keeps the feature-rich `index.html` and `server.mjs` intact and adds only the deployment-synchronisation fixes:
 - `GET /api/version` is registered before the API 404 catch-all.
 - HTML responses are sent with `no-store`/no-cache headers.
-- `X-EduShelf-Version: v73-api-cache-fix` identifies the deployed build.
+- `X-EduShelf-Version: v74-school-login-fix` identifies the deployed build.
 - The frontend contains the same v73 build marker.
 
 ### Verify after Render deploy
@@ -42,8 +42,15 @@ Expected JSON contains:
 
 and
 
-`"version": "v73-api-cache-fix"`
+`"version": "v74-school-login-fix"`
 
 If `/api/version` still returns `API endpoint not found`, Render is not running this `server.mjs` yet; deploy the files from this package together and trigger a fresh deploy/restart.
 
 Do not mix `index.html` or `server.mjs` with older copies.
+
+
+## v74 school dashboard login fix
+
+This build preserves the v73 cache/version fix and adds the missing `POST /api/schools/login` endpoint used by the School Dashboard sign-in form. It authenticates the supplied account, verifies an active school membership, creates the normal session cookie, and returns the school ID/name/member role expected by the existing frontend.
+
+After deployment, verify `GET /api/version` returns version `v74-school-login-fix`, then test School Dashboard sign-in.

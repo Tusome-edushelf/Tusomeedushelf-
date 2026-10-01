@@ -12,7 +12,7 @@ const app = express();
 app.use(express.json({ limit: '18mb' }));
 
 const PORT = Number(process.env.PORT || 3000);
-const APP_VERSION = 'v75-bulk-registration-fix';
+const APP_VERSION = 'v76-bulk-registration-visible';
 const DATA_DIR = path.join(__dirname, 'data');
 const TX_FILE = path.join(DATA_DIR, 'transactions.json');
 const BACKUP_DIR = process.env.BACKUP_DIR || path.join(DATA_DIR, 'backups');

@@ -20,3 +20,30 @@ This build fixes the School Plan API mismatch that can produce:
 Deploy **both** `index.html` and `server.mjs` from this package together. Do not mix these files with older versions. Then trigger a fresh Render deploy/restart.
 
 The database migrations are executed by `initDatabase()` at startup. PostgreSQL is required for School Plan learner registration.
+
+
+## v73 deployment/API-cache fix
+
+This package keeps the feature-rich `index.html` and `server.mjs` intact and adds only the deployment-synchronisation fixes:
+- `GET /api/version` is registered before the API 404 catch-all.
+- HTML responses are sent with `no-store`/no-cache headers.
+- `X-EduShelf-Version: v73-api-cache-fix` identifies the deployed build.
+- The frontend contains the same v73 build marker.
+
+### Verify after Render deploy
+
+Open:
+
+`https://YOUR-RENDER-SERVICE.onrender.com/api/version`
+
+Expected JSON contains:
+
+`"ok": true`
+
+and
+
+`"version": "v73-api-cache-fix"`
+
+If `/api/version` still returns `API endpoint not found`, Render is not running this `server.mjs` yet; deploy the files from this package together and trigger a fresh deploy/restart.
+
+Do not mix `index.html` or `server.mjs` with older copies.

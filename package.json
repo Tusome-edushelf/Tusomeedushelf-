@@ -1,14 +1,17 @@
 {
-  "name": "tusome-edushelf-daraja-sandbox",
-  "version": "1.0.0",
+  "name": "tusome-edushelf",
+  "version": "73.0.0",
   "private": true,
   "type": "module",
   "scripts": {
     "start": "node server.mjs"
   },
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
     "dotenv": "^16.4.7",
-    "express": "^5.1.0",
-    "pg": "^8.16.3"
+    "express": "^4.21.2",
+    "pg": "^8.13.1"
   }
 }

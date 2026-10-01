@@ -12,6 +12,7 @@ const app = express();
 app.use(express.json({ limit: '18mb' }));
 
 const PORT = Number(process.env.PORT || 3000);
+const APP_VERSION = 'v73-api-cache-fix';
 const DATA_DIR = path.join(__dirname, 'data');
 const TX_FILE = path.join(DATA_DIR, 'transactions.json');
 const BACKUP_DIR = process.env.BACKUP_DIR || path.join(DATA_DIR, 'backups');
@@ -3011,31 +3012,27 @@ app.get('/api/certificates/verify/:code', async (req,res)=>{
   try{const r=await db.query(`SELECT c.title,c.description,c.issuer_name AS "issuerName",c.verification_code AS "verificationCode",c.issued_at AS "issuedAt",c.revoked_at AS "revokedAt",COALESCE(u.display_name,u.email) AS "learnerName" FROM learner_certificates c JOIN users u ON u.email=c.learner_email WHERE c.verification_code=$1 LIMIT 1`,[String(req.params.code||'').trim().toUpperCase()]);if(!r.rowCount)return res.status(404).json({valid:false,error:'Certificate not found.'});const x=r.rows[0];res.json({valid:!x.revokedAt,...x})}catch(e){res.status(500).json({error:'Could not verify certificate.'})}
 });
 
+// Deployment/version endpoint: keep this before the API catch-all so it can never
+// fall through to the generic "API endpoint not found" response.
+app.get('/api/version', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.setHeader('X-EduShelf-Version', APP_VERSION);
+  res.json({ ok: true, version: APP_VERSION, build: 'full-feature-school-api', timestamp: new Date().toISOString() });
+});
+
 app.use('/api', (req,res) => res.status(404).json({error:'API endpoint not found.',path:req.path}));
 
-// v72 deployment/version and cache protection.
-app.disable('etag');
-app.get('/api/version', (_req, res) => {
-  res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
-  res.json({ok:true, version:'v72', build:'full-feature-restore'});
-});
-app.use((req, res, next) => {
-  if (req.path === '/' || req.path.endsWith('.html')) {
-    res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
-    res.setHeader('Pragma','no-cache');
-    res.setHeader('Expires','0');
-    res.setHeader('X-EduShelf-Version','v72');
-  }
-  next();
-});
-
+// Prevent an older cached index.html from keeping the browser on a mismatched
+// frontend while Render is serving the current server.mjs.
 app.use(express.static(__dirname, {
   setHeaders: (res, filePath) => {
     if (filePath.endsWith('.html')) {
-      res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
-      res.setHeader('Pragma','no-cache');
-      res.setHeader('Expires','0');
-      res.setHeader('X-EduShelf-Version','v72');
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+      res.setHeader('X-EduShelf-Version', APP_VERSION);
     }
   }
 }));

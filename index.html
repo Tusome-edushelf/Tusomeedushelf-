@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Tusome EduShelf — Learn • Manage • Succeed</title>
-<meta name="edushelf-version" content="v76-bulk-registration-visible">
+<meta name="edushelf-version" content="v78-bulk-registration-workflow">
 <script>console.info("Tusome EduShelf v74 school-login fix loaded");</script>
 <link rel="icon" type="image/png" href="tusome-logo.png">
 <style>
@@ -923,6 +923,17 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
     </div>
     <div class="card" style="margin-top:16px"><h3>👪 Parent / Guardian Links</h3><p class="small">School administrators can link an existing Parent/Guardian account to an active learner. Parents only see linked learners.</p><div class="school-grid"><label>Parent email<input id="schoolParentEmail" type="email" maxlength="160" placeholder="parent@example.com"></label><label>Learner<select id="schoolParentLearner"><option value="">Select learner</option></select></label></div><button class="btn primary" style="margin-top:10px" onclick="linkSchoolParent()">Link Parent</button><div class="table-like" style="margin-top:12px"><table><thead><tr><th>Parent</th><th>Learner</th><th>Class</th><th>Action</th></tr></thead><tbody id="schoolParentLinksTable"><tr><td colspan="4">Loading…</td></tr></tbody></table></div></div>
     <div class="card" style="margin-top:16px;border:2px solid #2563eb"><div class="topline"><div><h3>🎓 Register Learner</h3><p class="small">School administration registers the learner into a class/grade. Stream is optional and can be assigned later without creating a new learner account.</p></div></div><div class="school-grid"><label>Full name *<input id="learnerRegName" maxlength="160" placeholder="e.g. Amina Wanjiku"></label><label>Admission number *<input id="learnerRegAdmission" maxlength="60" placeholder="e.g. ADM-2026-014"></label><label>Class / Grade *<select id="learnerRegClass"><option value="">Select class / stream</option></select></label><label>Gender<select id="learnerRegGender"><option value="">Select</option><option>Female</option><option>Male</option><option>Prefer not to say</option></select></label><label>Date of birth<input id="learnerRegDob" type="date"></label><label>Learner phone (optional)<input id="learnerRegPhone" maxlength="40" placeholder="0712..." type="tel"></label><label>Email (optional)<input id="learnerRegEmail" maxlength="160" placeholder="learner@example.com" type="email"></label><label>Guardian name (optional)<input id="learnerRegGuardianName" maxlength="160" placeholder="Parent / Guardian"></label><label>Guardian phone (optional)<input id="learnerRegGuardianPhone" maxlength="40" placeholder="0712..." type="tel"></label></div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn primary" type="button" onclick="registerSchoolLearner()">＋ Register Learner & Create Account</button><button class="btn" type="button" onclick="document.getElementById('bulkLearnerRegistrationCard')?.scrollIntoView({behavior:'smooth',block:'start'});document.getElementById('bulkLearnerCsvFile')?.focus()">📥 Bulk Register Learners</button></div><div id="learnerRegCredentialNotice" class="notice" style="display:none;margin-top:12px"></div></div>
+<div id="bulkLearnerHowItWorks" class="card" style="display:none;margin-top:16px;border:2px solid #2563eb;background:#f8fbff">
+<div class="topline"><div><h3>📥 How Bulk Learner Registration Works</h3><p class="small">Register many learners safely from one CSV file.</p></div><button class="btn" type="button" onclick="closeBulkLearnerHowItWorks()">Close</button></div>
+<div class="school-grid" style="margin-top:12px">
+<div class="card" style="box-shadow:none"><b>1. Download the template</b><p class="small">Use the CSV template so your column names and format are correct.</p></div>
+<div class="card" style="box-shadow:none"><b>2. Fill in learner details</b><p class="small">Enter full name and admission number. Class/Grade can come from the CSV or the default class you select below.</p></div>
+<div class="card" style="box-shadow:none"><b>3. Upload and preview</b><p class="small">Tusome checks required fields, duplicate admission numbers, dates, emails and class placement before registration.</p></div>
+<div class="card" style="box-shadow:none"><b>4. Register learners</b><p class="small">Click <b>Register All Learners</b>. The system creates each learner account and school membership.</p></div>
+</div>
+<div class="notice" style="margin-top:12px"><b>5. Save the credentials</b><br>After successful registration, download the credential report immediately. It contains the usernames and temporary passwords generated for the learners.</div>
+<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn" type="button" onclick="downloadBulkLearnerTemplate()">⬇️ Download CSV Template</button><button class="btn primary" type="button" onclick="startBulkLearnerUpload()">Continue to Upload ↓</button></div>
+</div>
 <div id="bulkLearnerRegistrationCard" class="card" style="margin-top:16px;border:2px solid #16a34a;background:#f7fff9">
 <div class="topline"><div><h3>📥 Bulk Learner Registration</h3><p class="small">Register up to 500 learners at once from a CSV file. Full name, admission number and class/grade are required. Stream is optional and can be assigned later.</p></div></div>
 <div class="school-grid" style="margin-top:12px">
@@ -2503,16 +2514,37 @@ function updateSchoolRoleCards(){
   });
 }
 
-function openBulkLearnerRegistration(){
-  const role=getSessionRole();
-  const memberRole=window.schoolLoginMemberRole||document.getElementById('schoolWorkspaceSelect')?.selectedOptions?.[0]?.dataset?.memberRole||role||'';
-  if(role!=='admin' && memberRole!=='admin'){showToast?.('School administrator access is required.','error');return;}
+async function openBulkLearnerRegistration(){
+  const memberRole=window.schoolLoginMemberRole||document.getElementById('schoolWorkspaceSelect')?.selectedOptions?.[0]?.dataset?.memberRole||'';
+  const role=getSessionRole()||'';
+  if(role!=='admin' && memberRole!=='admin'){
+    showToast?.('School administrator access is required.','error');
+    return;
+  }
+  const workspace=document.getElementById('schoolWorkspace');
+  if(workspace && workspace.style.display==='none'){
+    try{ await loadSelectedSchool(); }catch{}
+  }
   const card=document.getElementById('bulkLearnerRegistrationCard');
+  const guide=document.getElementById('bulkLearnerHowItWorks');
   if(!card){showToast?.('Bulk Learner Registration is missing from this build.','error');return;}
+  if(guide) guide.style.display='block';
   card.style.display='block';
-  card.scrollIntoView({behavior:'smooth',block:'start'});
+  guide?.scrollIntoView({behavior:'smooth',block:'start'});
+  await loadBulkLearnerClasses();
+}
+function closeBulkLearnerHowItWorks(){
+  const guide=document.getElementById('bulkLearnerHowItWorks');
+  if(guide) guide.style.display='none';
+}
+function startBulkLearnerUpload(){
+  const guide=document.getElementById('bulkLearnerHowItWorks');
+  const card=document.getElementById('bulkLearnerRegistrationCard');
+  if(guide) guide.style.display='none';
+  if(card){card.style.display='block';card.scrollIntoView({behavior:'smooth',block:'start'});}
   loadBulkLearnerClasses();
 }
+
 
 function openSchoolRoleWorkspace(target){
   // School-role workspaces must always render inside the School Dashboard page.

@@ -9,10 +9,11 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
+const APP_VERSION='v81-dashboard-bulk-fix';
+app.get('/api/version',(_req,res)=>{res.setHeader('Cache-Control','no-store');res.json({ok:true,version:APP_VERSION,build:'dashboard-sequential-bulk-transaction-parent-required',timestamp:new Date().toISOString()});});
 app.use(express.json({ limit: '18mb' }));
 
 const PORT = Number(process.env.PORT || 3000);
-const APP_VERSION = 'v80-bulk-parent-required-class-required';
 const DATA_DIR = path.join(__dirname, 'data');
 const TX_FILE = path.join(DATA_DIR, 'transactions.json');
 const BACKUP_DIR = process.env.BACKUP_DIR || path.join(DATA_DIR, 'backups');
@@ -1280,30 +1281,6 @@ app.post('/api/auth/school-register', async (req,res)=>{
   }catch(e){console.error(e);res.status(500).json({error:'Could not create the school account.'})}
 });
 
-// School Dashboard sign-in. The frontend uses this dedicated endpoint for
-// school workspace access. Keep it separate from /api/auth/login so a school
-// member can be authenticated and the exact school membership can be returned.
-app.post('/api/schools/login', async (req,res)=>{
-  const identifier=String(req.body?.identifier||req.body?.username||req.body?.email||'').trim();
-  const password=String(req.body?.password||'');
-  if(!identifier||!password) return res.status(400).json({error:'Username/email and password are required.'});
-  if(!databaseReady) return res.status(503).json({error:'The school database is not ready. Please try again shortly.'});
-  try{
-    const user=await findUser(identifier);
-    if(!user || !verifyPassword(password,user.passwordHash)) return res.status(401).json({error:'Invalid school username/email and password.'});
-    const membership=await db.query(`SELECT sm.school_id AS "schoolId",sm.member_role AS "memberRole",sm.status,sc.school_name AS "schoolName",sc.status AS "schoolStatus" FROM school_memberships sm JOIN schools sc ON sc.school_id=sm.school_id WHERE sm.user_email=$1 AND sm.status='active' AND sc.status='active' ORDER BY CASE WHEN sm.member_role='admin' THEN 0 ELSE 1 END,sc.school_name LIMIT 1`,[user.email]);
-    if(!membership.rowCount) return res.status(403).json({error:'This account does not have active access to a school workspace.'});
-    const school=membership.rows[0];
-    const sessionUser={email:user.email,role:user.role};
-    setSessionCookie(res,sessionUser);
-    void audit({user:sessionUser},'school_login','school',school.schoolId,{memberRole:school.memberRole});
-    res.json({ok:true,user:sessionUser,school:{schoolId:school.schoolId,schoolName:school.schoolName,memberRole:school.memberRole}});
-  }catch(e){
-    console.error(e);
-    res.status(500).json({error:'Could not sign in to the school workspace.'});
-  }
-});
-
 app.post('/api/auth/login', async (req, res) => {
   const identifier=String(req.body?.identifier||req.body?.username||req.body?.email||'').trim();
   const password=String(req.body?.password||'');
@@ -2152,14 +2129,14 @@ app.get('/api/schools/mine', requireAuth, async (req,res)=>{
 
 app.get('/api/schools/dashboard', requireSchoolMembership, async (req,res)=>{
   try{
-    const [members,classes,materials,invites]=await Promise.all([
-      db.query(`SELECT user_email AS "email",member_role AS "memberRole",status,created_at AS "createdAt" FROM school_memberships WHERE school_id=$1 ORDER BY member_role,user_email`,[req.school.schoolId]),
-      db.query(`SELECT c.class_id AS "classId",c.class_name AS "className",c.grade,c.stream,c.teacher_email AS "teacherEmail",COUNT(sm.user_email)::int AS "learnerCount" FROM school_classes c LEFT JOIN school_memberships sm ON sm.school_id=c.school_id AND sm.class_id=c.class_id AND sm.member_role='learner' AND sm.status='active' GROUP BY c.class_id ORDER BY c.grade,c.class_name`,[req.school.schoolId]),
-      db.query(`SELECT m.id,m.title,m.subject,m.grade,m.approval_status AS "approvalStatus",m.teacher_email AS "teacherEmail",m.created_at AS "createdAt" FROM materials m WHERE m.approval_status='approved' ORDER BY m.created_at DESC LIMIT 40`),
-      db.query(`SELECT invite_id AS "inviteId",email,member_role AS "memberRole",class_id AS "classId",status,created_at AS "createdAt" FROM school_invites WHERE school_id=$1 ORDER BY created_at DESC LIMIT 100`,[req.school.schoolId])
-    ]);
+    // Keep these reads sequential on one request. This avoids the PostgreSQL protocol/bind
+    // failure seen in production while preserving the same response shape.
+    const members=await db.query(`SELECT user_email AS "email",member_role AS "memberRole",status,created_at AS "createdAt" FROM school_memberships WHERE school_id=$1 ORDER BY member_role,user_email`,[req.school.schoolId]);
+    const classes=await db.query(`SELECT c.class_id AS "classId",c.class_name AS "className",c.grade,c.stream,c.teacher_email AS "teacherEmail",COUNT(sm.user_email)::int AS "learnerCount" FROM school_classes c LEFT JOIN school_memberships sm ON sm.school_id=c.school_id AND sm.class_id=c.class_id AND sm.member_role='learner' AND sm.status='active' GROUP BY c.class_id ORDER BY c.grade,c.class_name`,[req.school.schoolId]);
+    const materials=await db.query(`SELECT m.id,m.title,m.subject,m.grade,m.approval_status AS "approvalStatus",m.teacher_email AS "teacherEmail",m.created_at AS "createdAt" FROM materials m WHERE m.approval_status='approved' ORDER BY m.created_at DESC LIMIT 40`);
+    const invites=await db.query(`SELECT invite_id AS "inviteId",email,member_role AS "memberRole",class_id AS "classId",status,created_at AS "createdAt" FROM school_invites WHERE school_id=$1 ORDER BY created_at DESC LIMIT 100`,[req.school.schoolId]);
     res.json({ok:true,school:req.school,members:members.rows,classes:classes.rows,materials:materials.rows,invites:invites.rows,counts:{members:members.rowCount,teachers:members.rows.filter(x=>x.memberRole==='teacher').length,learners:members.rows.filter(x=>x.memberRole==='learner').length,classes:classes.rowCount}});
-  }catch(e){console.error(e);res.status(500).json({error:'Could not load school dashboard.'})}
+  }catch(e){console.error('school dashboard load failed:',e);res.status(500).json({error:'Could not load school dashboard.'})}
 });
 
 app.post('/api/schools/classes', requireAuth, async (req,res)=>{
@@ -2262,46 +2239,34 @@ app.post('/api/schools/learners/bulk-register', requireAuth, async (req,res)=>{
     if(!rows.length) return res.status(400).json({error:'No learner rows were supplied.'});
     if(rows.length>500) return res.status(400).json({error:'Bulk registration is limited to 500 learners per upload.'});
     try{
-      const classes=(await db.query('SELECT class_id AS "classId",class_name AS "className",grade,stream FROM school_classes WHERE school_id=$1 ORDER BY grade,class_name',[req.school.schoolId])).rows;
+      const classes=(await db.query('SELECT class_id AS "classId",class_name AS "className",grade,stream FROM school_classes WHERE school_id=$1 ORDER BY grade,class_name,stream',[req.school.schoolId])).rows;
       const errors=[], prepared=[], admissions=new Set(), emails=new Set();
       for(let i=0;i<rows.length;i++){
         const x=rows[i]||{}, row=i+2;
         const fullName=String(x.fullName||'').trim().slice(0,160);
         const admissionNumber=String(x.admissionNumber||'').trim().slice(0,60);
-        const className=String(x.className||'').trim().slice(0,120);
-        const stream=String(x.stream||'').trim().slice(0,80);
+        const className=String(x.className||'').trim();
+        const stream=String(x.stream||'').trim();
         const guardianName=String(x.guardianName||'').trim().slice(0,160);
         const guardianPhone=String(x.guardianPhone||'').trim().slice(0,40);
-        if(!fullName||!admissionNumber) errors.push({row,error:'Full name and admission number are required.'});
-        if(!className) errors.push({row,error:'Class/Grade is required in every CSV row.'});
-        if(!guardianName||!guardianPhone) errors.push({row,error:'Parent/Guardian Name and Parent/Guardian Phone are required.'});
-        if(errors.some(e=>e.row===row)) continue;
+        if(!fullName||!admissionNumber||!className||!guardianName||!guardianPhone){
+          errors.push({row,error:'Full Name, Admission Number, Class/Grade, Parent/Guardian Name and Parent/Guardian Phone are required.'});
+          continue;
+        }
         const ak=admissionNumber.toLowerCase();
         if(admissions.has(ak)){errors.push({row,error:'Duplicate admission number in this file.'});continue;}
         admissions.add(ak);
-        const candidates=classes.filter(c=>String(c.className||'').toLowerCase()===className.toLowerCase() || String(c.grade||'').toLowerCase()===className.toLowerCase());
+        const classMatches=classes.filter(c=>String(c.className||'').toLowerCase()===className.toLowerCase());
+        const gradeMatches=classes.filter(c=>String(c.grade||'').toLowerCase()===className.toLowerCase());
+        const candidates=classMatches.length?classMatches:gradeMatches;
+        if(!candidates.length){errors.push({row,error:`Class/Grade "${className}" does not exist in this school.`});continue;}
         let cls=null;
-        if(stream){
-          cls=candidates.find(c=>String(c.stream||'').toLowerCase()===stream.toLowerCase())||null;
-          if(!cls){errors.push({row,error:'The Class/Grade and Stream combination does not match a school class.'});continue;}
-        }else if(candidates.length===1){
-          cls=candidates[0];
-        }else if(candidates.length===0){
-          errors.push({row,error:'Class/Grade does not match a class configured for this school.'});continue;
-        }
-        const classId=cls?.classId||null;
-        const resolvedClassName=cls?.className||className;
-        const resolvedGrade=cls?.grade||null;
-        const resolvedStream=cls?.stream||'';
+        if(stream){cls=candidates.find(c=>String(c.stream||'').toLowerCase()===stream.toLowerCase())||null;if(!cls){errors.push({row,error:`Stream "${stream}" does not match Class/Grade "${className}".`});continue;}}
+        else if(candidates.length===1){cls=candidates[0];}
         const email=String(x.email||'').trim().toLowerCase();
-        if(email){
-          if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){errors.push({row,error:'Learner email is not valid.'});continue;}
-          if(emails.has(email)){errors.push({row,error:'Duplicate learner email in this file.'});continue;}
-          emails.add(email);
-        }
-        const dob=String(x.dateOfBirth||'').trim();
-        if(dob && !/^\d{4}-\d{2}-\d{2}$/.test(dob)){errors.push({row,error:'DOB must be YYYY-MM-DD.'});continue;}
-        prepared.push({row,fullName,admissionNumber,classId,className:resolvedClassName,grade:resolvedGrade,stream:resolvedStream,email,gender:String(x.gender||'').trim()||null,dateOfBirth:dob||null,phone:String(x.phone||'').trim()||null,guardianName,guardianPhone});
+        if(email){if(!email.includes('@')){errors.push({row,error:'Learner Email must be a valid email address.'});continue;}if(emails.has(email)){errors.push({row,error:'Duplicate learner email in this file.'});continue;}emails.add(email);}
+        if(x.dateOfBirth && !/^\d{4}-\d{2}-\d{2}$/.test(String(x.dateOfBirth))) {errors.push({row,error:'DOB must be YYYY-MM-DD.'});continue;}
+        prepared.push({row,fullName,admissionNumber,classId:cls?.classId||null,className:cls?.className||className,grade:cls?.grade||className,stream:cls?.stream||stream,email,gender:String(x.gender||'').trim()||null,dateOfBirth:String(x.dateOfBirth||'').trim()||null,phone:String(x.phone||'').trim()||null,guardianName,guardianPhone});
       }
       if(errors.length) return res.status(400).json({error:'Please correct the highlighted rows before registering.',errors});
       const existingAdmissions=await db.query('SELECT admission_number FROM school_learner_profiles WHERE school_id=$1 AND lower(admission_number)=ANY($2::text[])',[req.school.schoolId,prepared.map(x=>x.admissionNumber.toLowerCase())]);
@@ -2309,29 +2274,26 @@ app.post('/api/schools/learners/bulk-register', requireAuth, async (req,res)=>{
       const existingEmails=prepared.filter(x=>x.email).length?await db.query('SELECT email FROM users WHERE lower(email)=ANY($1::text[])',[prepared.filter(x=>x.email).map(x=>x.email)]):{rowCount:0,rows:[]};
       if(existingEmails.rowCount) return res.status(409).json({error:'One or more learner emails already belong to existing accounts.',errors:existingEmails.rows.map(x=>({row:0,error:`Email ${x.email} already exists.`}))});
       const credentials=[];
-      const generatedUsernames=new Set();
-      for(const x of prepared){
-        const base=makeLearnerUsername(x.fullName,x.admissionNumber).toLowerCase();
-        if(generatedUsernames.has(base)) return res.status(400).json({error:'Two learner rows produce the same username. Please use distinct names/admission numbers.',errors:[{row:x.row,error:'Duplicate generated username.'}]});
-        generatedUsernames.add(base);
-      }
-      await db.query('BEGIN');
+      const client=await db.connect();
       try{
+        await client.query('BEGIN');
         for(const x of prepared){
           const username=await uniqueLearnerUsername(makeLearnerUsername(x.fullName,x.admissionNumber));
           const email=x.email||`${username}@learner.tusome.local`;
           const temporaryPassword=crypto.randomBytes(9).toString('base64url');
-          await db.query('INSERT INTO users(email,username,role,password_hash,display_name) VALUES($1,$2,\'learner\',$3,$4)',[email,username,hashPassword(temporaryPassword),x.fullName]);
-          await db.query('INSERT INTO school_learner_profiles(school_id,learner_email,admission_number,gender,date_of_birth,phone,guardian_name,guardian_phone) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',[req.school.schoolId,email,x.admissionNumber,x.gender,x.dateOfBirth,x.phone,x.guardianName,x.guardianPhone]);
-          await db.query("INSERT INTO school_memberships(school_id,user_email,member_role,status,class_id) VALUES($1,$2,'learner','active',$3)",[req.school.schoolId,email,x.classId]);
-          credentials.push({fullName:x.fullName,admissionNumber:x.admissionNumber,username,password:temporaryPassword,className:x.className,stream:x.stream,guardianName:x.guardianName,guardianPhone:x.guardianPhone});
+          await client.query('INSERT INTO users(email,username,role,password_hash,display_name) VALUES($1,$2,\'learner\',$3,$4)',[email,username,hashPassword(temporaryPassword),x.fullName]);
+          await client.query('INSERT INTO school_learner_profiles(school_id,learner_email,admission_number,gender,date_of_birth,phone,guardian_name,guardian_phone) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',[req.school.schoolId,email,x.admissionNumber,x.gender,x.dateOfBirth||null,x.phone,x.guardianName,x.guardianPhone]);
+          if(x.classId) await client.query("INSERT INTO school_memberships(school_id,user_email,member_role,status,class_id) VALUES($1,$2,'learner','active',$3)",[req.school.schoolId,email,x.classId]);
+          else await client.query("INSERT INTO school_memberships(school_id,user_email,member_role,status,class_id) VALUES($1,$2,'learner','active',NULL)",[req.school.schoolId,email]);
+          credentials.push({fullName:x.fullName,admissionNumber: x.admissionNumber,username,password:temporaryPassword,className:x.className,stream:x.stream,guardianName:x.guardianName,guardianPhone:x.guardianPhone});
         }
-        await db.query('COMMIT');
-      }catch(e){await db.query('ROLLBACK');throw e}
-      const csv=['Full Name,Admission Number,Username,Temporary Password,Class,Stream,Parent/Guardian Name,Parent/Guardian Phone',...credentials.map(x=>[x.fullName,x.admissionNumber,x.username,x.password,x.className,x.stream,x.guardianName,x.guardianPhone].map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(','))].join('\n');
+        await client.query('COMMIT');
+      }catch(e){try{await client.query('ROLLBACK')}catch{};throw e}
+      finally{client.release()}
+      const csv=['Full Name,Admission Number,Username,Temporary Password,Class/Grade,Stream,Parent/Guardian Name,Parent/Guardian Phone',...credentials.map(x=>[x.fullName,x.admissionNumber,x.username,x.password,x.className,x.stream,x.guardianName,x.guardianPhone].map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(','))].join('\n');
       void audit({user:req.user},'bulk_register_school_learners','school',req.school.schoolId,{count:credentials.length});
       res.status(201).json({ok:true,count:credentials.length,credentialsCsv:csv});
-    }catch(e){console.error(e);res.status(500).json({error:'Could not complete bulk learner registration.'})}
+    }catch(e){console.error('bulk learner registration failed:',e);res.status(500).json({error:'Could not complete bulk learner registration.'})}
   });
 });
 
@@ -3064,30 +3026,9 @@ app.get('/api/certificates/verify/:code', async (req,res)=>{
   try{const r=await db.query(`SELECT c.title,c.description,c.issuer_name AS "issuerName",c.verification_code AS "verificationCode",c.issued_at AS "issuedAt",c.revoked_at AS "revokedAt",COALESCE(u.display_name,u.email) AS "learnerName" FROM learner_certificates c JOIN users u ON u.email=c.learner_email WHERE c.verification_code=$1 LIMIT 1`,[String(req.params.code||'').trim().toUpperCase()]);if(!r.rowCount)return res.status(404).json({valid:false,error:'Certificate not found.'});const x=r.rows[0];res.json({valid:!x.revokedAt,...x})}catch(e){res.status(500).json({error:'Could not verify certificate.'})}
 });
 
-// Deployment/version endpoint: keep this before the API catch-all so it can never
-// fall through to the generic "API endpoint not found" response.
-app.get('/api/version', (_req, res) => {
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
-  res.setHeader('Pragma', 'no-cache');
-  res.setHeader('Expires', '0');
-  res.setHeader('X-EduShelf-Version', APP_VERSION);
-  res.json({ ok: true, version: APP_VERSION, build: 'full-feature-school-api', timestamp: new Date().toISOString() });
-});
-
 app.use('/api', (req,res) => res.status(404).json({error:'API endpoint not found.',path:req.path}));
 
-// Prevent an older cached index.html from keeping the browser on a mismatched
-// frontend while Render is serving the current server.mjs.
-app.use(express.static(__dirname, {
-  setHeaders: (res, filePath) => {
-    if (filePath.endsWith('.html')) {
-      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
-      res.setHeader('Pragma', 'no-cache');
-      res.setHeader('Expires', '0');
-      res.setHeader('X-EduShelf-Version', APP_VERSION);
-    }
-  }
-}));
+app.use(express.static(__dirname));
 
 try {
   await initDatabase();

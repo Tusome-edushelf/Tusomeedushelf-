@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
-const APP_VERSION='v85-bulk-registration-open-fix';
+const APP_VERSION='v81-dashboard-bulk-fix';
 app.get('/api/version',(_req,res)=>{res.setHeader('Cache-Control','no-store');res.json({ok:true,version:APP_VERSION,build:'dashboard-sequential-bulk-transaction-parent-required',timestamp:new Date().toISOString()});});
 app.use(express.json({ limit: '18mb' }));
 
@@ -2122,6 +2122,26 @@ app.patch('/api/admin/schools/:id/status', requireRole('admin'), async (req,res)
 });
 
 // v38 School Management. School admins are represented by active school memberships with member_role='admin'.
+app.post('/api/schools/login', async (req, res) => {
+  const identifier=String(req.body?.identifier||req.body?.username||req.body?.email||'').trim();
+  const password=String(req.body?.password||'');
+  if(!identifier||!password) return res.status(400).json({error:'Username/email and password are required.'});
+  try{
+    const user=await findUser(identifier);
+    if(!user || !verifyPassword(password,user.passwordHash)) return res.status(401).json({error:'Invalid username/email and password.'});
+    if(!db || !databaseReady) return res.status(503).json({error:'The school database is not ready. Please try again shortly.'});
+    const memberships=await db.query(`SELECT sc.school_id AS "schoolId",sc.school_name AS "schoolName",sc.status,sm.member_role AS "memberRole" FROM school_memberships sm JOIN schools sc ON sc.school_id=sm.school_id WHERE sm.user_email=$1 AND sm.status='active' AND sc.status='active' ORDER BY CASE sm.member_role WHEN 'admin' THEN 0 WHEN 'bursar' THEN 1 WHEN 'teacher' THEN 2 WHEN 'learner' THEN 3 WHEN 'parent' THEN 4 ELSE 5 END,sc.school_name`,[user.email]);
+    if(!memberships.rowCount) return res.status(403).json({error:'This account does not have an active school workspace.'});
+    const school=memberships.rows[0];
+    setSessionCookie(res,user);
+    void audit({user},'school_login','school',school.schoolId,{memberRole:school.memberRole});
+    res.json({ok:true,user:{email:user.email,username:user.username||null,role:user.role},school});
+  }catch(e){
+    console.error('school login failed:',e);
+    res.status(500).json({error:'Could not complete school login.'});
+  }
+});
+
 app.get('/api/schools/mine', requireAuth, async (req,res)=>{
   if(!databaseReady) return res.json({ok:true,schools:[]});
   try{const r=await db.query(`SELECT sc.school_id AS "schoolId",sc.school_name AS "schoolName",sc.status,sm.member_role AS "memberRole" FROM school_memberships sm JOIN schools sc ON sc.school_id=sm.school_id WHERE sm.user_email=$1 AND sm.status='active' ORDER BY sc.school_name`,[req.user.email]);res.json({ok:true,schools:r.rows})}catch(e){res.status(500).json({error:'Could not load school access.'})}
@@ -2132,7 +2152,7 @@ app.get('/api/schools/dashboard', requireSchoolMembership, async (req,res)=>{
     // Keep these reads sequential on one request. This avoids the PostgreSQL protocol/bind
     // failure seen in production while preserving the same response shape.
     const members=await db.query(`SELECT user_email AS "email",member_role AS "memberRole",status,created_at AS "createdAt" FROM school_memberships WHERE school_id=$1 ORDER BY member_role,user_email`,[req.school.schoolId]);
-    const classes=await db.query(`SELECT c.class_id AS "classId",c.class_name AS "className",c.grade,c.stream,c.teacher_email AS "teacherEmail",COUNT(sm.user_email)::int AS "learnerCount" FROM school_classes c LEFT JOIN school_memberships sm ON sm.school_id=c.school_id AND sm.class_id=c.class_id AND sm.member_role='learner' AND sm.status='active' GROUP BY c.class_id ORDER BY c.grade,c.class_name`,[req.school.schoolId]);
+    const classes=await db.query(`SELECT c.class_id AS "classId",c.class_name AS "className",c.grade,c.stream,c.teacher_email AS "teacherEmail",COUNT(sm.user_email)::int AS "learnerCount" FROM school_classes c LEFT JOIN school_memberships sm ON sm.school_id=c.school_id AND sm.class_id=c.class_id AND sm.member_role='learner' AND sm.status='active' WHERE c.school_id=$1 GROUP BY c.class_id ORDER BY c.grade,c.class_name`,[req.school.schoolId]);
     const materials=await db.query(`SELECT m.id,m.title,m.subject,m.grade,m.approval_status AS "approvalStatus",m.teacher_email AS "teacherEmail",m.created_at AS "createdAt" FROM materials m WHERE m.approval_status='approved' ORDER BY m.created_at DESC LIMIT 40`);
     const invites=await db.query(`SELECT invite_id AS "inviteId",email,member_role AS "memberRole",class_id AS "classId",status,created_at AS "createdAt" FROM school_invites WHERE school_id=$1 ORDER BY created_at DESC LIMIT 100`,[req.school.schoolId]);
     res.json({ok:true,school:req.school,members:members.rows,classes:classes.rows,materials:materials.rows,invites:invites.rows,counts:{members:members.rowCount,teachers:members.rows.filter(x=>x.memberRole==='teacher').length,learners:members.rows.filter(x=>x.memberRole==='learner').length,classes:classes.rowCount}});

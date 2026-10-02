@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
-const APP_VERSION='v99-multi-stream-fix';
+const APP_VERSION='v100-create-class-fix';
 app.get('/api/version',(_req,res)=>{res.setHeader('Cache-Control','no-store');res.json({ok:true,version:APP_VERSION,build:'dashboard-sequential-bulk-transaction-parent-required',timestamp:new Date().toISOString()});});
 app.use(express.json({ limit: '18mb' }));
 
@@ -505,6 +505,8 @@ async function initDatabase() {
       class_id TEXT PRIMARY KEY, school_id TEXT NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
       class_name TEXT NOT NULL, grade TEXT, stream TEXT, teacher_email TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+    ALTER TABLE school_classes ADD COLUMN IF NOT EXISTS stream TEXT;
+    ALTER TABLE school_classes ADD COLUMN IF NOT EXISTS teacher_email TEXT;
     CREATE INDEX IF NOT EXISTS idx_school_classes_school ON school_classes(school_id);
     CREATE TABLE IF NOT EXISTS school_invites (
       invite_id TEXT PRIMARY KEY, school_id TEXT NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,

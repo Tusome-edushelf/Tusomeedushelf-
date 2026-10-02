@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
-const APP_VERSION='v96-fresh-start-separated-credentials';
+const APP_VERSION='v99-multi-stream-fix';
 app.get('/api/version',(_req,res)=>{res.setHeader('Cache-Control','no-store');res.json({ok:true,version:APP_VERSION,build:'dashboard-sequential-bulk-transaction-parent-required',timestamp:new Date().toISOString()});});
 app.use(express.json({ limit: '18mb' }));
 
@@ -2157,7 +2157,7 @@ app.get('/api/schools/dashboard', requireSchoolMembership, async (req,res)=>{
     const classes=await db.query(`SELECT c.class_id AS "classId",c.class_name AS "className",c.grade,c.stream,c.teacher_email AS "teacherEmail",COUNT(sm.user_email)::int AS "learnerCount" FROM school_classes c LEFT JOIN school_memberships sm ON sm.school_id=c.school_id AND sm.class_id=c.class_id AND sm.member_role='learner' AND sm.status='active' WHERE c.school_id=$1 GROUP BY c.class_id ORDER BY c.grade,c.class_name`,[req.school.schoolId]);
     const materials=await db.query(`SELECT m.id,m.title,m.subject,m.grade,m.approval_status AS "approvalStatus",m.teacher_email AS "teacherEmail",m.created_at AS "createdAt" FROM materials m WHERE m.approval_status='approved' ORDER BY m.created_at DESC LIMIT 40`);
     const invites=await db.query(`SELECT invite_id AS "inviteId",email,member_role AS "memberRole",class_id AS "classId",status,created_at AS "createdAt" FROM school_invites WHERE school_id=$1 ORDER BY created_at DESC LIMIT 100`,[req.school.schoolId]);
-    res.json({ok:true,school:req.school,members:members.rows,classes:classes.rows,materials:materials.rows,invites:invites.rows,counts:{members:members.rowCount,teachers:members.rows.filter(x=>x.memberRole==='teacher').length,learners:members.rows.filter(x=>x.memberRole==='learner').length,classes:classes.rowCount}});
+    res.json({ok:true,school:req.school,members:members.rows,classes:classes.rows,materials:materials.rows,invites:invites.rows,counts:{members:members.rowCount,teachers:members.rows.filter(x=>x.memberRole==='teacher').length,learners:members.rows.filter(x=>x.memberRole==='learner').length,classes:new Set(classes.rows.map(x=>`${String(x.grade||x.className||'').trim().toLowerCase()}|${String(x.className||'').trim().toLowerCase()}`)).size}});
   }catch(e){console.error('school dashboard load failed:',e);res.status(500).json({error:'Could not load school dashboard.'})}
 });
 
@@ -2171,7 +2171,7 @@ app.get('/api/schools/classes', requireSchoolMembership, async (req,res)=>{
 app.post('/api/schools/classes', requireAuth, async (req,res)=>{
   const fake={query:{},body:req.body}; req.query={schoolId:req.body?.schoolId};
   return requireSchoolMembership({...req,query:req.query},res,async()=>{
-    try{if(!['admin'].includes(req.school.memberRole) && req.user.role!=='admin')return res.status(403).json({error:'School admin access is required.'});const name=String(req.body?.className||'').trim().slice(0,100);if(!name)return res.status(400).json({error:'Class name is required.'});const id='CLS-'+Date.now().toString(36).toUpperCase()+'-'+Math.random().toString(36).slice(2,6).toUpperCase();const r=await db.query(`INSERT INTO school_classes(class_id,school_id,class_name,grade,stream,teacher_email) VALUES($1,$2,$3,$4,$5,$6) RETURNING class_id AS "classId"`,[id,req.school.schoolId,name,String(req.body?.grade||'').trim().slice(0,40),String(req.body?.stream||'').trim().slice(0,40),String(req.body?.teacherEmail||'').trim().toLowerCase().slice(0,160)||null]);res.status(201).json({ok:true,classId:r.rows[0].classId})}catch(e){console.error(e);res.status(500).json({error:'Could not create class.'})}
+    try{if(!['admin'].includes(req.school.memberRole) && req.user.role!=='admin')return res.status(403).json({error:'School admin access is required.'});const name=String(req.body?.className||'').trim().slice(0,100);const grade=String(req.body?.grade||'').trim().slice(0,40);const stream=String(req.body?.stream||'').trim().slice(0,40);const teacher=String(req.body?.teacherEmail||'').trim().toLowerCase().slice(0,160)||null;if(!name)return res.status(400).json({error:'Class name is required.'});if(stream){const dup=await db.query(`SELECT 1 FROM school_classes WHERE school_id=$1 AND lower(class_name)=lower($2) AND lower(COALESCE(grade,''))=lower($3) AND lower(COALESCE(stream,''))=lower($4) LIMIT 1`,[req.school.schoolId,name,grade,stream]);if(dup.rowCount)return res.status(409).json({error:`Stream "${stream}" already exists under ${name}.`})}else{const base=await db.query(`SELECT stream FROM school_classes WHERE school_id=$1 AND lower(class_name)=lower($2) AND lower(COALESCE(grade,''))=lower($3) LIMIT 20`,[req.school.schoolId,name,grade]);if(base.rowCount)return res.status(409).json({error:`${name} already exists. Use Add Stream to add another stream under this class.`})}const id='CLS-'+Date.now().toString(36).toUpperCase()+'-'+Math.random().toString(36).slice(2,6).toUpperCase();const r=await db.query(`INSERT INTO school_classes(class_id,school_id,class_name,grade,stream,teacher_email) VALUES($1,$2,$3,$4,$5,$6) RETURNING class_id AS "classId"`,[id,req.school.schoolId,name,grade,stream||null,teacher]);res.status(201).json({ok:true,classId:r.rows[0].classId,className:name,grade,stream:stream||''})}catch(e){console.error(e);res.status(500).json({error:'Could not create class.'})}
   });
 });
 
@@ -2343,6 +2343,7 @@ app.post('/api/schools/learners/bulk-register', requireAuth, async (req,res)=>{
         let cls=null;
         if(stream){cls=candidates.find(c=>String(c.stream||'').toLowerCase()===stream.toLowerCase())||null;if(!cls){errors.push({row,error:`Stream "${stream}" does not match Class/Grade "${className}".`});continue;}}
         else if(candidates.length===1){cls=candidates[0];}
+        else {errors.push({row,error:`Class/Grade "${className}" has multiple streams. Enter Stream for this learner.`});continue;}
         const email=String(x.email||'').trim().toLowerCase();
         if(email){if(!email.includes('@')){errors.push({row,error:'Learner Email must be a valid email address.'});continue;}if(emails.has(email)){errors.push({row,error:'Duplicate learner email in this file.'});continue;}emails.add(email);}
         if(x.dateOfBirth && !/^\d{4}-\d{2}-\d{2}$/.test(String(x.dateOfBirth))) {errors.push({row,error:'DOB must be YYYY-MM-DD.'});continue;}

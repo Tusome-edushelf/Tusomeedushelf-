@@ -1291,23 +1291,26 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
 <footer><img src="tusome-logo.png" alt="Tusome EduShelf" style="height:62px;width:auto;display:block;margin:0 auto 10px"><div>© 2026 Tusome EduShelf • Kenya CBE Learning Materials Platform</div><div class="small" style="margin-top:5px">Learn • Manage • Succeed</div></footer>
 
 <script>
-// v102 universal API response guard: never let an HTML error page surface as
+// v103 API burst protection + universal API response guard: never let an HTML error page surface as
 // the misleading browser error `Unexpected token '<' ... is not valid JSON`.
 async function parseApiResponse(response){
   const raw=await response.text();
   const text=String(raw||'').trim();
+  const status=Number(response?.status||0);
+  if(status===429){
+    const retryAfter=response?.headers?.get?.('Retry-After');
+    const wait=retryAfter?` Please wait ${retryAfter} seconds and try again.`:' Please wait a moment and try again.';
+    throw new Error(`The server is temporarily rate-limiting requests (429).${wait}`);
+  }
   if(!text)return {};
   try{return JSON.parse(text)}catch(err){
     const isHtml=/^<!doctype\b|^<html[\s>]/i.test(text);
-    if(isHtml){
-      const status=response?.status?` (${response.status})`:'';
-      throw new Error(`The server returned an HTML page${status} instead of a JSON API response. Please redeploy index.html and server.mjs together, then refresh the page.`);
-    }
-    throw new Error(`The server returned an invalid API response${response?.status?` (${response.status})`:''}. Please refresh the page or redeploy the matching application files.`);
+    if(isHtml)throw new Error(`The server returned an HTML page${status?` (${status})`:''} instead of a JSON API response. Please redeploy index.html and server.mjs together, then refresh the page.`);
+    throw new Error(`The server returned an invalid API response${status?` (${status})`:''}. Please refresh the page or redeploy the matching application files.`);
   }
 }
 function escapeHtml(value){return String(value??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
-function showToast(message,type='info',duration=4200){const region=document.getElementById('tusomeToastRegion');if(!region)return;const item=document.createElement('div');item.className='tusome-toast '+type;item.setAttribute('role',type==='error'?'alert':'status');const close=document.createElement('button');close.type='button';close.setAttribute('aria-label','Dismiss message');close.textContent='×';const text=document.createElement('span');text.textContent=String(message||'');item.append(close,text);region.appendChild(item);const timer=setTimeout(()=>item.remove(),duration);close.addEventListener('click',()=>{clearTimeout(timer);item.remove()})}
+function showToast(message,type='info',duration=4200){const region=document.getElementById('tusomeToastRegion');if(!region)return;const msg=String(message||'');const now=Date.now();if(window.__lastToast && window.__lastToast.message===msg && window.__lastToast.type===type && now-window.__lastToast.at<3500)return;window.__lastToast={message:msg,type,at:now};const item=document.createElement('div');item.className='tusome-toast '+type;item.setAttribute('role',type==='error'?'alert':'status');const close=document.createElement('button');close.type='button';close.setAttribute('aria-label','Dismiss message');close.textContent='×';const text=document.createElement('span');text.textContent=msg;item.append(close,text);region.appendChild(item);const timer=setTimeout(()=>item.remove(),duration);close.addEventListener('click',()=>{clearTimeout(timer);item.remove()})}
 function friendlyError(error,fallback='Something went wrong. Please try again.'){const msg=String(error?.message||error||'').trim();return msg||fallback}
 
 const key='edushelfMaterials';
@@ -2532,7 +2535,26 @@ function openSchoolRoleWorkspace(target){
   }
 }
 
-async function loadSchoolManagement(){loadSchoolPlanStatus();loadSchoolExecutiveOverview();const sel=document.getElementById('schoolWorkspaceSelect');if(!sel)return;try{const r=await fetch('/api/schools/mine',{credentials:'include'});const raw=await r.text();let d={};try{d=JSON.parse(raw)}catch{throw new Error('The school API returned HTML instead of JSON. Redeploy index.html and server.mjs together on Render.')}if(!r.ok)throw new Error(d.error||'Could not load school access.');schoolWorkspaces=d.schools||[];updateSchoolRoleCards();sel.innerHTML=schoolWorkspaces.length?schoolWorkspaces.map(x=>`<option value="${escapeHtml(x.schoolId)}" data-member-role="${escapeHtml(x.memberRole)}">${escapeHtml(x.schoolName)} — ${escapeHtml(x.memberRole)}</option>`).join(''):'<option value="">No active school workspace</option>';if(!schoolWorkspaces.length){document.getElementById('schoolWorkspace').style.display='none';document.getElementById('schoolAccessStatus').textContent='No active school workspace is available. Request one from Premium Membership or ask your school administrator to add your account.';return}selectedSchoolId=selectedSchoolId&&schoolWorkspaces.some(x=>x.schoolId===selectedSchoolId)?selectedSchoolId:schoolWorkspaces[0].schoolId;sel.value=selectedSchoolId;loadSelectedSchool();loadSchoolPlanStatus()}catch(e){sel.innerHTML='<option value="">Unable to load</option>';showToast?.(e.message,'error')}}
+let __schoolManagementPromise=null;
+async function loadSchoolManagement(){
+  if(__schoolManagementPromise)return __schoolManagementPromise;
+  __schoolManagementPromise=(async()=>{
+    const sel=document.getElementById('schoolWorkspaceSelect');if(!sel)return;
+    try{
+      const r=await fetch('/api/schools/mine',{credentials:'include'});
+      const d=await parseApiResponse(r);
+      if(!r.ok)throw new Error(d.error||'Could not load school access.');
+      schoolWorkspaces=d.schools||[];updateSchoolRoleCards();
+      sel.innerHTML=schoolWorkspaces.length?schoolWorkspaces.map(x=>`<option value="${escapeHtml(x.schoolId)}" data-member-role="${escapeHtml(x.memberRole)}">${escapeHtml(x.schoolName)} — ${escapeHtml(x.memberRole)}</option>`).join(''):'<option value="">No active school workspace</option>';
+      if(!schoolWorkspaces.length){document.getElementById('schoolWorkspace').style.display='none';document.getElementById('schoolAccessStatus').textContent='No active school workspace is available. Request one from Premium Membership or ask your school administrator to add your account.';return;}
+      selectedSchoolId=selectedSchoolId&&schoolWorkspaces.some(x=>x.schoolId===selectedSchoolId)?selectedSchoolId:schoolWorkspaces[0].schoolId;sel.value=selectedSchoolId;
+      await loadSelectedSchool();
+      await loadSchoolPlanStatus();
+      await loadSchoolExecutiveOverview();
+    }catch(e){sel.innerHTML='<option value="">Unable to load</option>';showToast?.(e.message,'error')}
+  })();
+  try{return await __schoolManagementPromise}finally{__schoolManagementPromise=null}
+}
 
 async function loadSchoolExecutiveOverview(){
   const box=document.getElementById('schoolExecutiveOverview'); if(!box)return;
@@ -2551,7 +2573,19 @@ async function loadSchoolExecutiveOverview(){
   }
 }
 
-async function loadSelectedSchool(){const sel=document.getElementById('schoolWorkspaceSelect');selectedSchoolId=sel?.value||selectedSchoolId;if(!selectedSchoolId)return;try{const r=await fetch('/api/schools/dashboard?schoolId='+encodeURIComponent(selectedSchoolId),{credentials:'include'});const d=await parseApiResponse(r);if(!r.ok)throw new Error(d.error||'Could not load school dashboard.');document.getElementById('schoolWorkspace').style.display='block';document.getElementById('schoolAccessStatus').textContent=`${d.school.schoolName} · ${d.school.memberRole}`;document.getElementById('schoolMemberCount').textContent=d.counts.members;document.getElementById('schoolTeacherCount').textContent=d.counts.teachers;document.getElementById('schoolLearnerCount').textContent=d.counts.learners;document.getElementById('schoolClassCount').textContent=d.counts.classes;window.schoolData=d;renderSchoolManagement(d);loadAcademicManagement();loadRegisteredLearners()}catch(e){document.getElementById('schoolWorkspace').style.display='none';showToast?.(e.message,'error')}}
+let __selectedSchoolPromise=null;
+async function loadSelectedSchool(){
+  if(__selectedSchoolPromise)return __selectedSchoolPromise;
+  __selectedSchoolPromise=(async()=>{
+    const sel=document.getElementById('schoolWorkspaceSelect');selectedSchoolId=sel?.value||selectedSchoolId;if(!selectedSchoolId)return;
+    try{
+      const r=await fetch('/api/schools/dashboard?schoolId='+encodeURIComponent(selectedSchoolId),{credentials:'include'});
+      const d=await parseApiResponse(r);if(!r.ok)throw new Error(d.error||'Could not load school dashboard.');
+      document.getElementById('schoolWorkspace').style.display='block';document.getElementById('schoolAccessStatus').textContent=`${d.school.schoolName} · ${d.school.memberRole}`;document.getElementById('schoolMemberCount').textContent=d.counts.members;document.getElementById('schoolTeacherCount').textContent=d.counts.teachers;document.getElementById('schoolLearnerCount').textContent=d.counts.learners;document.getElementById('schoolClassCount').textContent=d.counts.classes;window.schoolData=d;renderSchoolManagement(d);loadAcademicManagement();loadRegisteredLearners();
+    }catch(e){document.getElementById('schoolWorkspace').style.display='none';showToast?.(e.message,'error')}
+  })();
+  try{return await __selectedSchoolPromise}finally{__selectedSchoolPromise=null}
+}
 function renderSchoolManagement(d){const classes=d.classes||[],members=d.members||[],materials=d.materials||[];const cls=document.getElementById('schoolClassesTable');const groups=[];const groupMap=new Map();classes.forEach(c=>{const key=`${String(c.grade||c.className||'').trim().toLowerCase()}|${String(c.className||'').trim().toLowerCase()}`;if(!groupMap.has(key)){const g={className:c.className||'',grade:c.grade||'',rows:[]};groupMap.set(key,g);groups.push(g)}groupMap.get(key).rows.push(c)});cls.innerHTML=groups.length?groups.map(g=>{const streams=g.rows.filter(c=>String(c.stream||'').trim());const plain=g.rows.filter(c=>!String(c.stream||'').trim());const streamHtml=streams.length?streams.map(c=>`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:4px 0"><span><b>${escapeHtml(c.stream)}</b> · ${c.learnerCount||0} learner${Number(c.learnerCount||0)===1?'':'s'}${c.teacherEmail?' · '+escapeHtml(c.teacherEmail):''}</span>${d.school.memberRole==='admin'||getSessionRole()==='admin'?`<button class="btn" type="button" onclick="deleteSchoolClass('${escapeHtml(c.classId)}')">Remove stream</button>`:'—'}</div>`).join(''):'<span class="small">No streams yet.</span>';const plainHtml=plain.map(c=>`<div style="margin:4px 0"><b>General</b> · ${c.learnerCount||0} learner${Number(c.learnerCount||0)===1?'':'s'} ${d.school.memberRole==='admin'||getSessionRole()==='admin'?`<button class="btn" type="button" onclick="deleteSchoolClass('${escapeHtml(c.classId)}')">Remove</button>`:''}</div>`).join('');return `<tr><td><b>${escapeHtml(g.className)}</b></td><td>${escapeHtml(g.grade||'—')}</td><td>${streamHtml}${plainHtml}</td><td>${g.rows.reduce((n,c)=>n+Number(c.learnerCount||0),0)}</td><td>${d.school.memberRole==='admin'||getSessionRole()==='admin'?`<button class="btn primary" type="button" onclick="addStreamToClass('${encodeURIComponent(g.className)}','${encodeURIComponent(g.grade||'')}')">＋ Add Stream</button>`:'—'}</td></tr>`}).join(''):'<tr><td colspan="5">No classes yet.</td></tr>';const mt=document.getElementById('schoolMembersTable');mt.innerHTML=members.length?members.map(m=>`<tr><td>${escapeHtml(m.email)}</td><td>${escapeHtml(m.memberRole)}</td><td>${escapeHtml(m.status)}</td><td>${(d.school.memberRole==='admin'||getSessionRole()==='admin')&&m.email!==getSessionUserEmail()?`<button class="btn" onclick="suspendSchoolMember('${encodeURIComponent(m.email)}')">Suspend</button>`:'—'}</td></tr>`).join(''):'<tr><td colspan="4">No members yet.</td></tr>';const classLabel=c=>{const base=[c.className,c.grade].filter((v,i,a)=>v&&a.indexOf(v)===i).join(' · ');return c.stream?`${base} — ${c.stream}`:base};const cs=document.getElementById('schoolInviteClass');if(cs)cs.innerHTML='<option value="">No class</option>'+classes.map(c=>`<option value="${escapeHtml(c.classId)}">${escapeHtml(classLabel(c))}</option>`).join('');const lr=document.getElementById('learnerRegClass');if(lr)lr.innerHTML='<option value="">Select class / stream</option>'+classes.map(c=>`<option value="${escapeHtml(c.classId)}">${escapeHtml(classLabel(c))}</option>`).join('');const pls=document.getElementById('schoolParentLearner');if(pls){const learners=members.filter(m=>m.memberRole==='learner'&&m.status==='active');pls.innerHTML='<option value="">Select learner</option>'+learners.map(m=>`<option value="${escapeHtml(m.email)}">${escapeHtml(m.email)}</option>`).join('');}loadSchoolParentLinks();const rr=document.getElementById('schoolResources');rr.innerHTML=materials.length?materials.map(m=>`<div class="school-resource"><b>${escapeHtml(m.title)}</b><div class="small">${escapeHtml(m.subject||'')} · ${escapeHtml(m.grade||'')} · ${escapeHtml(m.teacherEmail||'')}</div><button class="btn" style="margin-top:6px" onclick="openMaterialById('${escapeHtml(m.id)}')">Open</button></div>`).join(''):'<div class="notice">No approved learning resources yet.</div>';}
 function getSessionUserEmail(){return sessionStorage.getItem('tusomeCurrentUser')||localStorage.getItem('tusomeCurrentUser')||''}
 async function loadAcademicManagement(){if(!selectedSchoolId)return;try{const r=await fetch('/api/schools/academic?schoolId='+encodeURIComponent(selectedSchoolId),{credentials:'include'});const d=await parseApiResponse(r);if(!r.ok)throw new Error(d.error||'Could not load academic data.');window.academicData=d;renderAcademicManagement(d);loadSchoolSubmissions();loadSchoolGradebook()}catch(e){showToast?.(e.message,'error')}}

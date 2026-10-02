@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
-const APP_VERSION='v93-school-stability-consolidated';
+const APP_VERSION='v95-parent-bulk-pdf-credentials';
 app.get('/api/version',(_req,res)=>{res.setHeader('Cache-Control','no-store');res.json({ok:true,version:APP_VERSION,build:'dashboard-sequential-bulk-transaction-parent-required',timestamp:new Date().toISOString()});});
 app.use(express.json({ limit: '18mb' }));
 
@@ -157,7 +157,9 @@ async function initDatabase() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS notification_preferences JSONB NOT NULL DEFAULT '{"email":true,"platform":true}'::jsonb;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT;
     CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_unique ON users(username) WHERE username IS NOT NULL;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_parent_phone_unique ON users(phone) WHERE role='parent' AND phone IS NOT NULL;
     ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
     ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('learner','teacher','admin','parent','school'));
 
@@ -2290,10 +2292,12 @@ app.post('/api/schools/learners/bulk-register', requireAuth, async (req,res)=>{
         const stream=String(x.stream||'').trim();
         const guardianName=String(x.guardianName||'').trim().slice(0,160);
         const guardianPhone=String(x.guardianPhone||'').trim().slice(0,40);
+        const guardianEmail=String(x.guardianEmail||'').trim().toLowerCase().slice(0,160);
         if(!fullName||!admissionNumber||!className||!guardianName||!guardianPhone){
           errors.push({row,error:'Full Name, Admission Number, Class/Grade, Parent/Guardian Name and Parent/Guardian Phone are required.'});
           continue;
         }
+        if(guardianEmail&&!guardianEmail.includes('@')){errors.push({row,error:'Parent/Guardian Email must be a valid email address.'});continue;}
         const ak=admissionNumber.toLowerCase();
         if(admissions.has(ak)){errors.push({row,error:'Duplicate admission number in this file.'});continue;}
         admissions.add(ak);
@@ -2307,7 +2311,7 @@ app.post('/api/schools/learners/bulk-register', requireAuth, async (req,res)=>{
         const email=String(x.email||'').trim().toLowerCase();
         if(email){if(!email.includes('@')){errors.push({row,error:'Learner Email must be a valid email address.'});continue;}if(emails.has(email)){errors.push({row,error:'Duplicate learner email in this file.'});continue;}emails.add(email);}
         if(x.dateOfBirth && !/^\d{4}-\d{2}-\d{2}$/.test(String(x.dateOfBirth))) {errors.push({row,error:'DOB must be YYYY-MM-DD.'});continue;}
-        prepared.push({row,fullName,admissionNumber,classId:cls?.classId||null,className:cls?.className||className,grade:cls?.grade||className,stream:cls?.stream||stream,email,gender:String(x.gender||'').trim()||null,dateOfBirth:String(x.dateOfBirth||'').trim()||null,phone:String(x.phone||'').trim()||null,guardianName,guardianPhone});
+        prepared.push({row,fullName,admissionNumber,classId:cls?.classId||null,className:cls?.className||className,grade:cls?.grade||className,stream:cls?.stream||stream,email,gender:String(x.gender||'').trim()||null,dateOfBirth:String(x.dateOfBirth||'').trim()||null,phone:String(x.phone||'').trim()||null,guardianName,guardianPhone,guardianEmail});
       }
       if(errors.length) return res.status(400).json({error:'Please correct the highlighted rows before registering.',errors});
       const existingAdmissions=await db.query('SELECT admission_number FROM school_learner_profiles WHERE school_id=$1 AND lower(admission_number)=ANY($2::text[])',[req.school.schoolId,prepared.map(x=>x.admissionNumber.toLowerCase())]);
@@ -2316,6 +2320,7 @@ app.post('/api/schools/learners/bulk-register', requireAuth, async (req,res)=>{
       if(existingEmails.rowCount) return res.status(409).json({error:'One or more learner emails already belong to existing accounts.',errors:existingEmails.rows.map(x=>({row:0,error:`Email ${x.email} already exists.`}))});
       const credentials=[];
       const client=await db.connect();
+      const parentCredentialByPhone=new Map();
       try{
         await client.query('BEGIN');
         for(const x of prepared){
@@ -2324,17 +2329,40 @@ app.post('/api/schools/learners/bulk-register', requireAuth, async (req,res)=>{
           const temporaryPassword=crypto.randomBytes(9).toString('base64url');
           await client.query('INSERT INTO users(email,username,role,password_hash,display_name) VALUES($1,$2,\'learner\',$3,$4)',[email,username,hashPassword(temporaryPassword),x.fullName]);
           await client.query('INSERT INTO school_learner_profiles(school_id,learner_email,admission_number,gender,date_of_birth,phone,guardian_name,guardian_phone) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',[req.school.schoolId,email,x.admissionNumber,x.gender,x.dateOfBirth||null,x.phone,x.guardianName,x.guardianPhone]);
-          if(x.classId) await client.query("INSERT INTO school_memberships(school_id,user_email,member_role,status,class_id) VALUES($1,$2,'learner','active',$3)",[req.school.schoolId,email,x.classId]);
-          else await client.query("INSERT INTO school_memberships(school_id,user_email,member_role,status,class_id) VALUES($1,$2,'learner','active',NULL)",[req.school.schoolId,email]);
-          credentials.push({fullName:x.fullName,admissionNumber: x.admissionNumber,username,password:temporaryPassword,className:x.className,stream:x.stream,guardianName:x.guardianName,guardianPhone:x.guardianPhone});
+          await client.query("INSERT INTO school_memberships(school_id,user_email,member_role,status,class_id) VALUES($1,$2,'learner','active',$3)",[req.school.schoolId,email,x.classId||null]);
+
+          let parentPhone;
+          try{parentPhone=normalizePhone(x.guardianPhone)}catch{throw new Error(`Row ${x.row}: Parent/Guardian Phone must be a valid Kenyan phone number (07XXXXXXXX, +2547XXXXXXXX or 2547XXXXXXXX).`)}
+          let parent=await client.query(`SELECT email,username,display_name AS "displayName" FROM users WHERE role='parent' AND (phone=$1 OR username=$1) LIMIT 1`,[parentPhone]);
+          let parentEmail='',parentUsername=parentPhone,parentTemporaryPassword='',parentStatus='Existing parent account';
+          if(!parent.rowCount){
+            parentEmail=x.guardianEmail||`parent.${parentPhone}@tusome.local`;
+            const emailOwner=await client.query('SELECT email,role FROM users WHERE lower(email)=$1 LIMIT 1',[parentEmail]);
+            if(emailOwner.rowCount&&emailOwner.rows[0].role!=='parent') throw new Error(`Row ${x.row}: Parent/Guardian Email is already used by a non-parent account.`);
+            parentTemporaryPassword=crypto.randomBytes(9).toString('base64url');
+            await client.query('INSERT INTO users(email,username,role,password_hash,display_name,phone) VALUES($1,$2,\'parent\',$3,$4,$5)',[parentEmail,parentUsername,hashPassword(parentTemporaryPassword),x.guardianName,parentPhone]);
+            parentStatus='New parent account created';
+            parent={rows:[{email:parentEmail,username:parentUsername,displayName:x.guardianName}],rowCount:1};
+          }else{
+            parentEmail=parent.rows[0].email;
+            parentUsername=parent.rows[0].username||parentPhone;
+            await client.query('UPDATE users SET phone=COALESCE(phone,$1),display_name=COALESCE(NULLIF(display_name,\'\'),$2),updated_at=NOW() WHERE email=$3 AND role=\'parent\'',[parentPhone,x.guardianName,parentEmail]);
+          }
+          const linkId='PGL-'+Date.now().toString(36).toUpperCase()+'-'+crypto.randomBytes(3).toString('hex').toUpperCase();
+          await client.query(`INSERT INTO parent_guardian_links(link_id,school_id,parent_email,learner_email,created_by) VALUES($1,$2,$3,$4,$5) ON CONFLICT(school_id,parent_email,learner_email) DO NOTHING`,[linkId,req.school.schoolId,parentEmail,email,req.user.email]);
+          credentials.push({fullName:x.fullName,admissionNumber,username,password:temporaryPassword,className:x.className,stream:x.stream,guardianName:x.guardianName,guardianPhone:x.guardianPhone,parentName:x.guardianName,parentPhone,parentUsername,parentEmail,parentTemporaryPassword,parentStatus,learnerEmail:email});
+          if(!parentCredentialByPhone.has(parentPhone)) parentCredentialByPhone.set(parentPhone,{parentEmail,parentUsername,parentTemporaryPassword,parentStatus,parentName:x.guardianName});
         }
         await client.query('COMMIT');
       }catch(e){try{await client.query('ROLLBACK')}catch{};throw e}
       finally{client.release()}
-      const csv=['Full Name,Admission Number,Username,Temporary Password,Class/Grade,Stream,Parent/Guardian Name,Parent/Guardian Phone',...credentials.map(x=>[x.fullName,x.admissionNumber,x.username,x.password,x.className,x.stream,x.guardianName,x.guardianPhone].map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(','))].join('\n');
-      void audit({user:req.user},'bulk_register_school_learners','school',req.school.schoolId,{count:credentials.length});
-      res.status(201).json({ok:true,count:credentials.length,credentialsCsv:csv});
-    }catch(e){console.error('bulk learner registration failed:',e);res.status(500).json({error:'Could not complete bulk learner registration.'})}
+      for(const p of parentCredentialByPhone.values()){
+        if(p.parentEmail) void createNotification(p.parentEmail,'Parent/Guardian account ready',`Your Tusome EduShelf Parent/Guardian account is linked to learner(s) registered by ${req.school.schoolId}. Log in using your phone number: ${p.parentUsername}.`,'success');
+      }
+      const csv=['Full Name,Admission Number,Learner Username,Learner Temporary Password,Class/Grade,Stream,Parent/Guardian Name,Parent/Guardian Phone,Parent Username,Parent Email,Parent Temporary Password,Parent Account Status,Linked Learner Email',...credentials.map(x=>[x.fullName,x.admissionNumber,x.username,x.password,x.className,x.stream,x.guardianName,x.guardianPhone,x.parentUsername,x.parentEmail,x.parentTemporaryPassword,x.parentStatus,x.learnerEmail].map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(','))].join('\n');
+      void audit({user:req.user},'bulk_register_school_learners','school',req.school.schoolId,{count:credentials.length,parentAccountsCreated:credentials.filter(x=>x.parentStatus==='New parent account created').length,parentLinksCreated:credentials.length});
+      res.status(201).json({ok:true,count:credentials.length,parentAccountsCreated:credentials.filter(x=>x.parentStatus==='New parent account created').length,parentLinksCreated:credentials.length,credentialsCsv:csv});
+    }catch(e){console.error('bulk learner registration failed:',e);res.status(500).json({error:e.message||'Could not complete bulk learner registration.'})}
   });
 });
 

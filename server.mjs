@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
-const APP_VERSION='v95-parent-bulk-pdf-credentials';
+const APP_VERSION='v96-fresh-start-separated-credentials';
 app.get('/api/version',(_req,res)=>{res.setHeader('Cache-Control','no-store');res.json({ok:true,version:APP_VERSION,build:'dashboard-sequential-bulk-transaction-parent-required',timestamp:new Date().toISOString()});});
 app.use(express.json({ limit: '18mb' }));
 
@@ -2257,6 +2257,41 @@ app.get('/api/schools/learners/credential-report', requireSchoolMembership, asyn
   }catch(e){console.error('existing learner credential report failed:',e);res.status(500).json({error:'Could not generate the existing learner credential report.'})}
 });
 
+app.get('/api/schools/parents/credential-report', requireSchoolMembership, async (req,res)=>{
+  if(req.school.memberRole!=='admin'&&req.user.role!=='admin') return res.status(403).json({error:'School admin access is required.'});
+  try{
+    const r=await db.query(`SELECT u.display_name AS "parentName",COALESCE(u.phone,u.username) AS "parentPhone",u.username,u.email, string_agg(DISTINCT COALESCE(lu.display_name,pgl.learner_email), '; ' ORDER BY COALESCE(lu.display_name,pgl.learner_email)) AS "linkedLearners" FROM parent_guardian_links pgl JOIN users u ON u.email=pgl.parent_email AND u.role='parent' LEFT JOIN users lu ON lu.email=pgl.learner_email WHERE pgl.school_id=$1 GROUP BY u.display_name,u.phone,u.username,u.email ORDER BY u.display_name,u.email`,[req.school.schoolId]);
+    const csv=['Parent/Guardian Name,Parent Phone,Parent Username,Parent Email,Temporary Password,Account Status,Linked Learners',...r.rows.map(x=>[x.parentName,x.parentPhone,x.username,x.email,'Not recoverable - existing account','Existing parent account',x.linkedLearners||''].map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(','))].join('\n');
+    res.set('Content-Type','text/csv; charset=utf-8'); res.set('Content-Disposition',`attachment; filename=Tusome_Parent_Credentials_${new Date().toISOString().slice(0,10)}.csv`); res.send('\ufeff'+csv);
+  }catch(e){console.error('parent credential report failed:',e);res.status(500).json({error:'Could not generate the parent credential report.'})}
+});
+
+app.post('/api/schools/learners/reset', requireAuth, async (req,res)=>{
+  req.query={schoolId:req.body?.schoolId};
+  return requireSchoolMembership(req,res,async()=>{
+    if(req.school.memberRole!=='admin'&&req.user.role!=='admin') return res.status(403).json({error:'School admin access is required.'});
+    if(String(req.body?.confirmation||'')!=='RESET LEARNERS') return res.status(400).json({error:'Type RESET LEARNERS to confirm the fresh-start reset.'});
+    const client=await db.connect();
+    try{
+      await client.query('BEGIN');
+      const learners=(await client.query(`SELECT DISTINCT p.learner_email AS email FROM school_learner_profiles p WHERE p.school_id=$1 UNION SELECT DISTINCT sm.user_email FROM school_memberships sm WHERE sm.school_id=$1 AND sm.member_role='learner'`,[req.school.schoolId])).rows.map(x=>x.email).filter(Boolean);
+      const parents=(await client.query(`SELECT DISTINCT parent_email AS email FROM parent_guardian_links WHERE school_id=$1`,[req.school.schoolId])).rows.map(x=>x.email).filter(Boolean);
+      if(learners.length){
+        const tables=['learner_certificates','learner_gamification_points','learner_learning_preferences','learner_material_activity','learner_portfolio_items','material_reviews','school_assignment_submissions','school_attendance','school_exam_marks','school_fee_charges','school_fee_payments','school_learner_profiles','school_report_cards','study_group_members'];
+        for(const table of tables) await client.query(`DELETE FROM ${table} WHERE learner_email=ANY($1::text[])`,[learners]);
+        await client.query(`DELETE FROM school_memberships WHERE school_id=$1 AND member_role='learner'`,[req.school.schoolId]);
+        await client.query(`DELETE FROM users WHERE role='learner' AND email=ANY($1::text[])`,[learners]);
+      }
+      if(parents.length) await client.query(`DELETE FROM parent_guardian_links WHERE school_id=$1`,[req.school.schoolId]);
+      if(parents.length) await client.query(`DELETE FROM users u WHERE u.role='parent' AND u.email=ANY($1::text[]) AND NOT EXISTS (SELECT 1 FROM parent_guardian_links p WHERE p.parent_email=u.email)`,[parents]);
+      await client.query('COMMIT');
+      void audit({user:req.user},'reset_school_learners','school',req.school.schoolId,{learnersDeleted:learners.length,parentAccountsDeleted:parents.length});
+      res.json({ok:true,learnersDeleted:learners.length,parentAccountsDeleted:parents.length,message:'Learner and school-linked parent data has been cleared. School, classes, subjects and staff were preserved.'});
+    }catch(e){try{await client.query('ROLLBACK')}catch{};console.error('learner reset failed:',e);res.status(500).json({error:'Could not complete the fresh-start reset. No partial reset was committed.'})}
+    finally{client.release()}
+  });
+});
+
 app.patch('/api/schools/learners/:email/placement', requireAuth, async (req,res)=>{
   req.query={schoolId:req.body?.schoolId};
   return requireSchoolMembership(req,res,async()=>{
@@ -2351,7 +2386,7 @@ app.post('/api/schools/learners/bulk-register', requireAuth, async (req,res)=>{
           const linkId='PGL-'+Date.now().toString(36).toUpperCase()+'-'+crypto.randomBytes(3).toString('hex').toUpperCase();
           await client.query(`INSERT INTO parent_guardian_links(link_id,school_id,parent_email,learner_email,created_by) VALUES($1,$2,$3,$4,$5) ON CONFLICT(school_id,parent_email,learner_email) DO NOTHING`,[linkId,req.school.schoolId,parentEmail,email,req.user.email]);
           credentials.push({fullName:x.fullName,admissionNumber,username,password:temporaryPassword,className:x.className,stream:x.stream,guardianName:x.guardianName,guardianPhone:x.guardianPhone,parentName:x.guardianName,parentPhone,parentUsername,parentEmail,parentTemporaryPassword,parentStatus,learnerEmail:email});
-          if(!parentCredentialByPhone.has(parentPhone)) parentCredentialByPhone.set(parentPhone,{parentEmail,parentUsername,parentTemporaryPassword,parentStatus,parentName:x.guardianName});
+          if(!parentCredentialByPhone.has(parentPhone)) parentCredentialByPhone.set(parentPhone,{parentPhone,parentEmail,parentUsername,parentTemporaryPassword,parentStatus,parentName:x.guardianName});
         }
         await client.query('COMMIT');
       }catch(e){try{await client.query('ROLLBACK')}catch{};throw e}
@@ -2359,9 +2394,12 @@ app.post('/api/schools/learners/bulk-register', requireAuth, async (req,res)=>{
       for(const p of parentCredentialByPhone.values()){
         if(p.parentEmail) void createNotification(p.parentEmail,'Parent/Guardian account ready',`Your Tusome EduShelf Parent/Guardian account is linked to learner(s) registered by ${req.school.schoolId}. Log in using your phone number: ${p.parentUsername}.`,'success');
       }
-      const csv=['Full Name,Admission Number,Learner Username,Learner Temporary Password,Class/Grade,Stream,Parent/Guardian Name,Parent/Guardian Phone,Parent Username,Parent Email,Parent Temporary Password,Parent Account Status,Linked Learner Email',...credentials.map(x=>[x.fullName,x.admissionNumber,x.username,x.password,x.className,x.stream,x.guardianName,x.guardianPhone,x.parentUsername,x.parentEmail,x.parentTemporaryPassword,x.parentStatus,x.learnerEmail].map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(','))].join('\n');
+      const csvCell=v=>'\"'+String(v??'').replace(/\"/g,'\"\"')+'\"';
+      const learnerCsv=['Full Name,Admission Number,Learner Username,Learner Temporary Password,Class/Grade,Stream,Learner Email',...credentials.map(x=>[x.fullName,x.admissionNumber,x.username,x.password,x.className,x.stream,x.learnerEmail].map(csvCell).join(','))].join('\n');
+      const parentRows=[...parentCredentialByPhone.values()];
+      const parentCsv=['Parent/Guardian Name,Parent Phone,Parent Username,Parent Email,Parent Temporary Password,Parent Account Status,Linked Learners',...parentRows.map(p=>{const linked=credentials.filter(x=>x.parentPhone===p.parentPhone).map(x=>x.fullName).join('; ');return [p.parentName,p.parentPhone,p.parentUsername,p.parentEmail,p.parentTemporaryPassword,p.parentStatus,linked].map(csvCell).join(',')})].join('\n');
       void audit({user:req.user},'bulk_register_school_learners','school',req.school.schoolId,{count:credentials.length,parentAccountsCreated:credentials.filter(x=>x.parentStatus==='New parent account created').length,parentLinksCreated:credentials.length});
-      res.status(201).json({ok:true,count:credentials.length,parentAccountsCreated:credentials.filter(x=>x.parentStatus==='New parent account created').length,parentLinksCreated:credentials.length,credentialsCsv:csv});
+      res.status(201).json({ok:true,count:credentials.length,parentAccountsCreated:credentials.filter(x=>x.parentStatus==='New parent account created').length,parentLinksCreated:credentials.length,learnerCredentialsCsv:learnerCsv,parentCredentialsCsv:parentCsv});
     }catch(e){console.error('bulk learner registration failed:',e);res.status(500).json({error:e.message||'Could not complete bulk learner registration.'})}
   });
 });

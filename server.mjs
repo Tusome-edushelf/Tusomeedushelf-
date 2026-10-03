@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
-const APP_VERSION='v107-safe-resume-bulk-registration-fix';
+const APP_VERSION='v108-safe-resume-final-tdz-fix';
 app.get('/api/version',(_req,res)=>{res.setHeader('Cache-Control','no-store');res.json({ok:true,version:APP_VERSION,build:'dashboard-sequential-bulk-transaction-parent-required',timestamp:new Date().toISOString()});});
 app.use(express.json({ limit: '18mb' }));
 
@@ -2418,7 +2418,7 @@ app.post('/api/schools/learners/bulk-register', requireAuth, async (req,res)=>{
       const existingSchoolEmailSet=new Set(existingSchoolEmailRows.rows.map(x=>String(x.email||'').toLowerCase()));
       const skippedExistingEmail=[];
       const emailFreshPrepared=[];
-      for(const x of registrationPrepared){
+      for(const x of freshPrepared){
         if(x.email && existingSchoolEmailSet.has(x.email.toLowerCase())){
           skippedExistingEmail.push({row:x.row,admissionNumber:x.admissionNumber,fullName:x.fullName,error:`Learner email ${x.email} is already registered in this school. This learner was skipped.`});
         }else{
@@ -2431,8 +2431,8 @@ app.post('/api/schools/learners/bulk-register', requireAuth, async (req,res)=>{
       if(existingConflictEmails.length){
         return res.status(409).json({error:'One or more learner emails already belong to existing accounts that are not registered as learners in this school.',errors:existingConflictEmails.map(email=>({row:0,error:`Email ${email} already belongs to an existing account.`}))});
       }
-      const registrationPrepared=emailFreshPrepared;
-      if(!registrationPrepared.length){
+      const readyForRegistration=emailFreshPrepared;
+      if(!readyForRegistration.length){
         const allSkipped=[...skippedExisting,...skippedExistingEmail];
         const learnerCsv=['Full Name,Admission Number,Learner Username,Learner Temporary Password,Class/Grade,Stream,Learner Email'];
         const parentCsv=['Parent/Guardian Name,Parent Phone,Parent Username,Parent Email,Parent Temporary Password,Parent Account Status,Linked Learners'];
@@ -2457,7 +2457,7 @@ app.post('/api/schools/learners/bulk-register', requireAuth, async (req,res)=>{
       const parentLinks=[];
       const usedEmails=new Set();
 
-      for(const x of registrationPrepared){
+      for(const x of readyForRegistration){
         const base=makeLearnerUsername(x.fullName,x.admissionNumber);
         let username=base, n=1;
         while(usedUsernames.has(username.toLowerCase())){

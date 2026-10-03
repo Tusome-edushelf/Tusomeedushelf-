@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
-const APP_VERSION='v105-bulk-registration-performance-fix';
+const APP_VERSION='v106-bulk-registration-timeout-fix';
 app.get('/api/version',(_req,res)=>{res.setHeader('Cache-Control','no-store');res.json({ok:true,version:APP_VERSION,build:'dashboard-sequential-bulk-transaction-parent-required',timestamp:new Date().toISOString()});});
 app.use(express.json({ limit: '18mb' }));
 
@@ -90,6 +90,31 @@ function requireAuth(req, res, next) {
 function hashPassword(password, salt) {
   const actualSalt = salt || crypto.randomBytes(16).toString('hex');
   return `${actualSalt}:${crypto.scryptSync(String(password), actualSalt, 64).toString('hex')}`;
+}
+
+function hashPasswordAsync(password, salt) {
+  const actualSalt = salt || crypto.randomBytes(16).toString('hex');
+  return new Promise((resolve, reject) => {
+    crypto.scrypt(String(password), actualSalt, 64, (err, derivedKey) => {
+      if (err) return reject(err);
+      resolve(`${actualSalt}:${derivedKey.toString('hex')}`);
+    });
+  });
+}
+
+async function hashPasswordJobs(jobs, concurrency=4) {
+  const results = new Array(jobs.length);
+  let next = 0;
+  async function worker() {
+    while (true) {
+      const i = next++;
+      if (i >= jobs.length) return;
+      results[i] = await hashPasswordAsync(jobs[i].password, jobs[i].salt);
+    }
+  }
+  const workers = Array.from({length: Math.min(concurrency, jobs.length)}, () => worker());
+  await Promise.all(workers);
+  return results;
 }
 
 function verifyPassword(password, stored) {
@@ -2413,7 +2438,7 @@ app.post('/api/schools/learners/bulk-register', requireAuth, async (req,res)=>{
         }
         usedEmails.add(email.toLowerCase());
         const temporaryPassword=crypto.randomBytes(9).toString('base64url');
-        learnerUsers.push([email,username,'learner',hashPassword(temporaryPassword),x.fullName]);
+        learnerUsers.push({email,username,role:'learner',password:temporaryPassword,displayName:x.fullName});
         learnerProfiles.push([schoolId,email,x.admissionNumber,x.gender,x.dateOfBirth,x.phone,x.guardianName,x.guardianPhone]);
         learnerMemberships.push([schoolId,email,'learner','active',x.classId||null]);
 
@@ -2439,7 +2464,18 @@ app.post('/api/schools/learners/bulk-register', requireAuth, async (req,res)=>{
         if(!parentCredentialByPhone.has(x.parentPhone)) parentCredentialByPhone.set(x.parentPhone,{parentPhone:x.parentPhone,parentEmail,parentUsername,parentTemporaryPassword,parentStatus,parentName:x.guardianName});
       }
 
-      const generatedLearnerEmails=learnerUsers.map(x=>String(x[0]).toLowerCase());
+      // Password hashing is CPU-heavy. Keep it off the request event loop and run a small
+      // bounded number of hashes in parallel so large uploads do not stall or time out.
+      const hashJobs=[
+        ...learnerUsers.map(x=>({password:x.password})),
+        ...newParents.map(x=>({password:x.password}))
+      ];
+      const hashedPasswords=await hashPasswordJobs(hashJobs,4);
+      const learnerHashCount=learnerUsers.length;
+      learnerUsers.forEach((x,i)=>{x.passwordHash=hashedPasswords[i]});
+      newParents.forEach((x,i)=>{x.passwordHash=hashedPasswords[learnerHashCount+i]});
+
+      const generatedLearnerEmails=learnerUsers.map(x=>String(x.email).toLowerCase());
       const generatedParentEmails=[...new Map(newParents.map(p=>[p.email.toLowerCase(),p])).keys()];
       const [emailConflicts,parentEmailConflicts]=await Promise.all([
         db.query('SELECT email FROM users WHERE lower(email)=ANY($1::text[])',[generatedLearnerEmails]),
@@ -2458,12 +2494,12 @@ app.post('/api/schools/learners/bulk-register', requireAuth, async (req,res)=>{
       const bulkInsert=async(sql,params)=>{if(!params.length)return;await client.query(sql,params.flat());};
       try{
         await client.query('BEGIN');
-        await bulkInsert(`INSERT INTO users(email,username,role,password_hash,display_name) VALUES ${learnerUsers.map((_,i)=>`($${i*5+1},$${i*5+2},$${i*5+3},$${i*5+4},$${i*5+5})`).join(',')}`,[...learnerUsers]);
+        await bulkInsert(`INSERT INTO users(email,username,role,password_hash,display_name) VALUES ${learnerUsers.map((_,i)=>`($${i*5+1},$${i*5+2},$${i*5+3},$${i*5+4},$${i*5+5})`).join(',')}`,learnerUsers.map(x=>[x.email,x.username,x.role,x.passwordHash,x.displayName]));
         await bulkInsert(`INSERT INTO school_learner_profiles(school_id,learner_email,admission_number,gender,date_of_birth,phone,guardian_name,guardian_phone) VALUES ${learnerProfiles.map((_,i)=>`($${i*8+1},$${i*8+2},$${i*8+3},$${i*8+4},$${i*8+5},$${i*8+6},$${i*8+7},$${i*8+8})`).join(',')}`,[...learnerProfiles]);
         await bulkInsert(`INSERT INTO school_memberships(school_id,user_email,member_role,status,class_id) VALUES ${learnerMemberships.map((_,i)=>`($${i*5+1},$${i*5+2},$${i*5+3},$${i*5+4},$${i*5+5})`).join(',')}`,[...learnerMemberships]);
         if(newParents.length){
           const parentValues=[];
-          for(const p of newParents) parentValues.push([p.email,p.username,'parent',hashPassword(p.password),p.name,p.phone]);
+          for(const p of newParents) parentValues.push([p.email,p.username,'parent',p.passwordHash,p.name,p.phone]);
           await bulkInsert(`INSERT INTO users(email,username,role,password_hash,display_name,phone) VALUES ${parentValues.map((_,i)=>`($${i*6+1},$${i*6+2},$${i*6+3},$${i*6+4},$${i*6+5},$${i*6+6})`).join(',')}`,[...parentValues]);
         }
         await bulkInsert(`INSERT INTO parent_guardian_links(link_id,school_id,parent_email,learner_email,created_by) VALUES ${parentLinks.map((_,i)=>`($${i*5+1},$${i*5+2},$${i*5+3},$${i*5+4},$${i*5+5})`).join(',')} ON CONFLICT(school_id,parent_email,learner_email) DO NOTHING`,[...parentLinks]);

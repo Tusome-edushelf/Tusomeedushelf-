@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
-const APP_VERSION='v107-safe-resume-bulk-registration';
+const APP_VERSION='v107-safe-resume-bulk-registration-fix';
 app.get('/api/version',(_req,res)=>{res.setHeader('Cache-Control','no-store');res.json({ok:true,version:APP_VERSION,build:'dashboard-sequential-bulk-transaction-parent-required',timestamp:new Date().toISOString()});});
 app.use(express.json({ limit: '18mb' }));
 
@@ -2408,12 +2408,37 @@ app.post('/api/schools/learners/bulk-register', requireAuth, async (req,res)=>{
       const parentPhones=[...new Set(freshPrepared.map(x=>x.parentPhone))];
       const usernameBases=freshPrepared.map(x=>makeLearnerUsername(x.fullName,x.admissionNumber));
 
-      const [existingEmails,existingUsernames,existingParents]=await Promise.all([
+      const [existingEmails,existingSchoolEmailRows,existingUsernames,existingParents]=await Promise.all([
         learnerEmails.length?db.query('SELECT email FROM users WHERE lower(email)=ANY($1::text[])',[learnerEmails]):Promise.resolve({rowCount:0,rows:[]}),
+        learnerEmails.length?db.query('SELECT lower(learner_email) AS email, admission_number FROM school_learner_profiles WHERE school_id=$1 AND lower(learner_email)=ANY($2::text[])',[schoolId,learnerEmails]):Promise.resolve({rowCount:0,rows:[]}),
         db.query('SELECT lower(username) AS username FROM users WHERE username IS NOT NULL AND lower(username)=ANY($1::text[])',[usernameBases.map(x=>x.toLowerCase())]),
         db.query('SELECT email,username,display_name AS "displayName",phone FROM users WHERE role=\'parent\' AND (phone=ANY($1::text[]) OR username=ANY($1::text[]))',[parentPhones])
       ]);
-      if(existingEmails.rowCount) return res.status(409).json({error:'One or more learner emails already belong to existing accounts.',errors:existingEmails.rows.map(x=>({row:0,error:`Email ${x.email} already exists.`}))});
+
+      const existingSchoolEmailSet=new Set(existingSchoolEmailRows.rows.map(x=>String(x.email||'').toLowerCase()));
+      const skippedExistingEmail=[];
+      const emailFreshPrepared=[];
+      for(const x of registrationPrepared){
+        if(x.email && existingSchoolEmailSet.has(x.email.toLowerCase())){
+          skippedExistingEmail.push({row:x.row,admissionNumber:x.admissionNumber,fullName:x.fullName,error:`Learner email ${x.email} is already registered in this school. This learner was skipped.`});
+        }else{
+          emailFreshPrepared.push(x);
+        }
+      }
+      const existingConflictEmails=existingEmails.rows
+        .map(x=>String(x.email||'').toLowerCase())
+        .filter(email=>!existingSchoolEmailSet.has(email));
+      if(existingConflictEmails.length){
+        return res.status(409).json({error:'One or more learner emails already belong to existing accounts that are not registered as learners in this school.',errors:existingConflictEmails.map(email=>({row:0,error:`Email ${email} already belongs to an existing account.`}))});
+      }
+      const registrationPrepared=emailFreshPrepared;
+      if(!registrationPrepared.length){
+        const allSkipped=[...skippedExisting,...skippedExistingEmail];
+        const learnerCsv=['Full Name,Admission Number,Learner Username,Learner Temporary Password,Class/Grade,Stream,Learner Email'];
+        const parentCsv=['Parent/Guardian Name,Parent Phone,Parent Username,Parent Email,Parent Temporary Password,Parent Account Status,Linked Learners'];
+        void audit({user:req.user},'bulk_register_school_learners','school',schoolId,{count:0,skippedExisting:allSkipped.length,parentAccountsCreated:0,parentLinksCreated:0});
+        return res.status(200).json({ok:true,count:0,skippedExisting:allSkipped,parentAccountsCreated:0,parentLinksCreated:0,learnerCredentialsCsv:learnerCsv.join('\n'),parentCredentialsCsv:parentCsv.join('\n'),message:`No new learners were registered. ${allSkipped.length} existing learner(s) were skipped.`});
+      }
 
       const usedUsernames=new Set(existingUsernames.rows.map(x=>String(x.username||'').toLowerCase()));
       const parentByPhone=new Map();
@@ -2430,9 +2455,9 @@ app.post('/api/schools/learners/bulk-register', requireAuth, async (req,res)=>{
       const learnerMemberships=[];
       const newParents=[];
       const parentLinks=[];
-      const usedEmails=new Set(learnerEmails.map(x=>x.toLowerCase()));
+      const usedEmails=new Set();
 
-      for(const x of freshPrepared){
+      for(const x of registrationPrepared){
         const base=makeLearnerUsername(x.fullName,x.admissionNumber);
         let username=base, n=1;
         while(usedUsernames.has(username.toLowerCase())){
@@ -2523,9 +2548,10 @@ app.post('/api/schools/learners/bulk-register', requireAuth, async (req,res)=>{
       const learnerCsv=['Full Name,Admission Number,Learner Username,Learner Temporary Password,Class/Grade,Stream,Learner Email',...credentials.map(x=>[x.fullName,x.admissionNumber,x.username,x.password,x.className,x.stream,x.learnerEmail].map(csvCell).join(','))].join('\n');
       const parentRows=[...parentCredentialByPhone.values()];
       const parentCsv=['Parent/Guardian Name,Parent Phone,Parent Username,Parent Email,Parent Temporary Password,Parent Account Status,Linked Learners',...parentRows.map(p=>{const linked=credentials.filter(x=>x.parentPhone===p.parentPhone).map(x=>x.fullName).join('; ');return [p.parentName,p.parentPhone,p.parentUsername,p.parentEmail,p.parentTemporaryPassword,p.parentStatus,linked].map(csvCell).join(',')})].join('\n');
-      const skippedMessage=skippedExisting.length?` ${skippedExisting.length} existing learner(s) were skipped.`:'';
-      void audit({user:req.user},'bulk_register_school_learners','school',schoolId,{count:credentials.length,skippedExisting:skippedExisting.length,parentAccountsCreated:credentials.filter(x=>x.parentStatus==='New parent account created').length,parentLinksCreated:credentials.length});
-      res.status(201).json({ok:true,count:credentials.length,skippedExisting,parentAccountsCreated:credentials.filter(x=>x.parentStatus==='New parent account created').length,parentLinksCreated:credentials.length,learnerCredentialsCsv:learnerCsv,parentCredentialsCsv:parentCsv,message:`Bulk registration completed.${skippedMessage}`});
+      const allSkipped=[...skippedExisting,...skippedExistingEmail];
+      const skippedMessage=allSkipped.length?` ${allSkipped.length} existing learner(s) were skipped.`:'';
+      void audit({user:req.user},'bulk_register_school_learners','school',schoolId,{count:credentials.length,skippedExisting:allSkipped.length,parentAccountsCreated:credentials.filter(x=>x.parentStatus==='New parent account created').length,parentLinksCreated:credentials.length});
+      res.status(201).json({ok:true,count:credentials.length,skippedExisting:allSkipped,parentAccountsCreated:credentials.filter(x=>x.parentStatus==='New parent account created').length,parentLinksCreated:credentials.length,learnerCredentialsCsv:learnerCsv,parentCredentialsCsv:parentCsv,message:`Bulk registration completed.${skippedMessage}`});
     }catch(e){console.error('bulk learner registration failed:',e);res.status(500).json({error:e.message||'Could not complete bulk learner registration.'})}
   });
 });

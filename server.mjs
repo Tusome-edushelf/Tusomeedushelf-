@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
-const APP_VERSION='v106-bulk-registration-timeout-fix';
+const APP_VERSION='v107-safe-resume-bulk-registration';
 app.get('/api/version',(_req,res)=>{res.setHeader('Cache-Control','no-store');res.json({ok:true,version:APP_VERSION,build:'dashboard-sequential-bulk-transaction-parent-required',timestamp:new Date().toISOString()});});
 app.use(express.json({ limit: '18mb' }));
 
@@ -2393,17 +2393,26 @@ app.post('/api/schools/learners/bulk-register', requireAuth, async (req,res)=>{
 
       const schoolId=req.school.schoolId;
       const admissionKeys=prepared.map(x=>x.admissionNumber.toLowerCase());
-      const learnerEmails=prepared.filter(x=>x.email).map(x=>x.email);
-      const parentPhones=[...new Set(prepared.map(x=>x.parentPhone))];
-      const usernameBases=prepared.map(x=>makeLearnerUsername(x.fullName,x.admissionNumber));
+      const existingAdmissionRows=await db.query('SELECT admission_number FROM school_learner_profiles WHERE school_id=$1 AND lower(admission_number)=ANY($2::text[])',[schoolId,admissionKeys]);
+      const existingAdmissionSet=new Set(existingAdmissionRows.rows.map(x=>String(x.admission_number||'').toLowerCase()));
+      const skippedExisting=prepared.filter(x=>existingAdmissionSet.has(x.admissionNumber.toLowerCase())).map(x=>({row:x.row,admissionNumber:x.admissionNumber,fullName:x.fullName,error:`Admission number ${x.admissionNumber} is already registered in this school. This learner was skipped.`}));
+      const freshPrepared=prepared.filter(x=>!existingAdmissionSet.has(x.admissionNumber.toLowerCase()));
+      if(!freshPrepared.length){
+        const learnerCsv=['Full Name,Admission Number,Learner Username,Learner Temporary Password,Class/Grade,Stream,Learner Email'];
+        const parentCsv=['Parent/Guardian Name,Parent Phone,Parent Username,Parent Email,Parent Temporary Password,Parent Account Status,Linked Learners'];
+        void audit({user:req.user},'bulk_register_school_learners','school',schoolId,{count:0,skippedExisting:skippedExisting.length,parentAccountsCreated:0,parentLinksCreated:0});
+        return res.status(200).json({ok:true,count:0,skippedExisting,parentAccountsCreated:0,parentLinksCreated:0,learnerCredentialsCsv:learnerCsv.join('\n'),parentCredentialsCsv:parentCsv.join('\n'),message:`No new learners were registered. ${skippedExisting.length} existing learner(s) were skipped.`});
+      }
 
-      const [existingAdmissions,existingEmails,existingUsernames,existingParents]=await Promise.all([
-        db.query('SELECT admission_number FROM school_learner_profiles WHERE school_id=$1 AND lower(admission_number)=ANY($2::text[])',[schoolId,admissionKeys]),
+      const learnerEmails=freshPrepared.filter(x=>x.email).map(x=>x.email);
+      const parentPhones=[...new Set(freshPrepared.map(x=>x.parentPhone))];
+      const usernameBases=freshPrepared.map(x=>makeLearnerUsername(x.fullName,x.admissionNumber));
+
+      const [existingEmails,existingUsernames,existingParents]=await Promise.all([
         learnerEmails.length?db.query('SELECT email FROM users WHERE lower(email)=ANY($1::text[])',[learnerEmails]):Promise.resolve({rowCount:0,rows:[]}),
         db.query('SELECT lower(username) AS username FROM users WHERE username IS NOT NULL AND lower(username)=ANY($1::text[])',[usernameBases.map(x=>x.toLowerCase())]),
         db.query('SELECT email,username,display_name AS "displayName",phone FROM users WHERE role=\'parent\' AND (phone=ANY($1::text[]) OR username=ANY($1::text[]))',[parentPhones])
       ]);
-      if(existingAdmissions.rowCount) return res.status(409).json({error:'One or more admission numbers are already registered in this school.',errors:existingAdmissions.rows.map(x=>({row:0,error:`Admission number ${x.admission_number} already exists.`}))});
       if(existingEmails.rowCount) return res.status(409).json({error:'One or more learner emails already belong to existing accounts.',errors:existingEmails.rows.map(x=>({row:0,error:`Email ${x.email} already exists.`}))});
 
       const usedUsernames=new Set(existingUsernames.rows.map(x=>String(x.username||'').toLowerCase()));
@@ -2423,7 +2432,7 @@ app.post('/api/schools/learners/bulk-register', requireAuth, async (req,res)=>{
       const parentLinks=[];
       const usedEmails=new Set(learnerEmails.map(x=>x.toLowerCase()));
 
-      for(const x of prepared){
+      for(const x of freshPrepared){
         const base=makeLearnerUsername(x.fullName,x.admissionNumber);
         let username=base, n=1;
         while(usedUsernames.has(username.toLowerCase())){
@@ -2514,8 +2523,9 @@ app.post('/api/schools/learners/bulk-register', requireAuth, async (req,res)=>{
       const learnerCsv=['Full Name,Admission Number,Learner Username,Learner Temporary Password,Class/Grade,Stream,Learner Email',...credentials.map(x=>[x.fullName,x.admissionNumber,x.username,x.password,x.className,x.stream,x.learnerEmail].map(csvCell).join(','))].join('\n');
       const parentRows=[...parentCredentialByPhone.values()];
       const parentCsv=['Parent/Guardian Name,Parent Phone,Parent Username,Parent Email,Parent Temporary Password,Parent Account Status,Linked Learners',...parentRows.map(p=>{const linked=credentials.filter(x=>x.parentPhone===p.parentPhone).map(x=>x.fullName).join('; ');return [p.parentName,p.parentPhone,p.parentUsername,p.parentEmail,p.parentTemporaryPassword,p.parentStatus,linked].map(csvCell).join(',')})].join('\n');
-      void audit({user:req.user},'bulk_register_school_learners','school',schoolId,{count:credentials.length,parentAccountsCreated:credentials.filter(x=>x.parentStatus==='New parent account created').length,parentLinksCreated:credentials.length});
-      res.status(201).json({ok:true,count:credentials.length,parentAccountsCreated:credentials.filter(x=>x.parentStatus==='New parent account created').length,parentLinksCreated:credentials.length,learnerCredentialsCsv:learnerCsv,parentCredentialsCsv:parentCsv});
+      const skippedMessage=skippedExisting.length?` ${skippedExisting.length} existing learner(s) were skipped.`:'';
+      void audit({user:req.user},'bulk_register_school_learners','school',schoolId,{count:credentials.length,skippedExisting:skippedExisting.length,parentAccountsCreated:credentials.filter(x=>x.parentStatus==='New parent account created').length,parentLinksCreated:credentials.length});
+      res.status(201).json({ok:true,count:credentials.length,skippedExisting,parentAccountsCreated:credentials.filter(x=>x.parentStatus==='New parent account created').length,parentLinksCreated:credentials.length,learnerCredentialsCsv:learnerCsv,parentCredentialsCsv:parentCsv,message:`Bulk registration completed.${skippedMessage}`});
     }catch(e){console.error('bulk learner registration failed:',e);res.status(500).json({error:e.message||'Could not complete bulk learner registration.'})}
   });
 });

@@ -1738,7 +1738,11 @@ async function login(e){
   const password=form.querySelector('input[type="password"]').value;
   button.disabled=true;button.textContent='Logging in...';
   try{
-    const res=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({identifier,username:identifier,email:identifier,password,role})});
+    let res=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({identifier,username:identifier,email:identifier,password,role})});
+    // Compatibility fallback for older cached EduShelf pages.
+    if(res.status===404){
+      res=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({identifier,username:identifier,email:identifier,password,role})});
+    }
     const raw=await res.text();
     let data={};
     try{data=JSON.parse(raw)}catch{throw new Error('The EduShelf server returned an unexpected response. Please redeploy the latest EduShelf files on Render and try again.')} 

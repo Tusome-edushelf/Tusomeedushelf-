@@ -1289,17 +1289,28 @@ app.post('/api/auth/school-register', async (req,res)=>{
   }catch(e){console.error(e);res.status(500).json({error:'Could not create the school account.'})}
 });
 
-app.post('/api/auth/login', async (req, res) => {
-  const identifier=String(req.body?.identifier||req.body?.username||req.body?.email||'').trim();
-  const password=String(req.body?.password||'');
-  const role=String(req.body?.role||'').trim().toLowerCase();
-  const user=await findUser(identifier);
-  if(!user || !verifyPassword(password,user.passwordHash)) return res.status(401).json({error:'Invalid username/email and password.'});
-  if(!['learner','teacher','admin','parent','school'].includes(role) || user.role!==role) return res.status(403).json({error:'The selected account type does not match this account.'});
-  setSessionCookie(res,user);
-  void audit({user},'login','user',user.email);
-  res.json({ok:true,user:{email:user.email,username:user.username||null,role:user.role}});
-});
+app.post('/api/auth/login', handleAuthLogin);
+
+// Login compatibility aliases: older cached clients may still call /api/login or /api/auth/signin.
+async function handleAuthLogin(req, res) {
+  try {
+    const identifier=String(req.body?.identifier||req.body?.username||req.body?.email||'').trim();
+    const password=String(req.body?.password||'');
+    const role=String(req.body?.role||'').trim().toLowerCase();
+    const user=await findUser(identifier);
+    if(!user || !verifyPassword(password,user.passwordHash)) return res.status(401).json({error:'Invalid username/email and password.'});
+    if(!['learner','teacher','admin','parent','school'].includes(role) || user.role!==role) return res.status(403).json({error:'The selected account type does not match this account.'});
+    setSessionCookie(res,user);
+    void audit({user},'login','user',user.email);
+    res.json({ok:true,user:{email:user.email,username:user.username||null,role:user.role}});
+  } catch(e) {
+    console.error(e);
+    res.status(500).json({error:'Could not complete login.'});
+  }
+}
+
+app.post('/api/login', handleAuthLogin);
+app.post('/api/auth/signin', handleAuthLogin);
 
 app.get('/api/auth/me', (req, res) => {
   const user = currentUser(req);

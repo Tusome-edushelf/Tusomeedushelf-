@@ -729,7 +729,7 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
     <div class="card"><h3>🤖 AI Assistant</h3><p>Create lesson plans, assessments, notes and learning activities.</p><button class="btn primary" onclick="openAIAssistant('teacher')">Open AI Assistant</button></div>
   </div>
   <section id="teacherExamResultsSection" class="card teacher-section-card" style="margin-top:22px;border:2px solid #dbe5f2;background:linear-gradient(135deg,#f8fbff,#ffffff)">
-    <div class="topline"><div><h3>📝 Exam Results Centre</h3><p class="small">Select an assigned exam, enter the maximum marks, and fill the learner mark sheet directly in the system. Use X for did not sit the exam and Y for an exam irregularity.</p></div><button class="btn" type="button" onclick="loadTeacherExamResultsCentre()">↻ Refresh</button></div>
+    <div class="topline"><div><h3>📝 Exam Results Centre</h3><p class="small">Select an assigned exam, enter the maximum marks, and fill the learner mark sheet directly in the system. Use X for did not sit the exam and Y for an exam irregularity. When saved, the system adds automatic feedback unless you enter your own feedback.</p></div><button class="btn" type="button" onclick="loadTeacherExamResultsCentre()">↻ Refresh</button></div>
     <div id="teacherExamAccessNotice" class="notice" style="margin-top:12px">Checking your school exam access…</div>
     <div id="teacherExamResultsControls" style="display:none;margin-top:14px">
       <div class="school-grid">
@@ -853,7 +853,7 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
       <button class="school-module" onclick="openAIAssistant('school')"><span class="school-module-icon">🤖</span><b>School AI Support</b><small>Planning, school support and learning assistance.</small></button>
     </div>
     <div class="school-content-columns">
-      <div class="card" style="box-shadow:none;border:1px solid #e1e7f0"><h3>⚡ Quick Actions</h3><p class="small">Common school administrator tasks.</p><button class="btn primary" onclick="openVisibleLearnerRegistration()">＋ Register Learner</button><button class="btn primary" type="button" onclick="openBulkLearnerRegistration()">📥 Bulk Register Learners</button><button class="btn primary" type="button" onclick="openCreateSchoolClass()">＋ Create Class</button><button class="btn primary" type="button" onclick="openSchoolExamCreator()">＋ Create Exam</button><button class="btn" onclick="document.getElementById('schoolInviteEmail')?.focus();document.getElementById('schoolWorkspace')?.scrollIntoView({behavior:'smooth'})">＋ Add Teacher/Learner</button><button class="btn" onclick="show('communication')">📢 Publish Announcement</button><button class="btn" onclick="show('attendance')">✅ Open Attendance</button></div>
+      <div class="card" style="box-shadow:none;border:1px solid #e1e7f0"><h3>⚡ Quick Actions</h3><p class="small">Common school administrator tasks.</p><button class="btn primary" onclick="openVisibleLearnerRegistration()">＋ Register Learner</button><button class="btn primary" type="button" onclick="openBulkLearnerRegistration()">📥 Bulk Register Learners</button><button class="btn primary" type="button" onclick="openCreateSchoolClass()">＋ Create Class</button><button class="btn primary" type="button" onclick="openSchoolExamCreator()">＋ Create Exam</button><button class="btn primary" type="button" onclick="show('exams');loadSchoolAdminExamReview()">🛡️ Review Submitted Exams</button><button class="btn" onclick="document.getElementById('schoolInviteEmail')?.focus();document.getElementById('schoolWorkspace')?.scrollIntoView({behavior:'smooth'})">＋ Add Teacher/Learner</button><button class="btn" onclick="show('communication')">📢 Publish Announcement</button><button class="btn" onclick="show('attendance')">✅ Open Attendance</button></div>
     </div>
   </div>
   <div id="schoolLearnerRegistrationQuick" class="card" style="margin-top:14px;border:2px solid #2563eb;background:#f8fbff;display:none">
@@ -1008,7 +1008,7 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
   <div id="examAdminPanel" class="card" style="margin-top:14px;display:none"><h3>➕ Create Exam</h3><p class="small">Subjects are loaded automatically from the KICD regular curriculum-design list for the selected Grade 7, 8 or 9 class. If a grade is outside the configured Junior School list, the school's existing subjects remain available.</p><div class="school-grid"><label>Title<input id="examTitle" maxlength="160" placeholder="Term 1 Assessment"></label><label>Classes / Streams<select id="examClass" multiple size="6" onchange="updateExamSubjectsForSelectedClasses()"></select></label><label>Subjects<select id="examSubject" multiple size="8"></select></label><label>Date<input id="examDate" type="date"></label></div><p class="small">Select one or more class/streams and one or more subjects. The same assessment will be created for each selected class/subject combination. <b>The teacher sets the maximum marks when uploading marks.</b></p><p id="examCurriculumStatus" class="small" style="margin-top:8px"></p><button class="btn primary" onclick="createExamV44()">Create Exam</button></div>
   <div id="examTeacherPanel" class="card" style="margin-top:14px;display:none"><h3>📋 Marks Entry</h3><label>Exam<select id="marksExam" onchange="loadExamMarksV44()"></select></label><div class="table-like" style="margin-top:12px;overflow:auto"><table><thead><tr><th>Learner</th><th>Marks</th><th>Grade</th><th>Comment</th></tr></thead><tbody id="examMarksRows"><tr><td colspan="4">Select an exam.</td></tr></tbody></table></div><button class="btn primary" onclick="saveExamMarksV44()">💾 Save Marks</button></div>
   <div class="card" style="margin-top:14px"><h3>📝 Exams</h3><div class="table-like" style="overflow:auto"><table><thead><tr><th>Exam</th><th>Class</th><th>Subject</th><th>Date</th><th>Max</th><th>Status</th></tr></thead><tbody id="examsRows"><tr><td colspan="6">Loading…</td></tr></tbody></table></div></div>
-  <div id="examAdminReviewCentre" class="card" style="display:none;margin-top:14px;border:2px solid #d7e3f4"><div class="topline"><div><h3>🛡️ Admin Results Review & Publication</h3><p class="small">Teachers submit completed mark sheets here. The administrator can download a pre-publication PDF for the learner to physically check, then approve and publish directly. Publishing does not return the work to the teacher.</p></div><button class="btn" type="button" onclick="loadAdminExamReviewCentre()">↻ Refresh</button></div><div id="examAdminReviewCentreRows" style="margin-top:12px"><p class="small">Loading submitted results…</p></div></div>
+  <div id="schoolExamReviewPanel" class="card" style="margin-top:14px;display:none;border:2px solid #dbe5f2"><div class="topline"><div><h3>🛡️ School Administrator — Results Review & Publication</h3><p class="small">Teachers submit completed mark sheets here. The administrator can download a pre-publish PDF for the learner to check physically, then approve and publish directly. Publishing does not return the result to the teacher.</p></div><button class="btn" type="button" onclick="loadSchoolAdminExamReview()">↻ Refresh Review Queue</button></div><div id="schoolExamReviewRows" class="table-like" style="margin-top:12px;overflow:auto"><p class="small">Loading submitted results…</p></div></div>
   <div id="reportAdminPanel" class="card" style="margin-top:14px;display:none"><h3>📄 Generate Report Cards</h3><p class="small">Creates draft report cards from recorded exam results. Review before publishing.</p><label>Class<select id="reportClass"></select></label><button class="btn primary" onclick="generateReportsV44()">Generate Draft Reports</button><p id="reportGenerateStatus" class="small"></p></div>
   <div id="learnerResultsPanel" class="card" style="margin-top:14px;display:none"><h3>🎓 My Results</h3><div class="table-like" style="overflow:auto"><table><thead><tr><th>Exam</th><th>Subject</th><th>Date</th><th>Marks</th><th>Grade</th><th>Feedback</th></tr></thead><tbody id="learnerResultsRows"><tr><td colspan="6">Loading…</td></tr></tbody></table></div><h3 style="margin-top:18px">📄 Published Report Cards</h3><div id="learnerReportsList"></div></div>
 </section>
@@ -1833,7 +1833,7 @@ async function loadExamsPage(){
  [admin,teacher,report,learner].forEach(x=>{if(x)x.style.display='none'});
  if(!role)return;
  if(role==='learner'){learner.style.display='block';await loadLearnerResultsV44();return}
- if(isSchoolAdmin){admin.style.display='block';teacher.style.display='block';report.style.display='block';const reviewCentre=document.getElementById('examAdminReviewCentre');if(reviewCentre)reviewCentre.style.display='block';await loadExamSetupV44();await loadExamListV44();await loadTeacherExamResultsCentre();await loadAdminExamReviewCentre();return}
+ if(isSchoolAdmin){admin.style.display='block';teacher.style.display='block';report.style.display='block';await loadExamSetupV44();await loadExamListV44();await loadTeacherExamResultsCentre();await loadSchoolAdminExamReview();return}
  if(role==='teacher'){teacher.style.display='block';await loadTeacherExamResultsCentre();return}
 }
 async function loadExamSetupV44(){
@@ -1861,48 +1861,6 @@ async function updateExamSubjectsForClass(){
   const sr=await fetch('/api/schools/subjects?schoolId='+encodeURIComponent(selectedSchoolId),{credentials:'include'}),sd=await parseApiResponse(sr); const subs=sd.subjects||[]; subject.innerHTML=subs.map(x=>`<option value="${escHtml(x.subjectId)}">${escHtml(x.subjectName)}</option>`).join('')||'<option value="">No subjects</option>'; if(status)status.textContent=d.message||"Using the school's existing subject list.";
  }catch(e){subject.innerHTML='<option value="">Unable to load subjects</option>';if(status)status.textContent=e.message;showToast?.(e.message,'error')}
 }
-async function loadAdminExamReviewCentre(){
-  const panel=document.getElementById('examAdminReviewCentre'),box=document.getElementById('examAdminReviewCentreRows');
-  if(!panel||!box)return;
-  const role=getSessionRole(),memberRole=window.schoolData?.school?.memberRole||sessionStorage.getItem('tusomeSchoolMemberRole')||'';
-  if(!(role==='admin'||memberRole==='admin')){panel.style.display='none';return;}
-  panel.style.display='block';box.innerHTML='<p class="small">Loading submitted results…</p>';
-  try{
-    const r=await fetch('/api/schools/exams?schoolId='+encodeURIComponent(selectedSchoolId),{credentials:'include'}),d=await parseApiResponse(r);
-    if(!r.ok)throw new Error(d.error||'Could not load submitted results.');
-    const rows=(d.exams||[]).filter(x=>['pending','approved'].includes(x.approvalStatus));
-    box.innerHTML=rows.map(x=>`<div class="card" style="margin:8px 0"><div class="topline"><div><b>${escHtml(x.title)}</b><p class="small" style="margin:4px 0">${escHtml(x.className||'—')}${x.stream?` — ${escHtml(x.stream)}`:''} · ${escHtml(x.subjectName||'—')} · Max ${escHtml(x.maxMarks??'—')} · <b>${escHtml(x.approvalStatus)}</b></p></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" type="button" onclick="downloadExamPrePublishPdf('${escHtml(x.examId)}')">📄 Pre-publish PDF</button>${x.approvalStatus==='pending'?`<button class="btn primary" type="button" onclick="approveAndPublishExam('${escHtml(x.examId)}')">✅ Approve & Publish</button>`:`<button class="btn primary" type="button" onclick="publishExam('${escHtml(x.examId)}')">📢 Publish Results</button>`}</div></div></div>`).join('')||'<div class="notice">No teacher-submitted results are waiting for administrator review.</div>';
-  }catch(e){box.innerHTML=`<div class="notice">${escHtml(e.message)}</div>`}
-}
-async function downloadExamPrePublishPdf(id){
-  try{
-    const r=await fetch('/api/schools/exams/'+encodeURIComponent(id)+'/marks?schoolId='+encodeURIComponent(selectedSchoolId),{credentials:'include'}),d=await parseApiResponse(r);
-    if(!r.ok)throw new Error(d.error||'Could not load exam results for the PDF.');
-    const ex=d.exam||{},rows=d.rows||[];
-    if(!rows.length)throw new Error('There are no learner results to place in the PDF.');
-    const schoolName=window.schoolData?.school?.schoolName||'School';
-    const esc=v=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    const statusLabel=x=>x.markStatus==='absent'?'X — Did not do exam':x.markStatus==='irregular'?'Y — Exam irregularity':'Present';
-    const tableRows=rows.map((x,i)=>[i+1,x.fullName||'Learner',x.admissionNumber||'—',statusLabel(x),x.markStatus==='present'?(x.marks??'—'):'—',x.markStatus==='present'?(x.grade||'—'):x.markStatus==='absent'?'X':'Y',x.comment||'']);
-    const html=`<html><head><title>Pre-publication Results</title><style>body{font-family:Arial,sans-serif;font-size:11px;margin:28px;color:#111}h1{font-size:18px;margin:0 0 6px}h2{font-size:14px;margin:12px 0 4px}.meta{line-height:1.5;margin-bottom:12px}.notice{border:1px solid #555;padding:8px;margin:10px 0;font-weight:bold}table{width:100%;border-collapse:collapse;margin-top:12px}th,td{border:1px solid #444;padding:5px;text-align:left}th{font-weight:bold}.sign{margin-top:28px;display:flex;gap:40px}.line{border-bottom:1px solid #333;display:inline-block;min-width:180px;height:20px}</style></head><body><h1>${esc(schoolName)}</h1><h2>Pre-Publication Exam Results Check Copy</h2><div class="meta"><b>Exam:</b> ${esc(ex.title)}<br><b>Class:</b> ${esc(ex.className||'—')}${ex.stream?` — ${esc(ex.stream)}`:''}<br><b>Subject:</b> ${esc(ex.subjectName||'—')}<br><b>Exam date:</b> ${esc(ex.exam_date||ex.examDate||'—')}<br><b>Maximum marks:</b> ${esc(ex.max_marks||ex.maxMarks||'—')}</div><div class="notice">NOT YET PUBLISHED — Physical learner verification copy. This document is for checking before official publication.</div><table><thead><tr><th>#</th><th>Learner Name</th><th>Admission No.</th><th>Status</th><th>Marks</th><th>Grade</th><th>Feedback</th></tr></thead><tbody>${tableRows.map(r=>'<tr>'+r.map(esc).map(v=>`<td>${v}</td>`).join('')+'</tr>').join('')}</tbody></table><div class="sign"><div>Administrator: <span class="line"></span></div><div>Date: <span class="line"></span></div></div></body></html>`;
-    const w=window.open('','_blank','noopener,noreferrer');
-    if(!w)throw new Error('Please allow pop-ups to create the PDF check copy.');
-    w.document.write(html);w.document.close();
-    setTimeout(()=>{w.focus();w.print();},300);
-    showToast?.('Pre-publication check copy opened. Choose “Save as PDF” in the print dialog.','success');
-  }catch(e){showToast?.(e.message||'Could not create the pre-publication PDF.','error')}
-}
-async function approveAndPublishExam(id){
-  if(!confirm('Approve these results and publish them directly to learners and parents? The results will not be returned to the teacher.'))return;
-  try{
-    const rr=await fetch('/api/schools/exams/'+encodeURIComponent(id)+'/review?schoolId='+encodeURIComponent(selectedSchoolId),{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({action:'approve'})});
-    const rd=await parseApiResponse(rr);if(!rr.ok)throw new Error(rd.error||'Could not approve results.');
-    const pr=await fetch('/api/schools/exams/'+encodeURIComponent(id)+'/publish?schoolId='+encodeURIComponent(selectedSchoolId),{method:'POST',credentials:'include'});
-    const pd=await parseApiResponse(pr);if(!pr.ok)throw new Error(pd.error||'Could not publish results.');
-    showToast?.('Results approved and published directly by the school administrator.','success');
-    await loadAdminExamReviewCentre();await loadExamListV44();
-  }catch(e){showToast?.(e.message||'Could not approve and publish results.','error')}
-}
 async function loadExamListV44(){const box=document.getElementById('examsRows');try{const r=await fetch('/api/schools/exams?schoolId='+encodeURIComponent(selectedSchoolId),{credentials:'include'}),d=await parseApiResponse(r);if(!r.ok)throw new Error(d.error||'Could not load exams.');const rows=d.exams||[];box.innerHTML=rows.length?rows.map(x=>`<tr><td><b>${escHtml(x.title)}</b></td><td>${escHtml(x.className||'—')}</td><td>${escHtml(x.subjectName||'—')}</td><td>${escHtml(x.examDate||'—')}</td><td>${escHtml(x.maxMarks)}</td><td>${escHtml(x.status)}</td></tr>`).join(''):'<tr><td colspan="6">No exams yet.</td></tr>';const sel=document.getElementById('marksExam');if(sel)sel.innerHTML=rows.map(x=>`<option value="${escHtml(x.examId)}">${escHtml(x.title)} — ${escHtml(x.className||'')}</option>`).join('')||'<option value="">No exams</option>';if(rows.length)loadExamMarksV44()}catch(e){box.innerHTML=`<tr><td colspan="6">${escHtml(e.message)}</td></tr>`}}
 async function updateExamSubjectsForSelectedClasses(){const classSel=document.getElementById('examClass'),subjectSel=document.getElementById('examSubject');if(!classSel||!subjectSel)return;const ids=[...classSel.selectedOptions].map(o=>o.value).filter(Boolean);if(!ids.length){subjectSel.innerHTML='<option value="">Select class/stream first</option>';return}try{const r=await fetch('/api/schools/curriculum-subjects?schoolId='+encodeURIComponent(selectedSchoolId)+'&classIds='+encodeURIComponent(ids.join(',')),{credentials:'include'}),d=await parseApiResponse(r);if(!r.ok)throw new Error(d.error||'Could not load subjects.');const rows=d.subjects||d.rows||[];subjectSel.innerHTML=rows.map(x=>`<option value="${escHtml(x.subjectId||x.subject_id||'')}">${escHtml(x.subjectName||x.subject_name||'')}</option>`).join('')||'<option value="">No subjects available</option>';}catch(e){subjectSel.innerHTML='<option value="">Could not load subjects</option>';showToast?.(e.message,'error')}}
 async function createExamV44(){const title=document.getElementById('examTitle').value.trim(),classIds=[...document.getElementById('examClass').selectedOptions].map(o=>o.value).filter(Boolean),subjectIds=[...document.getElementById('examSubject').selectedOptions].map(o=>o.value).filter(Boolean),examDate=document.getElementById('examDate').value;if(!title||!classIds.length||!subjectIds.length){showToast?.('Title, at least one class/stream and at least one subject are required.','error');return}const payload={schoolId:selectedSchoolId,title,classIds,subjectIds,examDate};try{const r=await fetch('/api/schools/exams?schoolId='+encodeURIComponent(selectedSchoolId),{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(payload)}),d=await parseApiResponse(r);if(!r.ok)throw new Error(d.error||'Could not create exams.');showToast?.(`${d.created||0} exam(s) created. Teachers will set maximum marks when uploading.`,`success`);loadExamListV44()}catch(e){showToast?.(e.message,'error')}}
@@ -1927,6 +1885,42 @@ async function getExamSchool(){
   if(selectedSchoolId)return selectedSchoolId;
   try{const r=await fetch('/api/schools/mine',{credentials:'include'}),d=await parseApiResponse(r);const s=(d.schools||[]).find(x=>['teacher','admin'].includes(x.memberRole));if(s){selectedSchoolId=s.schoolId;return selectedSchoolId}}catch(e){}
   return '';
+}
+async function loadSchoolAdminExamReview(){
+  const panel=document.getElementById('schoolExamReviewPanel'),box=document.getElementById('schoolExamReviewRows');if(!panel||!box)return;
+  try{
+    const sid=selectedSchoolId||await getExamSchool();
+    const mr=await fetch('/api/schools/mine',{credentials:'include'}),md=await parseApiResponse(mr);if(!mr.ok)throw new Error(md.error||'Could not load school membership.');
+    const me=(md.schools||[]).find(x=>x.schoolId===sid);const isAdmin=me?.memberRole==='admin'||getSessionRole()==='admin';
+    panel.style.display=isAdmin?'block':'none';if(!isAdmin)return;
+    const r=await fetch('/api/schools/exams?schoolId='+encodeURIComponent(sid),{credentials:'include'}),d=await parseApiResponse(r);if(!r.ok)throw new Error(d.error||'Could not load exams.');
+    const rows=(d.exams||[]).filter(x=>['pending','approved','published','returned'].includes(String(x.approvalStatus||'draft')));
+    if(!rows.length){box.innerHTML='<p class="small">No submitted exam results are waiting for administrator review.</p>';return}
+    box.innerHTML='<table><thead><tr><th>Exam</th><th>Class / Stream</th><th>Subject</th><th>Submitted</th><th>Workflow</th><th>Action</th></tr></thead><tbody>'+rows.map(x=>{
+      const pending=x.approvalStatus==='pending',published=x.status==='published';
+      const state=published?'Published':x.approvalStatus==='approved'?'Approved':x.approvalStatus==='returned'?'Returned':'Pending review';
+      return `<tr><td><b>${escHtml(x.title)}</b></td><td>${escHtml(x.className||'—')}${x.grade?' · '+escHtml(x.grade):''}${x.stream?' — '+escHtml(x.stream):''}</td><td>${escHtml(x.subjectName||'—')}</td><td>${escHtml(x.submittedAt||'—')}</td><td>${escHtml(state)}</td><td style="white-space:nowrap"><button class="btn" type="button" onclick="downloadExamPrePublishPdf('${escHtml(x.examId)}')">📄 Pre-publish PDF</button> ${pending?`<button class="btn primary" type="button" onclick="approveAndPublishExam('${escHtml(x.examId)}')">✅ Approve & Publish</button>`:'<span class="small">No action needed</span>'}</td></tr>`;
+    }).join('')+'</tbody></table>';
+  }catch(e){panel.style.display='block';box.innerHTML='<p class="small">'+escHtml(e.message)+'</p>'}
+}
+async function downloadExamPrePublishPdf(examId){
+  try{
+    const r=await fetch('/api/schools/exams/'+encodeURIComponent(examId)+'/marks?schoolId='+encodeURIComponent(selectedSchoolId),{credentials:'include',cache:'no-store'}),d=await parseApiResponse(r);if(!r.ok)throw new Error(d.error||'Could not load exam results for the PDF.');
+    const ex=d.exam||{}, rows=d.rows||[];
+    if(!rows.length)throw new Error('No learner results are available for this exam.');
+    const esc=v=>String(v??'').replace(/"/g,'""');
+    const lines=[['Learner Name','Admission No.','Status','Marks','Maximum Marks','Grade','Teacher Feedback'],...rows.map(x=>[x.fullName||'Learner',x.admissionNumber||'',x.markStatus==='absent'?'X':x.markStatus==='irregular'?'Y':'Present',x.markStatus==='present'?(x.marks??''):'',ex.max_marks??'',x.grade||'',x.comment||''])];
+    const csv=lines.map(row=>row.map(v=>'"'+esc(v)+'"').join(',')).join('\n');
+    downloadTextFile(makeTableCredentialPdf(csv,'Tusome EduShelf — Pre-Publish Exam Verification | '+(ex.title||'Exam')),'Tusome_PrePublish_'+String(ex.title||'Exam').replace(/[^A-Za-z0-9_-]+/g,'_')+'_'+new Date().toISOString().slice(0,10)+'.pdf','application/pdf');
+    showToast?.('Pre-publish exam PDF downloaded for physical learner verification.','success');
+  }catch(e){showToast?.(e.message||'Could not create the pre-publish PDF.','error')}
+}
+async function approveAndPublishExam(examId){
+  if(!confirm('Approve and publish these results now? The results will become visible to learners and parents and will not need to return to the teacher.'))return;
+  try{
+    const r=await fetch('/api/schools/exams/'+encodeURIComponent(examId)+'/approve-publish',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({comment:'Approved after school administrator physical verification.'})}),d=await parseApiResponse(r);if(!r.ok)throw new Error(d.error||'Could not approve and publish results.');
+    showToast?.(d.message||'Results approved and published.','success');await loadExamsPage();
+  }catch(e){showToast?.(e.message||'Could not approve and publish results.','error')}
 }
 async function loadTeacherExamResultsCentre(){
   const notice=document.getElementById('teacherExamAccessNotice'),controls=document.getElementById('teacherExamResultsControls'),box=document.getElementById('teacherDashboardExamRows'),review=document.getElementById('examAdminReviewPanel');if(!notice||!controls||!box)return;notice.style.display='none';controls.style.display='none';
@@ -2625,6 +2619,17 @@ function openSchoolRoleWorkspace(target){
   }
 }
 
+async function loadSchoolExamReviewSummary(){
+  const role=getSessionRole();if(role!=='admin'&&window.schoolData?.school?.memberRole!=='admin')return;
+  try{
+    const r=await fetch('/api/schools/exams?schoolId='+encodeURIComponent(selectedSchoolId),{credentials:'include'}),d=await parseApiResponse(r);if(!r.ok)return;
+    const pending=(d.exams||[]).filter(x=>x.approvalStatus==='pending').length;
+    const card=document.getElementById('schoolExecutiveOverview');if(!card)return;
+    const existing=document.getElementById('schoolPendingExamReviewNotice');if(existing)existing.remove();
+    const notice=document.createElement('div');notice.id='schoolPendingExamReviewNotice';notice.className='notice';notice.style.marginTop='12px';notice.innerHTML=pending?`<b>🛡️ ${pending} exam result${pending===1?'':'s'} awaiting review.</b> Download a pre-publish PDF for physical learner verification, then approve and publish directly from Exams & Results. <button class="btn primary" type="button" onclick="show('exams');loadSchoolAdminExamReview()">Open Review Queue</button>`:'<b>✓ Exam review queue clear.</b> No submitted results are currently awaiting administrator review.';
+    card.appendChild(notice);
+  }catch(_e){}
+}
 let __schoolManagementPromise=null;
 window.__schoolDashboardGeneration=window.__schoolDashboardGeneration||0;
 async function loadSchoolManagement(){
@@ -2652,6 +2657,7 @@ async function loadSchoolManagement(){
       await loadSchoolPlanStatus();
       if(generation!==window.__schoolDashboardGeneration || !getSessionRole() || sessionStorage.getItem('tusomeSchoolAccess')!=='true')return;
       await loadSchoolExecutiveOverview();
+      await loadSchoolExamReviewSummary();
     }catch(e){sel.innerHTML='<option value="">Unable to load</option>';showToast?.(e.message,'error')}
   })();
   try{return await __schoolManagementPromise}finally{__schoolManagementPromise=null}

@@ -1,16 +1,10 @@
-Tusome EduShelf v126 — Admin Exam Review & Pre-Publication PDF
+Tusome EduShelf v126 — Admin Exam Review, Pre-Publish PDF & Auto Feedback
 
-Fixes and workflow:
-- Fixed the school administrator exam review panel so it renders instead of failing on a missing review renderer.
-- School administrators can see submitted exam results awaiting review.
-- Admin can download a table-form PRE-PUBLICATION RESULT CHECK PDF containing learner name, admission number, Present/X/Y status, marks, grade and feedback.
-- Admin can physically check/give the pre-publication PDF to the learner before publishing.
-- Admin can approve and publish directly with one action; the teacher does not need to publish after submission.
-- Admin can still return results to the teacher for correction when necessary.
-- Admin is allowed to read submitted exam marks for review; teachers remain restricted to their assigned class/subject.
-- Added server-side approve-and-publish endpoint.
-- No CSV is used for exam mark entry.
-- Existing bulk learner registration CSV workflow is unchanged.
-- No learner reset performed.
-- No GitHub changes.
-- Not deployed to Render.
+1. School administrator now has an Exams & Results review queue visible from the school dashboard and Exams page.
+2. Submitted teacher results show a Pre-publish PDF button for physical learner verification.
+3. School administrator can Approve & Publish directly; the approved results do not return to the teacher for publishing.
+4. Teacher saves still use direct in-system mark entry, including X (did not sit) and Y (irregularity).
+5. If the teacher leaves feedback blank, the server automatically saves feedback based on the result status/grade. Teacher-entered feedback overrides the automatic text.
+6. Published learner/parent result data includes mark status so X/Y can be displayed correctly.
+7. No CSV is used for exam mark entry. Bulk learner registration CSV remains unchanged.
+8. No learner reset, GitHub write, or deployment is performed by this package.

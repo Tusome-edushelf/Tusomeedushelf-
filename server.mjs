@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
-const APP_VERSION='v120-teacher-assigned-exam-workflow';
+const APP_VERSION='v121-kicd-subject-selection-fix';
 
 // KICD regular curriculum-design subjects currently listed for Junior School Grades 7-9.
 // Source: KICD Grade 7, Grade 8 and Grade 9 regular curriculum-design pages.
@@ -2648,13 +2648,26 @@ app.get('/api/schools/overview', requireSchoolMembership, async (req,res)=>{
 
 app.get('/api/schools/academic', requireSchoolMembership, async (req,res)=>{
   try{
+    // Make the KICD subject catalogue available before rendering the teacher-allocation
+    // selectors. This is important because allocation happens before an exam exists.
+    const classGrades=await db.query(`SELECT DISTINCT grade FROM school_classes WHERE school_id=$1`,[req.school.schoolId]);
+    const grades=[...new Set(classGrades.rows.map(x=>normaliseGrade(x.grade)).filter(g=>KICD_JUNIOR_SUBJECTS[g]))];
+    if(grades.length){
+      const names=[...new Set(grades.flatMap(g=>KICD_JUNIOR_SUBJECTS[g]))];
+      const values=[]; const params=[req.school.schoolId,'KICD CBE'];
+      names.forEach((name,i)=>{
+        const id='SUB-'+Date.now().toString(36).toUpperCase()+'-'+Math.random().toString(36).slice(2,7).toUpperCase();
+        const base=3+i*2; values.push(`($${base},$1,$${base+1},$2)`); params.push(id,name);
+      });
+      await db.query(`INSERT INTO school_subjects(subject_id,school_id,subject_name,learning_area) VALUES ${values.join(',')} ON CONFLICT(school_id,subject_name) DO UPDATE SET learning_area=EXCLUDED.learning_area`,params);
+    }
     const [subjects,allocations,terms,assignments]=await Promise.all([
       db.query(`SELECT subject_id AS "subjectId",subject_name AS "subjectName",learning_area AS "learningArea" FROM school_subjects WHERE school_id=$1 ORDER BY subject_name`,[req.school.schoolId]),
-      db.query(`SELECT tsa.subject_id AS "subjectId",ss.subject_name AS "subjectName",tsa.teacher_email AS "teacherEmail",tsa.class_id AS "classId",sc.class_name AS "className" FROM school_teacher_subjects tsa JOIN school_subjects ss ON ss.subject_id=tsa.subject_id JOIN school_classes sc ON sc.class_id=tsa.class_id WHERE tsa.school_id=$1 ORDER BY sc.class_name,ss.subject_name,tsa.teacher_email`,[req.school.schoolId]),
+      db.query(`SELECT tsa.subject_id AS "subjectId",ss.subject_name AS "subjectName",tsa.teacher_email AS "teacherEmail",tsa.class_id AS "classId",sc.class_name AS "className",sc.grade,sc.stream FROM school_teacher_subjects tsa JOIN school_subjects ss ON ss.subject_id=tsa.subject_id JOIN school_classes sc ON sc.class_id=tsa.class_id WHERE tsa.school_id=$1 ORDER BY sc.grade,sc.class_name,sc.stream,ss.subject_name,tsa.teacher_email`,[req.school.schoolId]),
       db.query(`SELECT term_id AS "termId",academic_year AS "academicYear",term_name AS "termName",starts_on AS "startsOn",ends_on AS "endsOn",status FROM school_terms WHERE school_id=$1 ORDER BY academic_year DESC,term_name`,[req.school.schoolId]),
       db.query(`SELECT a.assignment_id AS "assignmentId",a.title,a.instructions,a.due_at AS "dueAt",a.teacher_email AS "teacherEmail",ss.subject_name AS "subjectName",sc.class_name AS "className" FROM school_assignments a JOIN school_subjects ss ON ss.subject_id=a.subject_id JOIN school_classes sc ON sc.class_id=a.class_id WHERE a.school_id=$1 ORDER BY a.created_at DESC LIMIT 100`,[req.school.schoolId])
     ]);
-    res.json({ok:true,subjects:subjects.rows,allocations:allocations.rows,terms:terms.rows,assignments:assignments.rows});
+    res.json({ok:true,subjects:subjects.rows,allocations:allocations.rows,terms:terms.rows,assignments:assignments.rows,kicdGrades:grades});
   }catch(e){console.error(e);res.status(500).json({error:'Could not load academic management.'})}
 });
 app.get('/api/schools/curriculum-subjects', requireSchoolMembership, async (req,res)=>{

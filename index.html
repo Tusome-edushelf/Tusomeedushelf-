@@ -1769,8 +1769,25 @@ async function login(e){
   finally{button.disabled=false;button.textContent='Sign In'}
 }
 function updatePublicUi(){const b=document.getElementById('communicationLaunch');if(!b)return; b.style.display=getSessionRole()?'block':'none';}
-async function logoutUser(){
+function clearSchoolDashboardState(){
+  // Remove the visible school workspace immediately on logout. Any request
+  // already in flight may still finish, so also invalidate its generation.
+  window.__schoolDashboardGeneration=(window.__schoolDashboardGeneration||0)+1;
+  __schoolManagementPromise=null;
+  schoolWorkspaces=[];
+  selectedSchoolId='';
+  window.schoolData=null;
   window.schoolLoginMemberRole='';
+  ['schoolControlCentre','schoolManagementCentre','schoolPlanCard','schoolWorkspaceCard','schoolGlanceCard','schoolWorkspace','schoolExecutiveOverview','schoolGeneralEssentialCards','schoolRoleWorkspacePanel','schoolNameGate'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el)el.style.display='none';
+  });
+  showSchoolAuthGate();
+}
+async function logoutUser(){
+  // Clear the UI before awaiting the server logout so protected school data
+  // cannot remain visible during the network round-trip.
+  clearSchoolDashboardState();
   try{await fetch('/api/auth/logout',{method:'POST',credentials:'include'})}catch{}
   sessionStorage.removeItem('tusomeLoggedIn');
   sessionStorage.removeItem('tusomeRole');
@@ -2556,6 +2573,7 @@ function openSchoolRoleWorkspace(target){
 }
 
 let __schoolManagementPromise=null;
+window.__schoolDashboardGeneration=window.__schoolDashboardGeneration||0;
 async function loadSchoolManagement(){
   const role=getSessionRole();
   const schoolAccess=sessionStorage.getItem('tusomeSchoolAccess')==='true';
@@ -2563,6 +2581,7 @@ async function loadSchoolManagement(){
     showSchoolAuthGate();
     return;
   }
+  const generation=window.__schoolDashboardGeneration;
   if(__schoolManagementPromise)return __schoolManagementPromise;
   __schoolManagementPromise=(async()=>{
     const sel=document.getElementById('schoolWorkspaceSelect');if(!sel)return;
@@ -2570,12 +2589,15 @@ async function loadSchoolManagement(){
       const r=await fetch('/api/schools/mine',{credentials:'include'});
       const d=await parseApiResponse(r);
       if(!r.ok)throw new Error(d.error||'Could not load school access.');
+      if(generation!==window.__schoolDashboardGeneration || !getSessionRole() || sessionStorage.getItem('tusomeSchoolAccess')!=='true')return;
       schoolWorkspaces=d.schools||[];updateSchoolRoleCards();
       sel.innerHTML=schoolWorkspaces.length?schoolWorkspaces.map(x=>`<option value="${escapeHtml(x.schoolId)}" data-member-role="${escapeHtml(x.memberRole)}">${escapeHtml(x.schoolName)} — ${escapeHtml(x.memberRole)}</option>`).join(''):'<option value="">No active school workspace</option>';
       if(!schoolWorkspaces.length){document.getElementById('schoolWorkspace').style.display='none';document.getElementById('schoolAccessStatus').textContent='No active school workspace is available. Request one from Premium Membership or ask your school administrator to add your account.';return;}
       selectedSchoolId=selectedSchoolId&&schoolWorkspaces.some(x=>x.schoolId===selectedSchoolId)?selectedSchoolId:schoolWorkspaces[0].schoolId;sel.value=selectedSchoolId;
       await loadSelectedSchool();
+      if(generation!==window.__schoolDashboardGeneration || !getSessionRole() || sessionStorage.getItem('tusomeSchoolAccess')!=='true')return;
       await loadSchoolPlanStatus();
+      if(generation!==window.__schoolDashboardGeneration || !getSessionRole() || sessionStorage.getItem('tusomeSchoolAccess')!=='true')return;
       await loadSchoolExecutiveOverview();
     }catch(e){sel.innerHTML='<option value="">Unable to load</option>';showToast?.(e.message,'error')}
   })();

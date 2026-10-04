@@ -9,7 +9,23 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
-const APP_VERSION='v117-management-member-lists';
+const APP_VERSION='v119-kicd-cbe-exam-subjects-safe';
+
+// KICD regular curriculum-design subjects currently listed for Junior School Grades 7-9.
+// Source: KICD Grade 7, Grade 8 and Grade 9 regular curriculum-design pages.
+const KICD_JUNIOR_SUBJECTS={
+  'Grade 7':['Agriculture','Arabic','Creative Arts','CRE','English','French','German','HRE','Indigenous Language','Integrated Science','IRE','Kiswahili','Mandarin','Mathematics','Pre-Technical Studies','Social Studies'],
+  'Grade 8':['Agriculture','Arabic','Creative Arts','CRE','English','French','German','HRE','Indigenous Language','Integrated Science','IRE','Kiswahili','Mandarin','Mathematics','Pre-Technical Studies','Social Studies'],
+  'Grade 9':['Agriculture','Arabic','Creative Arts','CRE','English','French','German','HRE','Indigenous Language','Integrated Science','IRE','Kiswahili','Mandarin','Mathematics','Pre-Technical Studies','Social Studies']
+};
+function normaliseGrade(value){
+  const raw=String(value||'').trim();
+  if(/^grade\s*([789])$/i.test(raw)) return `Grade ${raw.match(/[789]/)[0]}`;
+  if(/^g\s*([789])$/i.test(raw)) return `Grade ${raw.match(/[789]/)[0]}`;
+  if(/^[789]$/.test(raw)) return `Grade ${raw}`;
+  return raw;
+}
+
 app.get('/api/version',(_req,res)=>{res.setHeader('Cache-Control','no-store');res.json({ok:true,version:APP_VERSION,build:'dashboard-sequential-bulk-transaction-parent-required',timestamp:new Date().toISOString()});});
 app.use(express.json({ limit: '18mb' }));
 
@@ -2636,6 +2652,22 @@ app.get('/api/schools/academic', requireSchoolMembership, async (req,res)=>{
     res.json({ok:true,subjects:subjects.rows,allocations:allocations.rows,terms:terms.rows,assignments:assignments.rows});
   }catch(e){console.error(e);res.status(500).json({error:'Could not load academic management.'})}
 });
+app.get('/api/schools/curriculum-subjects', requireSchoolMembership, async (req,res)=>{
+  try{
+    const grade=normaliseGrade(req.query?.grade);
+    const names=KICD_JUNIOR_SUBJECTS[grade]||[];
+    if(!names.length)return res.json({ok:true,grade,source:'KICD regular curriculum designs',subjects:[],message:'No automatic KICD Junior School subject list is configured for this grade yet.'});
+    const values=[]; const params=[req.school.schoolId,'KICD CBE'];
+    names.forEach((name,i)=>{
+      const id='SUB-'+Date.now().toString(36).toUpperCase()+'-'+Math.random().toString(36).slice(2,7).toUpperCase();
+      const base=3+i*2; values.push(`($${base},$1,$${base+1},$2)`); params.push(id,name);
+    });
+    await db.query(`INSERT INTO school_subjects(subject_id,school_id,subject_name,learning_area) VALUES ${values.join(',')} ON CONFLICT(school_id,subject_name) DO UPDATE SET learning_area=EXCLUDED.learning_area`,params);
+    const r=await db.query(`SELECT subject_id AS "subjectId",subject_name AS "subjectName",learning_area AS "learningArea" FROM school_subjects WHERE school_id=$1 AND subject_name=ANY($2::text[]) ORDER BY subject_name`,[req.school.schoolId,names]);
+    res.json({ok:true,grade,source:'KICD regular curriculum designs',subjects:r.rows});
+  }catch(e){console.error('KICD curriculum subjects load failed:',e);res.status(500).json({error:'Could not load the KICD curriculum subjects.'})}
+});
+
 app.get('/api/schools/subjects', requireSchoolMembership, async (req,res)=>{
   try{
     const r=await db.query(`SELECT subject_id AS "subjectId",subject_name AS "subjectName",learning_area AS "learningArea" FROM school_subjects WHERE school_id=$1 ORDER BY subject_name`,[req.school.schoolId]);
@@ -2945,7 +2977,7 @@ app.get('/api/schools/exams', requireSchoolMembership, async (req,res)=>{
   catch(e){console.error(e);res.status(500).json({error:'Could not load exams.'})}
 });
 app.post('/api/schools/exams', requireSchoolMembership, async (req,res)=>{
-  try{if(!['teacher','admin'].includes(req.school.role))return res.status(403).json({error:'Teacher or school administrator access is required.'}); const {title,classId,subjectId,examDate,maxMarks}=req.body||{}; if(!title||!classId||!subjectId)return res.status(400).json({error:'Title, class and subject are required.'}); const id='exam_'+Date.now()+'_'+Math.random().toString(36).slice(2,8); await db.query(`INSERT INTO school_exams(exam_id,school_id,class_id,subject_id,title,exam_date,max_marks,status,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,'open',$8)`,[id,req.school.schoolId,classId,subjectId,String(title).trim().slice(0,160),examDate||null,Math.max(1,Number(maxMarks)||100),req.user.email]);res.json({ok:true,examId:id})}
+  try{if(!['teacher','admin'].includes(req.school.role))return res.status(403).json({error:'Teacher or school administrator access is required.'}); const {title,classId,subjectId,examDate,maxMarks}=req.body||{}; if(!title||!classId||!subjectId)return res.status(400).json({error:'Title, class and subject are required.'}); const classRow=(await db.query(`SELECT grade FROM school_classes WHERE class_id=$1 AND school_id=$2`,[classId,req.school.schoolId])).rows[0]; if(!classRow)return res.status(404).json({error:'Class/stream not found.'}); const grade=normaliseGrade(classRow.grade); const allowed=KICD_JUNIOR_SUBJECTS[grade]; if(allowed){const subjectRow=(await db.query(`SELECT subject_name AS "subjectName" FROM school_subjects WHERE subject_id=$1 AND school_id=$2`,[subjectId,req.school.schoolId])).rows[0]; if(!subjectRow||!allowed.includes(subjectRow.subjectName))return res.status(400).json({error:`Select a KICD curriculum subject for ${grade}.`});} const id='exam_'+Date.now()+'_'+Math.random().toString(36).slice(2,8); await db.query(`INSERT INTO school_exams(exam_id,school_id,class_id,subject_id,title,exam_date,max_marks,status,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,'open',$8)`,[id,req.school.schoolId,classId,subjectId,String(title).trim().slice(0,160),examDate||null,Math.max(1,Number(maxMarks)||100),req.user.email]);res.json({ok:true,examId:id})}
   catch(e){console.error(e);res.status(500).json({error:'Could not create exam.'})}
 });
 app.get('/api/schools/exams/:id/marks', requireSchoolMembership, async (req,res)=>{

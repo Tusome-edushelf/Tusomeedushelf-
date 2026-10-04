@@ -853,7 +853,6 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
       <button class="school-module" onclick="openAIAssistant('school')"><span class="school-module-icon">🤖</span><b>School AI Support</b><small>Planning, school support and learning assistance.</small></button>
     </div>
     <div class="school-content-columns">
-      <div class="card" style="box-shadow:none;border:1px solid #e1e7f0"><h3>📋 What you can manage here</h3><ul class="school-dashboard-list"><li>👩🏽‍🏫 Teachers and learners</li><li>🎓 Classes, subjects and teacher allocations</li><li>👪 Parent/guardian links</li><li>📘 Assignments, submissions and gradebook</li><li>📅 Attendance, timetable and school calendar</li><li>💳 School fees and payment records</li><li>📊 Exams, marks and report cards</li><li>📢 School announcements and authorized messages</li><li>📚 Shared digital learning resources</li></ul></div>
       <div class="card" style="box-shadow:none;border:1px solid #e1e7f0"><h3>⚡ Quick Actions</h3><p class="small">Common school administrator tasks.</p><button class="btn primary" onclick="openVisibleLearnerRegistration()">＋ Register Learner</button><button class="btn primary" type="button" onclick="openBulkLearnerRegistration()">📥 Bulk Register Learners</button><button class="btn primary" type="button" onclick="openCreateSchoolClass()">＋ Create Class</button><button class="btn" onclick="document.getElementById('schoolInviteEmail')?.focus();document.getElementById('schoolWorkspace')?.scrollIntoView({behavior:'smooth'})">＋ Add Teacher/Learner</button><button class="btn" onclick="show('communication')">📢 Publish Announcement</button><button class="btn" onclick="show('attendance')">✅ Open Attendance</button></div>
     </div>
   </div>
@@ -876,19 +875,6 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
     </div>
   </div>
     <div id="schoolWorkspaceCard" class="card" style="margin-top:14px;display:none"><label>School workspace<select id="schoolWorkspaceSelect" onchange="loadSelectedSchool()"><option value="">Loading school access...</option></select></label><p id="schoolAccessStatus" class="small" style="margin-top:8px"></p></div>
-  <div id="schoolGlanceCard" class="card" style="margin-top:14px;border:2px solid #dce7f7;background:#f8fbff;display:none">
-    <h3 style="margin-top:0;color:#173f8a">📌 School Dashboard at a Glance</h3>
-    <div class="cards" style="margin-top:12px">
-      <div class="card"><h3>👥 People</h3><p>Teachers, learners and parent/guardian links.</p></div>
-      <div class="card"><h3>🎓 Classes</h3><p>Classes, subjects and teacher allocations.</p></div>
-      <div class="card"><h3>📅 Attendance</h3><p>Daily attendance and school calendar.</p></div>
-      <div class="card"><h3>🗓️ Timetable</h3><p>Lessons, periods and schedules.</p></div>
-      <div class="card"><h3>💰 Fees</h3><p>Charges, payments and balances.</p></div>
-      <div class="card"><h3>📝 Exams</h3><p>Exams, marks, grades and report cards.</p></div>
-      <div class="card"><h3>💬 Communication</h3><p>Announcements and authorised messages.</p></div>
-      <div class="card"><h3>📚 Digital Library</h3><p>Approved digital learning resources.</p></div>
-    </div>
-  </div>
   <div id="schoolWorkspace" style="display:none">
     <div class="school-stat-grid" style="margin-top:16px"><div class="card"><h3>👥 Members</h3><p><b id="schoolMemberCount">0</b></p></div><div class="card"><h3>👩🏽‍🏫 Teachers</h3><p><b id="schoolTeacherCount">0</b></p></div><div class="card"><h3>🎓 Learners</h3><p><b id="schoolLearnerCount">0</b></p></div><div class="card"><h3>📚 Classes</h3><p><b id="schoolClassCount">0</b></p></div></div>
     <div class="school-grid" style="margin-top:16px">

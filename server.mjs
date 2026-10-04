@@ -9,23 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
-const APP_VERSION='v126-admin-exam-review-prepublish-pdf';
-
-// KICD regular curriculum-design subjects currently listed for Junior School Grades 7-9.
-// Source: KICD Grade 7, Grade 8 and Grade 9 regular curriculum-design pages.
-const KICD_JUNIOR_SUBJECTS={
-  'Grade 7':['Agriculture','Arabic','Creative Arts','CRE','English','French','German','HRE','Indigenous Language','Integrated Science','IRE','Kiswahili','Mandarin','Mathematics','Pre-Technical Studies','Social Studies'],
-  'Grade 8':['Agriculture','Arabic','Creative Arts','CRE','English','French','German','HRE','Indigenous Language','Integrated Science','IRE','Kiswahili','Mandarin','Mathematics','Pre-Technical Studies','Social Studies'],
-  'Grade 9':['Agriculture','Arabic','Creative Arts','CRE','English','French','German','HRE','Indigenous Language','Integrated Science','IRE','Kiswahili','Mandarin','Mathematics','Pre-Technical Studies','Social Studies']
-};
-function normaliseGrade(value){
-  const raw=String(value||'').trim();
-  if(/^grade\s*([789])$/i.test(raw)) return `Grade ${raw.match(/[789]/)[0]}`;
-  if(/^g\s*([789])$/i.test(raw)) return `Grade ${raw.match(/[789]/)[0]}`;
-  if(/^[789]$/.test(raw)) return `Grade ${raw}`;
-  return raw;
-}
-
+const APP_VERSION='v81-dashboard-bulk-fix';
 app.get('/api/version',(_req,res)=>{res.setHeader('Cache-Control','no-store');res.json({ok:true,version:APP_VERSION,build:'dashboard-sequential-bulk-transaction-parent-required',timestamp:new Date().toISOString()});});
 app.use(express.json({ limit: '18mb' }));
 
@@ -108,31 +92,6 @@ function hashPassword(password, salt) {
   return `${actualSalt}:${crypto.scryptSync(String(password), actualSalt, 64).toString('hex')}`;
 }
 
-function hashPasswordAsync(password, salt) {
-  const actualSalt = salt || crypto.randomBytes(16).toString('hex');
-  return new Promise((resolve, reject) => {
-    crypto.scrypt(String(password), actualSalt, 64, (err, derivedKey) => {
-      if (err) return reject(err);
-      resolve(`${actualSalt}:${derivedKey.toString('hex')}`);
-    });
-  });
-}
-
-async function hashPasswordJobs(jobs, concurrency=4) {
-  const results = new Array(jobs.length);
-  let next = 0;
-  async function worker() {
-    while (true) {
-      const i = next++;
-      if (i >= jobs.length) return;
-      results[i] = await hashPasswordAsync(jobs[i].password, jobs[i].salt);
-    }
-  }
-  const workers = Array.from({length: Math.min(concurrency, jobs.length)}, () => worker());
-  await Promise.all(workers);
-  return results;
-}
-
 function verifyPassword(password, stored) {
   try {
     const [salt, expectedHex] = String(stored || '').split(':');
@@ -198,9 +157,7 @@ async function initDatabase() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS notification_preferences JSONB NOT NULL DEFAULT '{"email":true,"platform":true}'::jsonb;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT;
-    ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT;
     CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_unique ON users(username) WHERE username IS NOT NULL;
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_parent_phone_unique ON users(phone) WHERE role='parent' AND phone IS NOT NULL;
     ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
     ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('learner','teacher','admin','parent','school'));
 
@@ -518,9 +475,6 @@ async function initDatabase() {
       UNIQUE(school_id, learner_email)
     );
     CREATE INDEX IF NOT EXISTS idx_school_learner_profiles_school ON school_learner_profiles(school_id);
-    ALTER TABLE school_learner_profiles ADD COLUMN IF NOT EXISTS phone TEXT;
-    ALTER TABLE school_learner_profiles ADD COLUMN IF NOT EXISTS guardian_name TEXT;
-    ALTER TABLE school_learner_profiles ADD COLUMN IF NOT EXISTS guardian_phone TEXT;
 
     CREATE TABLE IF NOT EXISTS school_memberships (
       school_id TEXT NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
@@ -546,8 +500,6 @@ async function initDatabase() {
       class_id TEXT PRIMARY KEY, school_id TEXT NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
       class_name TEXT NOT NULL, grade TEXT, stream TEXT, teacher_email TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
-    ALTER TABLE school_classes ADD COLUMN IF NOT EXISTS stream TEXT;
-    ALTER TABLE school_classes ADD COLUMN IF NOT EXISTS teacher_email TEXT;
     CREATE INDEX IF NOT EXISTS idx_school_classes_school ON school_classes(school_id);
     CREATE TABLE IF NOT EXISTS school_invites (
       invite_id TEXT PRIMARY KEY, school_id TEXT NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
@@ -634,16 +586,17 @@ async function initDatabase() {
       subject_id TEXT NOT NULL REFERENCES school_subjects(subject_id) ON DELETE CASCADE, title TEXT NOT NULL, exam_date DATE, max_marks NUMERIC NOT NULL DEFAULT 100,
       status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','open','closed','published')), created_by TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+    CREATE TABLE IF NOT EXISTS school_exam_marks (
+      mark_id TEXT PRIMARY KEY, exam_id TEXT NOT NULL REFERENCES school_exams(exam_id) ON DELETE CASCADE, school_id TEXT NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
+      learner_email TEXT NOT NULL, marks NUMERIC, grade TEXT, comment TEXT, entered_by TEXT, entered_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(exam_id,learner_email)
+    );
     ALTER TABLE school_exams ADD COLUMN IF NOT EXISTS approval_status TEXT NOT NULL DEFAULT 'draft';
     ALTER TABLE school_exams ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMPTZ;
     ALTER TABLE school_exams ADD COLUMN IF NOT EXISTS reviewed_by TEXT;
     ALTER TABLE school_exams ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMPTZ;
     ALTER TABLE school_exams ADD COLUMN IF NOT EXISTS review_comment TEXT;
-    CREATE TABLE IF NOT EXISTS school_exam_marks (
-      mark_id TEXT PRIMARY KEY, exam_id TEXT NOT NULL REFERENCES school_exams(exam_id) ON DELETE CASCADE, school_id TEXT NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
-      learner_email TEXT NOT NULL, marks NUMERIC, grade TEXT, comment TEXT, mark_status TEXT NOT NULL DEFAULT 'present' CHECK(mark_status IN ('present','absent','irregular')), entered_by TEXT, entered_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      UNIQUE(exam_id,learner_email)
-    );
+    ALTER TABLE school_exam_marks ADD COLUMN IF NOT EXISTS auto_feedback TEXT;
     ALTER TABLE school_exam_marks ADD COLUMN IF NOT EXISTS mark_status TEXT NOT NULL DEFAULT 'present';
     DO $$ BEGIN ALTER TABLE school_exam_marks ADD CONSTRAINT school_exam_marks_status_check CHECK(mark_status IN ('present','absent','irregular')); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
     CREATE TABLE IF NOT EXISTS school_report_cards (
@@ -2177,23 +2130,6 @@ app.patch('/api/admin/schools/:id/status', requireRole('admin'), async (req,res)
 });
 
 // v38 School Management. School admins are represented by active school memberships with member_role='admin'.
-app.post('/api/schools/login', async (req,res)=>{
-  const identifier=String(req.body?.identifier||req.body?.username||req.body?.email||'').trim();
-  const password=String(req.body?.password||'');
-  if(!identifier||!password) return res.status(400).json({error:'Username/email and password are required.'});
-  try{
-    const user=await findUser(identifier);
-    if(!user || !verifyPassword(password,user.passwordHash)) return res.status(401).json({error:'Invalid username/email and password.'});
-    if(!db || !databaseReady) return res.status(503).json({error:'The school database is not ready. Please try again shortly.'});
-    const memberships=await db.query(`SELECT sc.school_id AS "schoolId",sc.school_name AS "schoolName",sc.status,sm.member_role AS "memberRole" FROM school_memberships sm JOIN schools sc ON sc.school_id=sm.school_id WHERE sm.user_email=$1 AND sm.status='active' AND sc.status='active' ORDER BY CASE sm.member_role WHEN 'admin' THEN 0 ELSE 1 END,sc.school_name`,[user.email]);
-    if(!memberships.rowCount) return res.status(403).json({error:'This account does not have an active school workspace.'});
-    const school=memberships.rows[0];
-    setSessionCookie(res,user);
-    void audit({user},'school_login','school',school.schoolId,{memberRole:school.memberRole});
-    res.json({ok:true,user:{email:user.email,username:user.username||null,role:user.role},school});
-  }catch(e){console.error('school login failed:',e);res.status(500).json({error:'Could not complete school login.'})}
-});
-
 app.get('/api/schools/mine', requireAuth, async (req,res)=>{
   if(!databaseReady) return res.json({ok:true,schools:[]});
   try{const r=await db.query(`SELECT sc.school_id AS "schoolId",sc.school_name AS "schoolName",sc.status,sm.member_role AS "memberRole" FROM school_memberships sm JOIN schools sc ON sc.school_id=sm.school_id WHERE sm.user_email=$1 AND sm.status='active' ORDER BY sc.school_name`,[req.user.email]);res.json({ok:true,schools:r.rows})}catch(e){res.status(500).json({error:'Could not load school access.'})}
@@ -2203,25 +2139,18 @@ app.get('/api/schools/dashboard', requireSchoolMembership, async (req,res)=>{
   try{
     // Keep these reads sequential on one request. This avoids the PostgreSQL protocol/bind
     // failure seen in production while preserving the same response shape.
-    const members=await db.query(`SELECT sm.user_email AS "email",u.display_name AS "fullName",u.username,sm.member_role AS "memberRole",sm.status,sm.created_at AS "createdAt",sm.class_id AS "classId",c.class_name AS "className",c.grade,c.stream FROM school_memberships sm LEFT JOIN users u ON u.email=sm.user_email LEFT JOIN school_classes c ON c.class_id=sm.class_id AND c.school_id=sm.school_id WHERE sm.school_id=$1 ORDER BY sm.member_role,COALESCE(u.display_name,sm.user_email),sm.user_email`,[req.school.schoolId]);
-    const classes=await db.query(`SELECT c.class_id AS "classId",c.class_name AS "className",c.grade,c.stream,c.teacher_email AS "teacherEmail",COUNT(sm.user_email)::int AS "learnerCount" FROM school_classes c LEFT JOIN school_memberships sm ON sm.school_id=c.school_id AND sm.class_id=c.class_id AND sm.member_role='learner' AND sm.status='active' WHERE c.school_id=$1 GROUP BY c.class_id ORDER BY c.grade,c.class_name`,[req.school.schoolId]);
+    const members=await db.query(`SELECT user_email AS "email",member_role AS "memberRole",status,created_at AS "createdAt" FROM school_memberships WHERE school_id=$1 ORDER BY member_role,user_email`,[req.school.schoolId]);
+    const classes=await db.query(`SELECT c.class_id AS "classId",c.class_name AS "className",c.grade,c.stream,c.teacher_email AS "teacherEmail",COUNT(sm.user_email)::int AS "learnerCount" FROM school_classes c LEFT JOIN school_memberships sm ON sm.school_id=c.school_id AND sm.class_id=c.class_id AND sm.member_role='learner' AND sm.status='active' GROUP BY c.class_id ORDER BY c.grade,c.class_name`,[req.school.schoolId]);
     const materials=await db.query(`SELECT m.id,m.title,m.subject,m.grade,m.approval_status AS "approvalStatus",m.teacher_email AS "teacherEmail",m.created_at AS "createdAt" FROM materials m WHERE m.approval_status='approved' ORDER BY m.created_at DESC LIMIT 40`);
     const invites=await db.query(`SELECT invite_id AS "inviteId",email,member_role AS "memberRole",class_id AS "classId",status,created_at AS "createdAt" FROM school_invites WHERE school_id=$1 ORDER BY created_at DESC LIMIT 100`,[req.school.schoolId]);
-    res.json({ok:true,school:req.school,members:members.rows,classes:classes.rows,materials:materials.rows,invites:invites.rows,counts:{members:members.rowCount,teachers:members.rows.filter(x=>x.memberRole==='teacher').length,learners:members.rows.filter(x=>x.memberRole==='learner').length,classes:new Set(classes.rows.map(x=>`${String(x.grade||x.className||'').trim().toLowerCase()}|${String(x.className||'').trim().toLowerCase()}`)).size}});
+    res.json({ok:true,school:req.school,members:members.rows,classes:classes.rows,materials:materials.rows,invites:invites.rows,counts:{members:members.rowCount,teachers:members.rows.filter(x=>x.memberRole==='teacher').length,learners:members.rows.filter(x=>x.memberRole==='learner').length,classes:classes.rowCount}});
   }catch(e){console.error('school dashboard load failed:',e);res.status(500).json({error:'Could not load school dashboard.'})}
 });
 
-app.get('/api/schools/classes', requireSchoolMembership, async (req,res)=>{
-  try{
-    const r=await db.query(`SELECT class_id AS "classId",class_name AS "className",grade,stream,teacher_email AS "teacherEmail" FROM school_classes WHERE school_id=$1 ORDER BY grade,class_name,stream`,[req.school.schoolId]);
-    res.json({ok:true,classes:r.rows});
-  }catch(e){console.error('school classes load failed:',e);res.status(500).json({error:'Could not load school classes.'})}
-});
-
 app.post('/api/schools/classes', requireAuth, async (req,res)=>{
-  req.query={schoolId:req.body?.schoolId};
-  return requireSchoolMembership(req,res,async()=>{
-    try{if(!['admin'].includes(req.school.memberRole) && req.user.role!=='admin')return res.status(403).json({error:'School admin access is required.'});const name=String(req.body?.className||'').trim().slice(0,100);const grade=String(req.body?.grade||'').trim().slice(0,40);const stream=String(req.body?.stream||'').trim().slice(0,40);const teacher=String(req.body?.teacherEmail||'').trim().toLowerCase().slice(0,160)||null;if(!name)return res.status(400).json({error:'Class name is required.'});if(stream){const dup=await db.query(`SELECT 1 FROM school_classes WHERE school_id=$1 AND lower(class_name)=lower($2) AND lower(COALESCE(grade,''))=lower($3) AND lower(COALESCE(stream,''))=lower($4) LIMIT 1`,[req.school.schoolId,name,grade,stream]);if(dup.rowCount)return res.status(409).json({error:`Stream "${stream}" already exists under ${name}.`})}else{const base=await db.query(`SELECT stream FROM school_classes WHERE school_id=$1 AND lower(class_name)=lower($2) AND lower(COALESCE(grade,''))=lower($3) LIMIT 20`,[req.school.schoolId,name,grade]);if(base.rowCount)return res.status(409).json({error:`${name} already exists. Use Add Stream to add another stream under this class.`})}const id='CLS-'+Date.now().toString(36).toUpperCase()+'-'+Math.random().toString(36).slice(2,6).toUpperCase();const r=await db.query(`INSERT INTO school_classes(class_id,school_id,class_name,grade,stream,teacher_email) VALUES($1,$2,$3,$4,$5,$6) RETURNING class_id AS "classId"`,[id,req.school.schoolId,name,grade,stream||null,teacher]);res.status(201).json({ok:true,classId:r.rows[0].classId,className:name,grade,stream:stream||''})}catch(e){console.error(e);res.status(500).json({error:'Could not create class.'})}
+  const fake={query:{},body:req.body}; req.query={schoolId:req.body?.schoolId};
+  return requireSchoolMembership({...req,query:req.query},res,async()=>{
+    try{if(!['admin'].includes(req.school.memberRole) && req.user.role!=='admin')return res.status(403).json({error:'School admin access is required.'});const name=String(req.body?.className||'').trim().slice(0,100);if(!name)return res.status(400).json({error:'Class name is required.'});const id='CLS-'+Date.now().toString(36).toUpperCase()+'-'+Math.random().toString(36).slice(2,6).toUpperCase();const r=await db.query(`INSERT INTO school_classes(class_id,school_id,class_name,grade,stream,teacher_email) VALUES($1,$2,$3,$4,$5,$6) RETURNING class_id AS "classId"`,[id,req.school.schoolId,name,String(req.body?.grade||'').trim().slice(0,40),String(req.body?.stream||'').trim().slice(0,40),String(req.body?.teacherEmail||'').trim().toLowerCase().slice(0,160)||null]);res.status(201).json({ok:true,classId:r.rows[0].classId})}catch(e){console.error(e);res.status(500).json({error:'Could not create class.'})}
   });
 });
 
@@ -2293,56 +2222,6 @@ app.get('/api/schools/learners', requireSchoolMembership, async (req,res)=>{
   }catch(e){console.error(e);res.status(500).json({error:'Could not load registered learners.'})}
 });
 
-app.get('/api/schools/learners/credential-report', requireSchoolMembership, async (req,res)=>{
-  if(req.school.memberRole!=='admin'&&req.user.role!=='admin') return res.status(403).json({error:'School admin access is required.'});
-  try{
-    const r=await db.query(`SELECT u.email,u.username,u.display_name AS "fullName",p.admission_number AS "admissionNumber",p.guardian_name AS "guardianName",p.guardian_phone AS "guardianPhone",c.class_name AS "className",c.grade,c.stream FROM school_learner_profiles p JOIN users u ON u.email=p.learner_email LEFT JOIN school_memberships sm ON sm.school_id=p.school_id AND sm.user_email=p.learner_email AND sm.member_role='learner' AND sm.status='active' LEFT JOIN school_classes c ON c.class_id=sm.class_id WHERE p.school_id=$1 ORDER BY p.admission_number`,[req.school.schoolId]);
-    const csv=[
-      'Full Name,Admission Number,Username,Learner Email,Temporary Password,Class/Grade,Stream,Parent/Guardian Name,Parent/Guardian Phone',
-      ...r.rows.map(x=>[x.fullName,x.admissionNumber,x.username,x.email,'Not recoverable - existing account',x.className||x.grade||'',x.stream||'',x.guardianName||'',x.guardianPhone||''].map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(','))
-    ].join('\n');
-    res.set('Content-Type','text/csv; charset=utf-8');
-    res.set('Content-Disposition',`attachment; filename=Tusome_Existing_Learner_Credentials_${new Date().toISOString().slice(0,10)}.csv`);
-    res.send('\ufeff'+csv);
-  }catch(e){console.error('existing learner credential report failed:',e);res.status(500).json({error:'Could not generate the existing learner credential report.'})}
-});
-
-app.get('/api/schools/parents/credential-report', requireSchoolMembership, async (req,res)=>{
-  if(req.school.memberRole!=='admin'&&req.user.role!=='admin') return res.status(403).json({error:'School admin access is required.'});
-  try{
-    const r=await db.query(`SELECT u.display_name AS "parentName",COALESCE(u.phone,u.username) AS "parentPhone",u.username,u.email, string_agg(DISTINCT COALESCE(lu.display_name,pgl.learner_email), '; ' ORDER BY COALESCE(lu.display_name,pgl.learner_email)) AS "linkedLearners" FROM parent_guardian_links pgl JOIN users u ON u.email=pgl.parent_email AND u.role='parent' LEFT JOIN users lu ON lu.email=pgl.learner_email WHERE pgl.school_id=$1 GROUP BY u.display_name,u.phone,u.username,u.email ORDER BY u.display_name,u.email`,[req.school.schoolId]);
-    const csv=['Parent/Guardian Name,Parent Phone,Parent Username,Parent Email,Temporary Password,Account Status,Linked Learners',...r.rows.map(x=>[x.parentName,x.parentPhone,x.username,x.email,'Not recoverable - existing account','Existing parent account',x.linkedLearners||''].map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(','))].join('\n');
-    if(String(req.query?.format||'').toLowerCase()==='json') return res.json({ok:true,parents:r.rows});
-    res.set('Content-Type','text/csv; charset=utf-8'); res.set('Content-Disposition',`attachment; filename=Tusome_Parent_Credentials_${new Date().toISOString().slice(0,10)}.csv`); res.send('\ufeff'+csv);
-  }catch(e){console.error('parent credential report failed:',e);res.status(500).json({error:'Could not generate the parent credential report.'})}
-});
-
-app.post('/api/schools/learners/reset', requireAuth, async (req,res)=>{
-  req.query={schoolId:req.body?.schoolId};
-  return requireSchoolMembership(req,res,async()=>{
-    if(req.school.memberRole!=='admin'&&req.user.role!=='admin') return res.status(403).json({error:'School admin access is required.'});
-    if(String(req.body?.confirmation||'')!=='RESET LEARNERS') return res.status(400).json({error:'Type RESET LEARNERS to confirm the fresh-start reset.'});
-    const client=await db.connect();
-    try{
-      await client.query('BEGIN');
-      const learners=(await client.query(`SELECT DISTINCT p.learner_email AS email FROM school_learner_profiles p WHERE p.school_id=$1 UNION SELECT DISTINCT sm.user_email FROM school_memberships sm WHERE sm.school_id=$1 AND sm.member_role='learner'`,[req.school.schoolId])).rows.map(x=>x.email).filter(Boolean);
-      const parents=(await client.query(`SELECT DISTINCT parent_email AS email FROM parent_guardian_links WHERE school_id=$1`,[req.school.schoolId])).rows.map(x=>x.email).filter(Boolean);
-      if(learners.length){
-        const tables=['learner_certificates','learner_gamification_points','learner_learning_preferences','learner_material_activity','learner_portfolio_items','material_reviews','school_assignment_submissions','school_attendance','school_exam_marks','school_fee_charges','school_fee_payments','school_learner_profiles','school_report_cards','study_group_members'];
-        for(const table of tables) await client.query(`DELETE FROM ${table} WHERE learner_email=ANY($1::text[])`,[learners]);
-        await client.query(`DELETE FROM school_memberships WHERE school_id=$1 AND member_role='learner'`,[req.school.schoolId]);
-        await client.query(`DELETE FROM users WHERE role='learner' AND email=ANY($1::text[])`,[learners]);
-      }
-      if(parents.length) await client.query(`DELETE FROM parent_guardian_links WHERE school_id=$1`,[req.school.schoolId]);
-      if(parents.length) await client.query(`DELETE FROM users u WHERE u.role='parent' AND u.email=ANY($1::text[]) AND NOT EXISTS (SELECT 1 FROM parent_guardian_links p WHERE p.parent_email=u.email)`,[parents]);
-      await client.query('COMMIT');
-      void audit({user:req.user},'reset_school_learners','school',req.school.schoolId,{learnersDeleted:learners.length,parentAccountsDeleted:parents.length});
-      res.json({ok:true,learnersDeleted:learners.length,parentAccountsDeleted:parents.length,message:'Learner and school-linked parent data has been cleared. School, classes, subjects and staff were preserved.'});
-    }catch(e){try{await client.query('ROLLBACK')}catch{};console.error('learner reset failed:',e);res.status(500).json({error:'Could not complete the fresh-start reset. No partial reset was committed.'})}
-    finally{client.release()}
-  });
-});
-
 app.patch('/api/schools/learners/:email/placement', requireAuth, async (req,res)=>{
   req.query={schoolId:req.body?.schoolId};
   return requireSchoolMembership(req,res,async()=>{
@@ -2378,12 +2257,10 @@ app.post('/api/schools/learners/bulk-register', requireAuth, async (req,res)=>{
         const stream=String(x.stream||'').trim();
         const guardianName=String(x.guardianName||'').trim().slice(0,160);
         const guardianPhone=String(x.guardianPhone||'').trim().slice(0,40);
-        const guardianEmail=String(x.guardianEmail||'').trim().toLowerCase().slice(0,160);
         if(!fullName||!admissionNumber||!className||!guardianName||!guardianPhone){
           errors.push({row,error:'Full Name, Admission Number, Class/Grade, Parent/Guardian Name and Parent/Guardian Phone are required.'});
           continue;
         }
-        if(guardianEmail&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guardianEmail)){errors.push({row,error:'Parent/Guardian Email must be a valid email address.'});continue;}
         const ak=admissionNumber.toLowerCase();
         if(admissions.has(ak)){errors.push({row,error:'Duplicate admission number in this file.'});continue;}
         admissions.add(ak);
@@ -2394,189 +2271,37 @@ app.post('/api/schools/learners/bulk-register', requireAuth, async (req,res)=>{
         let cls=null;
         if(stream){cls=candidates.find(c=>String(c.stream||'').toLowerCase()===stream.toLowerCase())||null;if(!cls){errors.push({row,error:`Stream "${stream}" does not match Class/Grade "${className}".`});continue;}}
         else if(candidates.length===1){cls=candidates[0];}
-        else {errors.push({row,error:`Class/Grade "${className}" has multiple streams. Enter Stream for this learner.`});continue;}
         const email=String(x.email||'').trim().toLowerCase();
-        if(email){
-          if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){errors.push({row,error:'Learner Email must be a valid email address.'});continue;}
-          if(emails.has(email)){errors.push({row,error:'Duplicate learner email in this file.'});continue;}
-          emails.add(email);
-        }
-        const dob=String(x.dateOfBirth||'').trim();
-        if(dob){
-          const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(dob);
-          if(!m){errors.push({row,error:'DOB must be YYYY-MM-DD.'});continue;}
-          const dt=new Date(Date.UTC(Number(m[1]),Number(m[2])-1,Number(m[3])));
-          if(dt.getUTCFullYear()!==Number(m[1])||dt.getUTCMonth()!==Number(m[2])-1||dt.getUTCDate()!==Number(m[3])){errors.push({row,error:'DOB must be a valid date in YYYY-MM-DD format.'});continue;}
-        }
-        let parentPhone;
-        try{parentPhone=normalizePhone(guardianPhone)}catch{errors.push({row,error:'Parent/Guardian Phone must be a valid Kenyan phone number (07XXXXXXXX, +2547XXXXXXXX or 2547XXXXXXXX).'});continue;}
-        prepared.push({row,fullName,admissionNumber,classId:cls?.classId||null,className:cls?.className||className,grade:cls?.grade||className,stream:cls?.stream||stream,email,gender:String(x.gender||'').trim()||null,dateOfBirth:dob||null,phone:String(x.phone||'').trim()||null,guardianName,guardianPhone,guardianEmail,parentPhone});
+        if(email){if(!email.includes('@')){errors.push({row,error:'Learner Email must be a valid email address.'});continue;}if(emails.has(email)){errors.push({row,error:'Duplicate learner email in this file.'});continue;}emails.add(email);}
+        if(x.dateOfBirth && !/^\d{4}-\d{2}-\d{2}$/.test(String(x.dateOfBirth))) {errors.push({row,error:'DOB must be YYYY-MM-DD.'});continue;}
+        prepared.push({row,fullName,admissionNumber,classId:cls?.classId||null,className:cls?.className||className,grade:cls?.grade||className,stream:cls?.stream||stream,email,gender:String(x.gender||'').trim()||null,dateOfBirth:String(x.dateOfBirth||'').trim()||null,phone:String(x.phone||'').trim()||null,guardianName,guardianPhone});
       }
       if(errors.length) return res.status(400).json({error:'Please correct the highlighted rows before registering.',errors});
-      if(!prepared.length) return res.status(400).json({error:'No valid learner rows were supplied.'});
-
-      const schoolId=req.school.schoolId;
-      const admissionKeys=prepared.map(x=>x.admissionNumber.toLowerCase());
-      const existingAdmissionRows=await db.query('SELECT admission_number FROM school_learner_profiles WHERE school_id=$1 AND lower(admission_number)=ANY($2::text[])',[schoolId,admissionKeys]);
-      const existingAdmissionSet=new Set(existingAdmissionRows.rows.map(x=>String(x.admission_number||'').toLowerCase()));
-      const skippedExisting=prepared.filter(x=>existingAdmissionSet.has(x.admissionNumber.toLowerCase())).map(x=>({row:x.row,admissionNumber:x.admissionNumber,fullName:x.fullName,error:`Admission number ${x.admissionNumber} is already registered in this school. This learner was skipped.`}));
-      const freshPrepared=prepared.filter(x=>!existingAdmissionSet.has(x.admissionNumber.toLowerCase()));
-      if(!freshPrepared.length){
-        const learnerCsv=['Full Name,Admission Number,Learner Username,Learner Temporary Password,Class/Grade,Stream,Learner Email'];
-        const parentCsv=['Parent/Guardian Name,Parent Phone,Parent Username,Parent Email,Parent Temporary Password,Parent Account Status,Linked Learners'];
-        void audit({user:req.user},'bulk_register_school_learners','school',schoolId,{count:0,skippedExisting:skippedExisting.length,parentAccountsCreated:0,parentLinksCreated:0});
-        return res.status(200).json({ok:true,count:0,skippedExisting,parentAccountsCreated:0,parentLinksCreated:0,learnerCredentialsCsv:learnerCsv.join('\n'),parentCredentialsCsv:parentCsv.join('\n'),message:`No new learners were registered. ${skippedExisting.length} existing learner(s) were skipped.`});
-      }
-
-      const learnerEmails=freshPrepared.filter(x=>x.email).map(x=>x.email);
-      const parentPhones=[...new Set(freshPrepared.map(x=>x.parentPhone))];
-      const usernameBases=freshPrepared.map(x=>makeLearnerUsername(x.fullName,x.admissionNumber));
-
-      const [existingEmails,existingSchoolEmailRows,existingUsernames,existingParents]=await Promise.all([
-        learnerEmails.length?db.query('SELECT email FROM users WHERE lower(email)=ANY($1::text[])',[learnerEmails]):Promise.resolve({rowCount:0,rows:[]}),
-        learnerEmails.length?db.query('SELECT lower(learner_email) AS email, admission_number FROM school_learner_profiles WHERE school_id=$1 AND lower(learner_email)=ANY($2::text[])',[schoolId,learnerEmails]):Promise.resolve({rowCount:0,rows:[]}),
-        db.query('SELECT lower(username) AS username FROM users WHERE username IS NOT NULL AND lower(username)=ANY($1::text[])',[usernameBases.map(x=>x.toLowerCase())]),
-        db.query('SELECT email,username,display_name AS "displayName",phone FROM users WHERE role=\'parent\' AND (phone=ANY($1::text[]) OR username=ANY($1::text[]))',[parentPhones])
-      ]);
-
-      const existingSchoolEmailSet=new Set(existingSchoolEmailRows.rows.map(x=>String(x.email||'').toLowerCase()));
-      const skippedExistingEmail=[];
-      const emailFreshPrepared=[];
-      for(const x of freshPrepared){
-        if(x.email && existingSchoolEmailSet.has(x.email.toLowerCase())){
-          skippedExistingEmail.push({row:x.row,admissionNumber:x.admissionNumber,fullName:x.fullName,error:`Learner email ${x.email} is already registered in this school. This learner was skipped.`});
-        }else{
-          emailFreshPrepared.push(x);
-        }
-      }
-      const existingConflictEmails=existingEmails.rows
-        .map(x=>String(x.email||'').toLowerCase())
-        .filter(email=>!existingSchoolEmailSet.has(email));
-      if(existingConflictEmails.length){
-        return res.status(409).json({error:'One or more learner emails already belong to existing accounts that are not registered as learners in this school.',errors:existingConflictEmails.map(email=>({row:0,error:`Email ${email} already belongs to an existing account.`}))});
-      }
-      const readyForRegistration=emailFreshPrepared;
-      if(!readyForRegistration.length){
-        const allSkipped=[...skippedExisting,...skippedExistingEmail];
-        const learnerCsv=['Full Name,Admission Number,Learner Username,Learner Temporary Password,Class/Grade,Stream,Learner Email'];
-        const parentCsv=['Parent/Guardian Name,Parent Phone,Parent Username,Parent Email,Parent Temporary Password,Parent Account Status,Linked Learners'];
-        void audit({user:req.user},'bulk_register_school_learners','school',schoolId,{count:0,skippedExisting:allSkipped.length,parentAccountsCreated:0,parentLinksCreated:0});
-        return res.status(200).json({ok:true,count:0,skippedExisting:allSkipped,parentAccountsCreated:0,parentLinksCreated:0,learnerCredentialsCsv:learnerCsv.join('\n'),parentCredentialsCsv:parentCsv.join('\n'),message:`No new learners were registered. ${allSkipped.length} existing learner(s) were skipped.`});
-      }
-
-      const usedUsernames=new Set(existingUsernames.rows.map(x=>String(x.username||'').toLowerCase()));
-      const parentByPhone=new Map();
-      for(const p of existingParents.rows){
-        const parent={email:p.email,username:p.username||p.phone||'',displayName:p.displayName||''};
-        if(p.phone) parentByPhone.set(String(p.phone).trim(),parent);
-        if(p.username) parentByPhone.set(String(p.username).trim(),parent);
-      }
-
+      const existingAdmissions=await db.query('SELECT admission_number FROM school_learner_profiles WHERE school_id=$1 AND lower(admission_number)=ANY($2::text[])',[req.school.schoolId,prepared.map(x=>x.admissionNumber.toLowerCase())]);
+      if(existingAdmissions.rowCount) return res.status(409).json({error:'One or more admission numbers are already registered in this school.',errors:existingAdmissions.rows.map(x=>({row:0,error:`Admission number ${x.admission_number} already exists.`}))});
+      const existingEmails=prepared.filter(x=>x.email).length?await db.query('SELECT email FROM users WHERE lower(email)=ANY($1::text[])',[prepared.filter(x=>x.email).map(x=>x.email)]):{rowCount:0,rows:[]};
+      if(existingEmails.rowCount) return res.status(409).json({error:'One or more learner emails already belong to existing accounts.',errors:existingEmails.rows.map(x=>({row:0,error:`Email ${x.email} already exists.`}))});
       const credentials=[];
-      const parentCredentialByPhone=new Map();
-      const learnerUsers=[];
-      const learnerProfiles=[];
-      const learnerMemberships=[];
-      const newParents=[];
-      const parentLinks=[];
-      const usedEmails=new Set();
-
-      for(const x of readyForRegistration){
-        const base=makeLearnerUsername(x.fullName,x.admissionNumber);
-        let username=base, n=1;
-        while(usedUsernames.has(username.toLowerCase())){
-          n++;
-          const suffix=`.${n}`;
-          username=`${base.slice(0,Math.max(1,60-suffix.length))}${suffix}`;
-        }
-        usedUsernames.add(username.toLowerCase());
-        const email=x.email||`${username}@learner.tusome.local`;
-        if(usedEmails.has(email.toLowerCase())){
-          throw new Error(`Row ${x.row}: Learner email ${email} is duplicated.`);
-        }
-        usedEmails.add(email.toLowerCase());
-        const temporaryPassword=crypto.randomBytes(9).toString('base64url');
-        learnerUsers.push({email,username,role:'learner',password:temporaryPassword,displayName:x.fullName});
-        learnerProfiles.push([schoolId,email,x.admissionNumber,x.gender,x.dateOfBirth,x.phone,x.guardianName,x.guardianPhone]);
-        learnerMemberships.push([schoolId,email,'learner','active',x.classId||null]);
-
-        let parent=parentByPhone.get(x.parentPhone);
-        let parentEmail='',parentUsername=x.parentPhone,parentTemporaryPassword='',parentStatus='Existing parent account';
-        if(!parent){
-          parentEmail=x.guardianEmail||`parent.${x.parentPhone}@tusome.local`;
-          parent=parentByPhone.get(x.parentPhone);
-          if(!parent){
-            newParents.push({phone:x.parentPhone,email:parentEmail,username:parentUsername,name:x.guardianName,password:crypto.randomBytes(9).toString('base64url')});
-            parent={email:parentEmail,username:parentUsername,displayName:x.guardianName};
-            parentByPhone.set(x.parentPhone,parent);
-            parentStatus='New parent account created';
-          }
-        }
-        parentEmail=parent.email;
-        parentUsername=parent.username||x.parentPhone;
-        const createdParent=newParents.find(p=>p.phone===x.parentPhone);
-        if(createdParent) parentTemporaryPassword=createdParent.password;
-        const linkId='PGL-'+Date.now().toString(36).toUpperCase()+'-'+crypto.randomBytes(3).toString('hex').toUpperCase();
-        parentLinks.push([linkId,schoolId,parentEmail,email,req.user.email]);
-        credentials.push({fullName:x.fullName,admissionNumber:x.admissionNumber,username,password:temporaryPassword,className:x.className,stream:x.stream,guardianName:x.guardianName,guardianPhone:x.guardianPhone,parentName:x.guardianName,parentPhone:x.parentPhone,parentUsername,parentEmail,parentTemporaryPassword,parentStatus,learnerEmail:email});
-        if(!parentCredentialByPhone.has(x.parentPhone)) parentCredentialByPhone.set(x.parentPhone,{parentPhone:x.parentPhone,parentEmail,parentUsername,parentTemporaryPassword,parentStatus,parentName:x.guardianName});
-      }
-
-      // Password hashing is CPU-heavy. Keep it off the request event loop and run a small
-      // bounded number of hashes in parallel so large uploads do not stall or time out.
-      const hashJobs=[
-        ...learnerUsers.map(x=>({password:x.password})),
-        ...newParents.map(x=>({password:x.password}))
-      ];
-      const hashedPasswords=await hashPasswordJobs(hashJobs,4);
-      const learnerHashCount=learnerUsers.length;
-      learnerUsers.forEach((x,i)=>{x.passwordHash=hashedPasswords[i]});
-      newParents.forEach((x,i)=>{x.passwordHash=hashedPasswords[learnerHashCount+i]});
-
-      const generatedLearnerEmails=learnerUsers.map(x=>String(x.email).toLowerCase());
-      const generatedParentEmails=[...new Map(newParents.map(p=>[p.email.toLowerCase(),p])).keys()];
-      const [emailConflicts,parentEmailConflicts]=await Promise.all([
-        db.query('SELECT email FROM users WHERE lower(email)=ANY($1::text[])',[generatedLearnerEmails]),
-        generatedParentEmails.length?db.query('SELECT email,role FROM users WHERE lower(email)=ANY($1::text[])',[generatedParentEmails]):Promise.resolve({rowCount:0,rows:[]})
-      ]);
-      if(emailConflicts.rowCount) return res.status(409).json({error:'One or more generated learner account emails already exist. Please change the affected names/admission numbers and try again.',errors:emailConflicts.rows.map(x=>({row:0,error:`Email ${x.email} already exists.`}))});
-      const learnerEmailSet=new Set(generatedLearnerEmails);
-      const parentLearnerEmailConflict=generatedParentEmails.find(email=>learnerEmailSet.has(email));
-      if(parentLearnerEmailConflict) return res.status(409).json({error:'A Parent/Guardian Email cannot be the same as a learner account email in this upload.',errors:[{row:0,error:`Email ${parentLearnerEmailConflict} is used for both a learner and a parent account.`}]});
-      if(parentEmailConflicts.rowCount){
-        const conflict=parentEmailConflicts.rows[0];
-        return res.status(409).json({error:'One or more new Parent/Guardian account emails already exist. Use a different Parent/Guardian Email or use the existing parent account.',errors:[{row:0,error:`Parent/Guardian Email ${conflict.email} already belongs to an existing ${String(conflict.role||'')} account.`}]});
-      }
-
       const client=await db.connect();
-      const bulkInsert=async(sql,params)=>{if(!params.length)return;await client.query(sql,params.flat());};
       try{
         await client.query('BEGIN');
-        await bulkInsert(`INSERT INTO users(email,username,role,password_hash,display_name) VALUES ${learnerUsers.map((_,i)=>`($${i*5+1},$${i*5+2},$${i*5+3},$${i*5+4},$${i*5+5})`).join(',')}`,learnerUsers.map(x=>[x.email,x.username,x.role,x.passwordHash,x.displayName]));
-        await bulkInsert(`INSERT INTO school_learner_profiles(school_id,learner_email,admission_number,gender,date_of_birth,phone,guardian_name,guardian_phone) VALUES ${learnerProfiles.map((_,i)=>`($${i*8+1},$${i*8+2},$${i*8+3},$${i*8+4},$${i*8+5},$${i*8+6},$${i*8+7},$${i*8+8})`).join(',')}`,[...learnerProfiles]);
-        await bulkInsert(`INSERT INTO school_memberships(school_id,user_email,member_role,status,class_id) VALUES ${learnerMemberships.map((_,i)=>`($${i*5+1},$${i*5+2},$${i*5+3},$${i*5+4},$${i*5+5})`).join(',')}`,[...learnerMemberships]);
-        if(newParents.length){
-          const parentValues=[];
-          for(const p of newParents) parentValues.push([p.email,p.username,'parent',p.passwordHash,p.name,p.phone]);
-          await bulkInsert(`INSERT INTO users(email,username,role,password_hash,display_name,phone) VALUES ${parentValues.map((_,i)=>`($${i*6+1},$${i*6+2},$${i*6+3},$${i*6+4},$${i*6+5},$${i*6+6})`).join(',')}`,[...parentValues]);
+        for(const x of prepared){
+          const username=await uniqueLearnerUsername(makeLearnerUsername(x.fullName,x.admissionNumber));
+          const email=x.email||`${username}@learner.tusome.local`;
+          const temporaryPassword=crypto.randomBytes(9).toString('base64url');
+          await client.query('INSERT INTO users(email,username,role,password_hash,display_name) VALUES($1,$2,\'learner\',$3,$4)',[email,username,hashPassword(temporaryPassword),x.fullName]);
+          await client.query('INSERT INTO school_learner_profiles(school_id,learner_email,admission_number,gender,date_of_birth,phone,guardian_name,guardian_phone) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',[req.school.schoolId,email,x.admissionNumber,x.gender,x.dateOfBirth||null,x.phone,x.guardianName,x.guardianPhone]);
+          if(x.classId) await client.query("INSERT INTO school_memberships(school_id,user_email,member_role,status,class_id) VALUES($1,$2,'learner','active',$3)",[req.school.schoolId,email,x.classId]);
+          else await client.query("INSERT INTO school_memberships(school_id,user_email,member_role,status,class_id) VALUES($1,$2,'learner','active',NULL)",[req.school.schoolId,email]);
+          credentials.push({fullName:x.fullName,admissionNumber: x.admissionNumber,username,password:temporaryPassword,className:x.className,stream:x.stream,guardianName:x.guardianName,guardianPhone:x.guardianPhone});
         }
-        await bulkInsert(`INSERT INTO parent_guardian_links(link_id,school_id,parent_email,learner_email,created_by) VALUES ${parentLinks.map((_,i)=>`($${i*5+1},$${i*5+2},$${i*5+3},$${i*5+4},$${i*5+5})`).join(',')} ON CONFLICT(school_id,parent_email,learner_email) DO NOTHING`,[...parentLinks]);
         await client.query('COMMIT');
       }catch(e){try{await client.query('ROLLBACK')}catch{};throw e}
       finally{client.release()}
-
-      for(const p of parentCredentialByPhone.values()){
-        if(p.parentEmail) void createNotification(p.parentEmail,'Parent/Guardian account ready',`Your Tusome EduShelf Parent/Guardian account is linked to learner(s) registered by ${schoolId}. Log in using your phone number: ${p.parentUsername}.`,'success');
-      }
-      const csvCell=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
-      const learnerCsv=['Full Name,Admission Number,Learner Username,Learner Temporary Password,Class/Grade,Stream,Learner Email',...credentials.map(x=>[x.fullName,x.admissionNumber,x.username,x.password,x.className,x.stream,x.learnerEmail].map(csvCell).join(','))].join('\n');
-      const parentRows=[...parentCredentialByPhone.values()];
-      const parentCsv=['Parent/Guardian Name,Parent Phone,Parent Username,Parent Email,Parent Temporary Password,Parent Account Status,Linked Learners',...parentRows.map(p=>{const linked=credentials.filter(x=>x.parentPhone===p.parentPhone).map(x=>x.fullName).join('; ');return [p.parentName,p.parentPhone,p.parentUsername,p.parentEmail,p.parentTemporaryPassword,p.parentStatus,linked].map(csvCell).join(',')})].join('\n');
-      const allSkipped=[...skippedExisting,...skippedExistingEmail];
-      const skippedMessage=allSkipped.length?` ${allSkipped.length} existing learner(s) were skipped.`:'';
-      void audit({user:req.user},'bulk_register_school_learners','school',schoolId,{count:credentials.length,skippedExisting:allSkipped.length,parentAccountsCreated:credentials.filter(x=>x.parentStatus==='New parent account created').length,parentLinksCreated:credentials.length});
-      res.status(201).json({ok:true,count:credentials.length,skippedExisting:allSkipped,parentAccountsCreated:credentials.filter(x=>x.parentStatus==='New parent account created').length,parentLinksCreated:credentials.length,learnerCredentialsCsv:learnerCsv,parentCredentialsCsv:parentCsv,message:`Bulk registration completed.${skippedMessage}`});
-    }catch(e){console.error('bulk learner registration failed:',e);res.status(500).json({error:e.message||'Could not complete bulk learner registration.'})}
+      const csv=['Full Name,Admission Number,Username,Temporary Password,Class/Grade,Stream,Parent/Guardian Name,Parent/Guardian Phone',...credentials.map(x=>[x.fullName,x.admissionNumber,x.username,x.password,x.className,x.stream,x.guardianName,x.guardianPhone].map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(','))].join('\n');
+      void audit({user:req.user},'bulk_register_school_learners','school',req.school.schoolId,{count:credentials.length});
+      res.status(201).json({ok:true,count:credentials.length,credentialsCsv:csv});
+    }catch(e){console.error('bulk learner registration failed:',e);res.status(500).json({error:'Could not complete bulk learner registration.'})}
   });
 });
 
@@ -2632,75 +2357,17 @@ app.delete('/api/schools/parent-links/:id', requireAuth, async (req,res)=>{
 });
 
 // v39 Academic Management: subjects, teacher allocations, terms and class assignments.
-app.get('/api/schools/overview', requireSchoolMembership, async (req,res)=>{
-  try{
-    const schoolId=req.school.schoolId;
-    const teachers=await db.query(`SELECT COUNT(*)::int AS count FROM school_memberships WHERE school_id=$1 AND member_role='teacher' AND status='active'`,[schoolId]);
-    const learners=await db.query(`SELECT COUNT(*)::int AS count FROM school_memberships WHERE school_id=$1 AND member_role='learner' AND status='active'`,[schoolId]);
-    const classes=await db.query(`SELECT COUNT(*)::int AS count FROM school_classes WHERE school_id=$1`,[schoolId]);
-    const attendance=await db.query(`SELECT COUNT(*)::int AS total,COUNT(*) FILTER (WHERE status='present')::int AS present FROM school_attendance WHERE school_id=$1`,[schoolId]);
-    const exams=await db.query(`SELECT COUNT(*)::int AS count FROM school_exams WHERE school_id=$1`,[schoolId]);
-    const assignments=await db.query(`SELECT COUNT(*)::int AS count FROM school_assignments WHERE school_id=$1`,[schoolId]);
-    const fees=await db.query(`SELECT COALESCE(SUM(amount),0)::numeric AS billed FROM school_fee_charges WHERE school_id=$1 AND status='open'`,[schoolId]);
-    const parents=await db.query(`SELECT COUNT(DISTINCT parent_email)::int AS count FROM parent_guardian_links WHERE school_id=$1`,[schoolId]);
-    const total=Number(attendance.rows[0]?.total||0),present=Number(attendance.rows[0]?.present||0);
-    res.json({ok:true,summary:{teachers:Number(teachers.rows[0]?.count||0),learners:Number(learners.rows[0]?.count||0),classes:Number(classes.rows[0]?.count||0),attendancePercent:total?present/total*100:0,exams:Number(exams.rows[0]?.count||0),assignments:Number(assignments.rows[0]?.count||0),feesBilled:Number(fees.rows[0]?.billed||0),parents:Number(parents.rows[0]?.count||0)}});
-  }catch(e){console.error('school overview load failed:',e);res.status(500).json({error:'Could not load school overview.'})}
-});
-
 app.get('/api/schools/academic', requireSchoolMembership, async (req,res)=>{
   try{
-    // Make the KICD subject catalogue available before rendering the teacher-allocation
-    // selectors. This is important because allocation happens before an exam exists.
-    const classGrades=await db.query(`SELECT DISTINCT grade FROM school_classes WHERE school_id=$1`,[req.school.schoolId]);
-    const grades=[...new Set(classGrades.rows.map(x=>normaliseGrade(x.grade)).filter(g=>KICD_JUNIOR_SUBJECTS[g]))];
-    if(grades.length){
-      const names=[...new Set(grades.flatMap(g=>KICD_JUNIOR_SUBJECTS[g]))];
-      const values=[]; const params=[req.school.schoolId,'KICD CBE'];
-      names.forEach((name,i)=>{
-        const id='SUB-'+Date.now().toString(36).toUpperCase()+'-'+Math.random().toString(36).slice(2,7).toUpperCase();
-        const base=3+i*2; values.push(`($${base},$1,$${base+1},$2)`); params.push(id,name);
-      });
-      await db.query(`INSERT INTO school_subjects(subject_id,school_id,subject_name,learning_area) VALUES ${values.join(',')} ON CONFLICT(school_id,subject_name) DO UPDATE SET learning_area=EXCLUDED.learning_area`,params);
-    }
     const [subjects,allocations,terms,assignments]=await Promise.all([
       db.query(`SELECT subject_id AS "subjectId",subject_name AS "subjectName",learning_area AS "learningArea" FROM school_subjects WHERE school_id=$1 ORDER BY subject_name`,[req.school.schoolId]),
-      db.query(`SELECT tsa.subject_id AS "subjectId",ss.subject_name AS "subjectName",tsa.teacher_email AS "teacherEmail",tsa.class_id AS "classId",sc.class_name AS "className",sc.grade,sc.stream FROM school_teacher_subjects tsa JOIN school_subjects ss ON ss.subject_id=tsa.subject_id JOIN school_classes sc ON sc.class_id=tsa.class_id WHERE tsa.school_id=$1 ORDER BY sc.grade,sc.class_name,sc.stream,ss.subject_name,tsa.teacher_email`,[req.school.schoolId]),
+      db.query(`SELECT tsa.subject_id AS "subjectId",ss.subject_name AS "subjectName",tsa.teacher_email AS "teacherEmail",tsa.class_id AS "classId",sc.class_name AS "className" FROM school_teacher_subjects tsa JOIN school_subjects ss ON ss.subject_id=tsa.subject_id JOIN school_classes sc ON sc.class_id=tsa.class_id WHERE tsa.school_id=$1 ORDER BY sc.class_name,ss.subject_name,tsa.teacher_email`,[req.school.schoolId]),
       db.query(`SELECT term_id AS "termId",academic_year AS "academicYear",term_name AS "termName",starts_on AS "startsOn",ends_on AS "endsOn",status FROM school_terms WHERE school_id=$1 ORDER BY academic_year DESC,term_name`,[req.school.schoolId]),
       db.query(`SELECT a.assignment_id AS "assignmentId",a.title,a.instructions,a.due_at AS "dueAt",a.teacher_email AS "teacherEmail",ss.subject_name AS "subjectName",sc.class_name AS "className" FROM school_assignments a JOIN school_subjects ss ON ss.subject_id=a.subject_id JOIN school_classes sc ON sc.class_id=a.class_id WHERE a.school_id=$1 ORDER BY a.created_at DESC LIMIT 100`,[req.school.schoolId])
     ]);
-    res.json({ok:true,subjects:subjects.rows,allocations:allocations.rows,terms:terms.rows,assignments:assignments.rows,kicdGrades:grades});
+    res.json({ok:true,subjects:subjects.rows,allocations:allocations.rows,terms:terms.rows,assignments:assignments.rows});
   }catch(e){console.error(e);res.status(500).json({error:'Could not load academic management.'})}
 });
-app.get('/api/schools/curriculum-subjects', requireSchoolMembership, async (req,res)=>{
-  try{
-    const classIds=String(req.query?.classIds||'').split(',').map(x=>x.trim()).filter(Boolean);
-    let grades=[normaliseGrade(req.query?.grade)].filter(Boolean);
-    if(classIds.length){
-      const cr=await db.query(`SELECT grade FROM school_classes WHERE school_id=$1 AND class_id=ANY($2::text[])`,[req.school.schoolId,classIds]);
-      grades=[...new Set(cr.rows.map(x=>normaliseGrade(x.grade)).filter(Boolean))];
-    }
-    const names=[...new Set(grades.flatMap(g=>KICD_JUNIOR_SUBJECTS[g]||[]))];
-    const grade=grades.length===1?grades[0]:grades.join(', ');
-    if(!names.length)return res.json({ok:true,grade,source:'KICD regular curriculum designs',subjects:[],message:'No automatic KICD Junior School subject list is configured for this grade yet.'});
-    const values=[]; const params=[req.school.schoolId,'KICD CBE'];
-    names.forEach((name,i)=>{
-      const id='SUB-'+Date.now().toString(36).toUpperCase()+'-'+Math.random().toString(36).slice(2,7).toUpperCase();
-      const base=3+i*2; values.push(`($${base},$1,$${base+1},$2)`); params.push(id,name);
-    });
-    await db.query(`INSERT INTO school_subjects(subject_id,school_id,subject_name,learning_area) VALUES ${values.join(',')} ON CONFLICT(school_id,subject_name) DO UPDATE SET learning_area=EXCLUDED.learning_area`,params);
-    const r=await db.query(`SELECT subject_id AS "subjectId",subject_name AS "subjectName",learning_area AS "learningArea" FROM school_subjects WHERE school_id=$1 AND subject_name=ANY($2::text[]) ORDER BY subject_name`,[req.school.schoolId,names]);
-    res.json({ok:true,grade,source:'KICD regular curriculum designs',subjects:r.rows});
-  }catch(e){console.error('KICD curriculum subjects load failed:',e);res.status(500).json({error:'Could not load the KICD curriculum subjects.'})}
-});
-
-app.get('/api/schools/subjects', requireSchoolMembership, async (req,res)=>{
-  try{
-    const r=await db.query(`SELECT subject_id AS "subjectId",subject_name AS "subjectName",learning_area AS "learningArea" FROM school_subjects WHERE school_id=$1 ORDER BY subject_name`,[req.school.schoolId]);
-    res.json({ok:true,subjects:r.rows});
-  }catch(e){console.error('school subjects load failed:',e);res.status(500).json({error:'Could not load school subjects.'})}
-});
-
 app.post('/api/schools/subjects', requireAuth, async (req,res)=>{
   req.query={schoolId:req.body?.schoolId}; return requireSchoolMembership(req,res,async()=>{try{
     if(req.school.memberRole!=='admin'&&req.user.role!=='admin')return res.status(403).json({error:'School admin access is required.'});
@@ -2997,103 +2664,74 @@ app.delete('/api/schools/calendar/:id', requireSchoolMembership, async (req,res)
   }catch(e){console.error(e);res.status(500).json({error:'Could not delete calendar event.'})}
 });
 
-// Exams, Results & Report Cards — teacher assignment aware workflow
-async function teacherExamAssignment(req, examId){
-  const r=await db.query(`SELECT e.*,c.class_name AS "className",c.grade,c.stream,s.subject_name AS "subjectName",s.learning_area AS "learningArea" FROM school_exams e JOIN school_classes c ON c.class_id=e.class_id JOIN school_subjects s ON s.subject_id=e.subject_id WHERE e.exam_id=$1 AND e.school_id=$2`,[examId,req.school.schoolId]);
-  return r.rows[0]||null;
+// v44 Exams, Results & Report Cards
+// v44 Exams, Results & Report Cards
+function buildAutomaticExamFeedback(marks,maxMarks,grade){
+  const m=Number(marks), max=Number(maxMarks);
+  if(!Number.isFinite(m)||!Number.isFinite(max)||max<=0)return 'No mark was recorded. Please confirm the learner attendance and enter a valid mark.';
+  if(grade==='EE')return 'Excellent achievement. The learner shows strong understanding of the assessed work. Keep up the excellent work and continue challenging yourself.';
+  if(grade==='ME')return 'Very good achievement. Review the few areas where marks were lost and keep practising to reach excellent achievement.';
+  if(grade==='AE')return 'Approaching expectation. Revise difficult areas, practise more questions and seek help where needed.';
+  return 'Below expectation. More support and practice are needed. Review the assessed topics and work with the teacher on areas that need improvement.';
 }
-async function assertTeacherCanAccessExam(req, exam){
-  if(req.school.memberRole==='admin' || req.user.role==='admin') return true;
-  if(req.school.memberRole!=='teacher' || req.user.role!=='teacher') return false;
-  const a=await db.query(`SELECT 1 FROM school_teacher_subjects WHERE school_id=$1 AND teacher_email=$2 AND class_id=$3 AND subject_id=$4 LIMIT 1`,[req.school.schoolId,req.user.email,exam.class_id,exam.subject_id]);
-  return !!a.rowCount;
-}
+function isSchoolAdmin(req){return req.school?.memberRole==='admin'||req.user?.role==='admin'}
+
 app.get('/api/schools/exams', requireSchoolMembership, async (req,res)=>{
-  try{
-    const teacher=req.school.memberRole==='teacher' && req.user.role==='teacher'; const params=[req.school.schoolId];
-    const where=teacher?' AND EXISTS (SELECT 1 FROM school_teacher_subjects tsa WHERE tsa.school_id=e.school_id AND tsa.teacher_email=$2 AND tsa.class_id=e.class_id AND tsa.subject_id=e.subject_id)':''; if(teacher)params.push(req.user.email);
-    const r=await db.query(`SELECT e.exam_id AS "examId",e.title,e.exam_date AS "examDate",e.max_marks AS "maxMarks",e.status,e.approval_status AS "approvalStatus",e.submitted_at AS "submittedAt",e.class_id AS "classId",c.class_name AS "className",c.grade,c.stream,s.subject_name AS "subjectName",e.subject_id AS "subjectId",e.created_by AS "createdBy" FROM school_exams e JOIN school_classes c ON c.class_id=e.class_id JOIN school_subjects s ON s.subject_id=e.subject_id WHERE e.school_id=$1${where} ORDER BY e.exam_date DESC NULLS LAST,e.created_at DESC LIMIT 500`,params);
-    res.json({ok:true,exams:r.rows});
-  }catch(e){console.error(e);res.status(500).json({error:'Could not load exams.'})}
-});
-app.get('/api/teacher/exam-assignments', requireSchoolMembership, async (req,res)=>{
-  try{
-    if(req.school.memberRole!=='teacher' || req.user.role!=='teacher')return res.status(403).json({error:'Teacher access is required.'});
-    const r=await db.query(`SELECT tsa.subject_id AS "subjectId",s.subject_name AS "subjectName",s.learning_area AS "learningArea",tsa.class_id AS "classId",c.class_name AS "className",c.grade,c.stream,e.exam_id AS "examId",e.title,e.exam_date AS "examDate",e.max_marks AS "maxMarks",e.status,e.approval_status AS "approvalStatus",e.submitted_at AS "submittedAt" FROM school_teacher_subjects tsa JOIN school_subjects s ON s.subject_id=tsa.subject_id JOIN school_classes c ON c.class_id=tsa.class_id LEFT JOIN school_exams e ON e.school_id=tsa.school_id AND e.class_id=tsa.class_id AND e.subject_id=tsa.subject_id WHERE tsa.school_id=$1 AND tsa.teacher_email=$2 ORDER BY c.grade,c.class_name,c.stream,s.subject_name,e.exam_date DESC NULLS LAST,e.created_at DESC`,[req.school.schoolId,req.user.email]);
-    res.json({ok:true,assignments:r.rows});
-  }catch(e){console.error(e);res.status(500).json({error:'Could not load your teaching assignments.'})}
+  try{const r=await db.query(`SELECT e.exam_id AS "examId",e.title,e.exam_date AS "examDate",e.max_marks AS "maxMarks",e.status,e.approval_status AS "approvalStatus",e.submitted_at AS "submittedAt",e.class_id AS "classId",c.class_name AS "className",s.name AS "subjectName",e.subject_id AS "subjectId" FROM school_exams e JOIN school_classes c ON c.class_id=e.class_id JOIN school_subjects s ON s.subject_id=e.subject_id WHERE e.school_id=$1 ORDER BY e.exam_date DESC NULLS LAST,e.created_at DESC LIMIT 500`,[req.school.schoolId]);res.json({ok:true,exams:r.rows})}
+  catch(e){console.error(e);res.status(500).json({error:'Could not load exams.'})}
 });
 app.post('/api/schools/exams', requireSchoolMembership, async (req,res)=>{
-  try{
-    if(!['teacher','admin'].includes(req.school.memberRole) && req.user.role!=='admin')return res.status(403).json({error:'Teacher or school administrator access is required.'});
-    const {title,classIds,subjectIds,classId,subjectId,examDate,termId}=req.body||{};
-    const classes=[...(Array.isArray(classIds)?classIds:classId?[classId]:[])].map(String).filter(Boolean);
-    const subjects=[...(Array.isArray(subjectIds)?subjectIds:subjectId?[subjectId]:[])].map(String).filter(Boolean);
-    if(!title||!classes.length||!subjects.length)return res.status(400).json({error:'Title, at least one class/stream and at least one subject are required.'});
-    const cr=await db.query(`SELECT class_id,grade FROM school_classes WHERE school_id=$1 AND class_id=ANY($2::text[])`,[req.school.schoolId,classes]);
-    if(cr.rowCount!==classes.length)return res.status(404).json({error:'One or more selected class/streams were not found.'});
-    const sr=await db.query(`SELECT subject_id,subject_name FROM school_subjects WHERE school_id=$1 AND subject_id=ANY($2::text[])`,[req.school.schoolId,subjects]);
-    if(sr.rowCount!==subjects.length)return res.status(404).json({error:'One or more selected subjects were not found.'});
-    for(const c of cr.rows){const grade=normaliseGrade(c.grade),allowed=KICD_JUNIOR_SUBJECTS[grade];for(const sub of sr.rows){if(allowed&&!allowed.includes(sub.subject_name))return res.status(400).json({error:`${sub.subject_name} is not a configured KICD curriculum subject for ${grade}.`});if(req.school.memberRole==='teacher' && req.user.role==='teacher'){const a=await db.query(`SELECT 1 FROM school_teacher_subjects WHERE school_id=$1 AND teacher_email=$2 AND class_id=$3 AND subject_id=$4 LIMIT 1`,[req.school.schoolId,req.user.email,c.class_id,sub.subject_id]);if(!a.rowCount)return res.status(403).json({error:`You are not assigned to ${sub.subject_name} in ${c.class_id}.`});}}}
-    const created=[];for(const c of cr.rows){for(const sub of sr.rows){const id='exam_'+Date.now()+'_'+Math.random().toString(36).slice(2,8);await db.query(`INSERT INTO school_exams(exam_id,school_id,term_id,class_id,subject_id,title,exam_date,max_marks,status,approval_status,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,100,'open','draft',$8)`,[id,req.school.schoolId,termId||null,c.class_id,sub.subject_id,String(title).trim().slice(0,160),examDate||null,req.user.email]);created.push(id);}}
-    res.json({ok:true,created:created.length,examIds:created,message:'Exam shells created. The teacher will set maximum marks when uploading results.'});
-  }catch(e){console.error(e);res.status(500).json({error:'Could not create exams.'})}
+  try{if(!['teacher','admin'].includes(req.school.memberRole)&&req.user.role!=='admin')return res.status(403).json({error:'Teacher or school administrator access is required.'}); const {title,classId,subjectId,examDate,maxMarks}=req.body||{}; if(!title||!classId||!subjectId)return res.status(400).json({error:'Title, class and subject are required.'}); const id='exam_'+Date.now()+'_'+Math.random().toString(36).slice(2,8); await db.query(`INSERT INTO school_exams(exam_id,school_id,class_id,subject_id,title,exam_date,max_marks,status,approval_status,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,'open','draft',$8)`,[id,req.school.schoolId,classId,subjectId,String(title).trim().slice(0,160),examDate||null,Math.max(1,Number(maxMarks)||100),req.user.email]);res.json({ok:true,examId:id})}
+  catch(e){console.error(e);res.status(500).json({error:'Could not create exam.'})}
 });
 app.get('/api/schools/exams/:id/marks', requireSchoolMembership, async (req,res)=>{
-  try{const ex=await teacherExamAssignment(req,req.params.id);if(!ex)return res.status(404).json({error:'Exam not found.'});
-    const isAdmin=req.school.memberRole==='admin'||req.user.role==='admin';
-    if(!isAdmin && !(await assertTeacherCanAccessExam(req,ex)))return res.status(403).json({error:'You are not assigned to this class and subject.'});
-    const r=await db.query(`SELECT sm.user_email AS "learnerEmail",COALESCE(u.display_name,sm.user_email) AS "fullName",COALESCE(p.admission_number,'') AS "admissionNumber",COALESCE(m.marks::text,'') AS marks,COALESCE(m.grade,'') AS grade,COALESCE(m.comment,'') AS comment,COALESCE(m.mark_status,'present') AS "markStatus" FROM school_memberships sm LEFT JOIN users u ON u.email=sm.user_email LEFT JOIN school_learner_profiles p ON p.school_id=sm.school_id AND p.learner_email=sm.user_email LEFT JOIN school_exam_marks m ON m.exam_id=$1 AND m.learner_email=sm.user_email WHERE sm.school_id=$2 AND sm.class_id=$3 AND sm.member_role='learner' AND sm.status='active' ORDER BY LOWER(COALESCE(u.display_name,sm.user_email)),COALESCE(p.admission_number,''),sm.user_email`,[req.params.id,req.school.schoolId,ex.class_id]);
-    res.json({ok:true,exam:ex,rows:r.rows});
+  try{
+    const ex=await db.query(`SELECT e.*,c.class_name AS "className",s.name AS "subjectName" FROM school_exams e JOIN school_classes c ON c.class_id=e.class_id JOIN school_subjects s ON s.subject_id=e.subject_id WHERE e.exam_id=$1 AND e.school_id=$2`,[req.params.id,req.school.schoolId]);
+    if(!ex.rows[0])return res.status(404).json({error:'Exam not found.'});
+    const r=await db.query(`SELECT sm.user_email AS "learnerEmail",COALESCE(u.display_name,sm.user_email) AS "fullName",COALESCE(p.admission_number,'') AS "admissionNumber",COALESCE(m.marks::text,'') AS marks,COALESCE(m.grade,'') AS grade,COALESCE(m.comment,'') AS comment,COALESCE(m.auto_feedback,'') AS "autoFeedback",COALESCE(m.mark_status,'present') AS "markStatus" FROM school_memberships sm LEFT JOIN users u ON u.email=sm.user_email LEFT JOIN school_learner_profiles p ON p.school_id=sm.school_id AND p.learner_email=sm.user_email LEFT JOIN school_exam_marks m ON m.exam_id=$1 AND m.learner_email=sm.user_email WHERE sm.school_id=$2 AND sm.class_id=$3 AND sm.member_role='learner' AND sm.status='active' ORDER BY LOWER(COALESCE(u.display_name,sm.user_email)),COALESCE(p.admission_number,''),sm.user_email`,[req.params.id,req.school.schoolId,ex.rows[0].class_id]);
+    res.json({ok:true,exam:ex.rows[0],rows:r.rows});
   }catch(e){console.error(e);res.status(500).json({error:'Could not load exam marks.'})}
 });
 app.post('/api/schools/exams/:id/marks', requireSchoolMembership, async (req,res)=>{
   try{
-    let ex=await teacherExamAssignment(req,req.params.id);if(!ex)return res.status(404).json({error:'Exam not found.'});
-    if(!(await assertTeacherCanAccessExam(req,ex)))return res.status(403).json({error:'You are not assigned to this class and subject.'});
+    if(!['teacher','admin'].includes(req.school.memberRole)&&req.user.role!=='admin')return res.status(403).json({error:'Teacher or school administrator access is required.'});
+    const ex=(await db.query(`SELECT * FROM school_exams WHERE exam_id=$1 AND school_id=$2`,[req.params.id,req.school.schoolId])).rows[0];
+    if(!ex)return res.status(404).json({error:'Exam not found.'});
     if(ex.status==='published'||ex.approval_status==='approved')return res.status(409).json({error:'This exam is already approved or published and cannot be edited.'});
     const rows=Array.isArray(req.body?.rows)?req.body.rows:[];if(!rows.length)return res.status(400).json({error:'No learner results were supplied.'});
-    const suppliedMax=Number(req.body?.maxMarks);if(req.school.memberRole==='teacher' && (!Number.isFinite(suppliedMax)||suppliedMax<=0||suppliedMax>1000))return res.status(400).json({error:'Set the maximum marks (1–1000) before saving results.'});
-    if(Number.isFinite(suppliedMax)&&suppliedMax>0&&suppliedMax<=1000){await db.query(`UPDATE school_exams SET max_marks=$1 WHERE exam_id=$2 AND school_id=$3`,[suppliedMax,req.params.id,req.school.schoolId]);ex=await teacherExamAssignment(req,req.params.id);}
-    const maxMarks=Number(ex.max_marks);
-    const roster=await db.query(`SELECT user_email FROM school_memberships WHERE school_id=$1 AND class_id=$2 AND member_role='learner' AND status='active'`,[req.school.schoolId,ex.class_id]);
-    const allowedLearners=new Set(roster.rows.map(x=>String(x.user_email).toLowerCase()));
     for(const x of rows){
-      const email=String(x.learnerEmail||'').trim();if(!allowedLearners.has(email.toLowerCase()))return res.status(400).json({error:`Learner ${email||'(blank)'} is not in this class/stream.`});
-      const markStatus=['present','absent','irregular'].includes(String(x.markStatus||'present'))?String(x.markStatus||'present'):'present';
-      const rawMarks=x.marks===''||x.marks==null?null:Number(x.marks);
-      if(markStatus!=='present' && rawMarks!==null)return res.status(400).json({error:`Do not enter marks for ${email} when X or Y is selected.`});
-      if(markStatus==='present' && rawMarks!==null&&(!Number.isFinite(rawMarks)||rawMarks<0||rawMarks>maxMarks))return res.status(400).json({error:`Marks for ${email} must be between 0 and ${ex.max_marks}.`});
-      if(markStatus==='present' && rawMarks===null)return res.status(400).json({error:`Enter marks for ${email}, or select X/Y.`});
-      const grade=markStatus==='present'&&rawMarks!==null?(rawMarks/Number(ex.max_marks)>=.8?'EE':rawMarks/Number(ex.max_marks)>=.6?'ME':rawMarks/Number(ex.max_marks)>=.4?'AE':'BE'):'';
+      const status=['present','absent','irregular'].includes(String(x.markStatus||'present'))?String(x.markStatus||'present'):'present';
+      const m=x.marks===''||x.marks==null?null:Number(x.marks);
+      if(status!=='present'&&m!==null)return res.status(400).json({error:`Do not enter marks for ${x.learnerEmail||'this learner'} when X or Y is selected.`});
+      if(status==='present'&&m!==null&&(!Number.isFinite(m)||m<0||m>Number(ex.max_marks)))return res.status(400).json({error:`Marks must be between 0 and ${ex.max_marks}.`});
+      if(status==='present'&&m===null)return res.status(400).json({error:`Enter marks for ${x.learnerEmail||'this learner'}, or select X/Y.`});
+      const grade=status==='present'&&m!==null?(m/Number(ex.max_marks)>=.8?'EE':m/Number(ex.max_marks)>=.6?'ME':m/Number(ex.max_marks)>=.4?'AE':'BE'):'';
+      const autoFeedback=buildAutomaticExamFeedback(m,ex.max_marks,grade);
       const id='mark_'+Date.now()+'_'+Math.random().toString(36).slice(2,8);
-      await db.query(`INSERT INTO school_exam_marks(mark_id,exam_id,school_id,learner_email,marks,grade,comment,mark_status,entered_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(exam_id,learner_email) DO UPDATE SET marks=EXCLUDED.marks,grade=EXCLUDED.grade,comment=EXCLUDED.comment,mark_status=EXCLUDED.mark_status,entered_by=EXCLUDED.entered_by,updated_at=NOW()`,[id,req.params.id,req.school.schoolId,email,markStatus==='present'?rawMarks:null,grade,String(x.comment||'').slice(0,500),markStatus,req.user.email]);
+      await db.query(`INSERT INTO school_exam_marks(mark_id,exam_id,school_id,learner_email,marks,grade,comment,auto_feedback,mark_status,entered_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT(exam_id,learner_email) DO UPDATE SET marks=EXCLUDED.marks,grade=EXCLUDED.grade,comment=EXCLUDED.comment,auto_feedback=EXCLUDED.auto_feedback,mark_status=EXCLUDED.mark_status,entered_by=EXCLUDED.entered_by,updated_at=NOW()`,[id,req.params.id,req.school.schoolId,String(x.learnerEmail||'').trim(),status==='present'?m:null,grade,String(x.comment||'').slice(0,500),autoFeedback,status,req.user.email]);
     }
     res.json({ok:true,message:`Saved ${rows.length} learner result(s).`});
-  }catch(e){console.error(e);res.status(500).json({error:'Could not save learner results.'})}
+  }catch(e){console.error(e);res.status(500).json({error:'Could not save marks.'})}
 });
 app.post('/api/schools/exams/:id/submit', requireSchoolMembership, async (req,res)=>{
-  try{const ex=await teacherExamAssignment(req,req.params.id);if(!ex)return res.status(404).json({error:'Exam not found.'});if(!(await assertTeacherCanAccessExam(req,ex)))return res.status(403).json({error:'You are not assigned to this class and subject.'});const count=await db.query(`SELECT COUNT(*)::int AS total,COUNT(m.mark_id) FILTER (WHERE m.mark_status IN ('present','absent','irregular'))::int AS scored FROM school_memberships sm LEFT JOIN school_exam_marks m ON m.exam_id=$1 AND m.learner_email=sm.user_email WHERE sm.school_id=$2 AND sm.class_id=$3 AND sm.member_role='learner' AND sm.status='active'`,[req.params.id,req.school.schoolId,ex.class_id]);if(!count.rows[0].total)return res.status(400).json({error:'There are no active learners in this class/stream.'});if(count.rows[0].scored!==count.rows[0].total)return res.status(400).json({error:`Complete all learner marks before submitting. ${count.rows[0].scored} of ${count.rows[0].total} have marks.`});await db.query(`UPDATE school_exams SET approval_status='pending',submitted_at=NOW(),status='closed',reviewed_by=NULL,reviewed_at=NULL,review_comment=NULL WHERE exam_id=$1 AND school_id=$2`,[req.params.id,req.school.schoolId]);res.json({ok:true,message:'Results submitted for school review.'});}
+  try{if(req.school.memberRole!=='teacher'&&req.user.role!=='teacher')return res.status(403).json({error:'Teacher access is required.'});const r=await db.query(`UPDATE school_exams SET approval_status='pending',submitted_at=NOW(),status='closed' WHERE exam_id=$1 AND school_id=$2 AND approval_status IN ('draft','returned') RETURNING exam_id`,[req.params.id,req.school.schoolId]);if(!r.rowCount)return res.status(409).json({error:'This exam cannot be submitted in its current state.'});res.json({ok:true,message:'Results submitted for school administrator review.'})}
   catch(e){console.error(e);res.status(500).json({error:'Could not submit results.'})}
 });
 app.post('/api/schools/exams/:id/review', requireSchoolMembership, async (req,res)=>{
-  try{if(req.school.memberRole!=='admin'&&req.user.role!=='admin')return res.status(403).json({error:'School administrator access is required.'});const action=req.body?.action==='approve'?'approve':'reject';const status=action==='approve'?'approved':'returned';const r=await db.query(`UPDATE school_exams SET approval_status=$1,reviewed_by=$2,reviewed_at=NOW(),review_comment=$3,status=CASE WHEN $1='approved' THEN 'closed' ELSE 'open' END WHERE exam_id=$4 AND school_id=$5 AND approval_status='pending' RETURNING exam_id`,[status,req.user.email,String(req.body?.comment||'').slice(0,500),req.params.id,req.school.schoolId]);if(!r.rowCount)return res.status(404).json({error:'Submitted exam not found or is no longer awaiting review.'});res.json({ok:true,message:action==='approve'?'Results approved.':'Results returned to teacher.'});}
+  try{if(!isSchoolAdmin(req))return res.status(403).json({error:'School administrator access is required.'});const action=req.body?.action==='approve'?'approve':'reject';const status=action==='approve'?'approved':'returned';const r=await db.query(`UPDATE school_exams SET approval_status=$1,reviewed_by=$2,reviewed_at=NOW(),review_comment=$3 WHERE exam_id=$4 AND school_id=$5 AND approval_status='pending' RETURNING exam_id`,[status,req.user.email,String(req.body?.comment||'').slice(0,500),req.params.id,req.school.schoolId]);if(!r.rowCount)return res.status(404).json({error:'Submitted exam not found or is no longer awaiting review.'});res.json({ok:true,message:action==='approve'?'Results approved.':'Results returned to the teacher for correction.'})}
   catch(e){console.error(e);res.status(500).json({error:'Could not review exam results.'})}
 });
-app.post('/api/schools/exams/:id/publish', requireSchoolMembership, async (req,res)=>{
-  try{if(req.school.memberRole!=='admin'&&req.user.role!=='admin')return res.status(403).json({error:'School administrator access is required.'});const r=await db.query(`UPDATE school_exams SET status='published' WHERE exam_id=$1 AND school_id=$2 AND approval_status='approved' RETURNING exam_id`,[req.params.id,req.school.schoolId]);if(!r.rowCount)return res.status(400).json({error:'Only an approved exam can be published.'});res.json({ok:true,message:'Results published.'});}
-  catch(e){console.error(e);res.status(500).json({error:'Could not publish exam results.'})}
-});
 app.post('/api/schools/exams/:id/approve-publish', requireSchoolMembership, async (req,res)=>{
-  try{
-    if(req.school.memberRole!=='admin'&&req.user.role!=='admin')return res.status(403).json({error:'School administrator access is required.'});
-    const r=await db.query(`UPDATE school_exams SET approval_status='approved',reviewed_by=$1,reviewed_at=NOW(),review_comment=$2,status='published' WHERE exam_id=$3 AND school_id=$4 AND approval_status='pending' RETURNING exam_id`,[req.user.email,String(req.body?.comment||'Pre-publication check completed.').slice(0,500),req.params.id,req.school.schoolId]);
-    if(!r.rowCount)return res.status(404).json({error:'Submitted exam not found or is no longer awaiting review.'});
-    res.json({ok:true,message:'Results approved and published by the school administrator.'});
-  }catch(e){console.error(e);res.status(500).json({error:'Could not approve and publish exam results.'})}
+  try{if(!isSchoolAdmin(req))return res.status(403).json({error:'School administrator access is required.'});const r=await db.query(`UPDATE school_exams SET approval_status='approved',reviewed_by=$1,reviewed_at=NOW(),review_comment=$2,status='published' WHERE exam_id=$3 AND school_id=$4 AND approval_status='pending' RETURNING exam_id`,[req.user.email,String(req.body?.comment||'Pre-publication check completed.').slice(0,500),req.params.id,req.school.schoolId]);if(!r.rowCount)return res.status(404).json({error:'Submitted exam not found or is no longer awaiting review.'});res.json({ok:true,message:'Results approved and published by the school administrator.'})}
+  catch(e){console.error(e);res.status(500).json({error:'Could not approve and publish exam results.'})}
 });
-app.get('/api/learner/exams', requireRole('learner'), async (req,res)=>{try{const r=await db.query(`SELECT e.exam_id AS "examId",e.title,e.exam_date AS "examDate",e.max_marks AS "maxMarks",m.marks,m.grade,m.comment,s.subject_name AS "subjectName",c.class_name AS "className",c.grade,c.stream FROM school_exam_marks m JOIN school_exams e ON e.exam_id=m.exam_id JOIN school_subjects s ON s.subject_id=e.subject_id JOIN school_classes c ON c.class_id=e.class_id WHERE m.learner_email=$1 AND e.status='published' ORDER BY e.exam_date DESC NULLS LAST,e.created_at DESC`,[req.user.email]);res.json({ok:true,rows:r.rows})}catch(e){console.error(e);res.status(500).json({error:'Could not load results.'})}});
-app.get('/api/parent/exams', requireRole('parent'), async (req,res)=>{try{const learner=req.query.learnerEmail;const linked=await db.query(`SELECT 1 FROM parent_learner_links WHERE parent_email=$1 AND learner_email=$2 AND status='active' LIMIT 1`,[req.user.email,learner]);if(!linked.rows[0])return res.status(403).json({error:'Learner is not linked to this parent account.'});const r=await db.query(`SELECT e.title,e.exam_date AS "examDate",e.max_marks AS "maxMarks",m.marks,m.grade,m.comment,s.subject_name AS "subjectName",c.class_name AS "className",c.grade,c.stream FROM school_exam_marks m JOIN school_exams e ON e.exam_id=m.exam_id JOIN school_subjects s ON s.subject_id=e.subject_id JOIN school_classes c ON c.class_id=e.class_id WHERE m.learner_email=$1 AND e.status='published' ORDER BY e.exam_date DESC NULLS LAST`,[learner]);res.json({ok:true,rows:r.rows})}catch(e){console.error(e);res.status(500).json({error:'Could not load learner results.'})}});
+app.post('/api/schools/exams/:id/publish', requireSchoolMembership, async (req,res)=>{
+  try{if(!isSchoolAdmin(req))return res.status(403).json({error:'School administrator access is required.'});const r=await db.query(`UPDATE school_exams SET status='published' WHERE exam_id=$1 AND school_id=$2 AND approval_status='approved' RETURNING exam_id`,[req.params.id,req.school.schoolId]);if(!r.rowCount)return res.status(404).json({error:'Approved exam not found.'});res.json({ok:true,message:'Results published.'})}
+  catch(e){console.error(e);res.status(500).json({error:'Could not publish results.'})}
+});
+app.get('/api/learner/exams', requireRole('learner'), async (req,res)=>{try{const r=await db.query(`SELECT e.exam_id AS "examId",e.title,e.exam_date AS "examDate",e.max_marks AS "maxMarks",m.marks,m.grade,m.comment,m.auto_feedback AS "autoFeedback",s.name AS "subjectName",c.class_name AS "className" FROM school_exam_marks m JOIN school_exams e ON e.exam_id=m.exam_id JOIN school_subjects s ON s.subject_id=e.subject_id JOIN school_classes c ON c.class_id=e.class_id WHERE m.learner_email=$1 AND e.status='published' ORDER BY e.exam_date DESC NULLS LAST,e.created_at DESC`,[req.user.email]);res.json({ok:true,rows:r.rows})}catch(e){console.error(e);res.status(500).json({error:'Could not load results.'})}});
+app.get('/api/parent/exams', requireRole('parent'), async (req,res)=>{try{const learner=req.query.learnerEmail;const linked=await db.query(`SELECT 1 FROM parent_learner_links WHERE parent_email=$1 AND learner_email=$2 AND status='active' LIMIT 1`,[req.user.email,learner]);if(!linked.rows[0])return res.status(403).json({error:'Learner is not linked to this parent account.'});const r=await db.query(`SELECT e.title,e.exam_date AS "examDate",e.max_marks AS "maxMarks",m.marks,m.grade,m.comment,m.auto_feedback AS "autoFeedback",s.name AS "subjectName",c.class_name AS "className" FROM school_exam_marks m JOIN school_exams e ON e.exam_id=m.exam_id JOIN school_subjects s ON s.subject_id=e.subject_id JOIN school_classes c ON c.class_id=e.class_id WHERE m.learner_email=$1 AND e.status='published' ORDER BY e.exam_date DESC NULLS LAST`,[learner]);res.json({ok:true,rows:r.rows})}catch(e){console.error(e);res.status(500).json({error:'Could not load learner results.'})}});
+
 app.post('/api/schools/report-cards/generate', requireSchoolMembership, async (req,res)=>{try{if(req.school.role!=='admin')return res.status(403).json({error:'School administrator access is required.'});const classId=req.body?.classId;const termId=req.body?.termId||null;if(!classId)return res.status(400).json({error:'Class is required.'});const learners=await db.query(`SELECT user_email FROM school_memberships WHERE school_id=$1 AND class_id=$2 AND member_role='learner' AND status='active'`,[req.school.schoolId,classId]);let count=0;for(const l of learners.rows){const avg=await db.query(`SELECT AVG(m.marks/NULLIF(e.max_marks,0)*100) AS avg FROM school_exam_marks m JOIN school_exams e ON e.exam_id=m.exam_id WHERE m.school_id=$1 AND m.learner_email=$2 AND e.class_id=$3`,[req.school.schoolId,l.user_email,classId]);const id='report_'+Date.now()+'_'+Math.random().toString(36).slice(2,8);await db.query(`INSERT INTO school_report_cards(report_id,school_id,learner_email,class_id,term_id,status,overall_average,created_by) VALUES($1,$2,$3,$4,$5,'draft',$6,$7) ON CONFLICT DO NOTHING`,[id,req.school.schoolId,l.user_email,classId,termId,avg.rows[0]?.avg?Number(avg.rows[0].avg).toFixed(2):null,req.user.email]);count++}res.json({ok:true,count,message:'Draft report cards generated.'})}catch(e){console.error(e);res.status(500).json({error:'Could not generate report cards.'})}});
 app.get('/api/learner/report-cards', requireRole('learner'), async (req,res)=>{try{const r=await db.query(`SELECT report_id AS "reportId",class_id AS "classId",term_id AS "termId",status,overall_average AS "overallAverage",teacher_comment AS "teacherComment",created_at AS "createdAt",published_at AS "publishedAt" FROM school_report_cards WHERE learner_email=$1 AND status='published' ORDER BY created_at DESC`,[req.user.email]);res.json({ok:true,rows:r.rows})}catch(e){console.error(e);res.status(500).json({error:'Could not load report cards.'})}});
 app.get('/api/parent/report-cards', requireRole('parent'), async (req,res)=>{try{const learner=req.query.learnerEmail;const linked=await db.query(`SELECT 1 FROM parent_learner_links WHERE parent_email=$1 AND learner_email=$2 AND status='active' LIMIT 1`,[req.user.email,learner]);if(!linked.rows[0])return res.status(403).json({error:'Learner is not linked to this parent account.'});const r=await db.query(`SELECT report_id AS "reportId",class_id AS "classId",term_id AS "termId",overall_average AS "overallAverage",teacher_comment AS "teacherComment",published_at AS "publishedAt" FROM school_report_cards WHERE learner_email=$1 AND status='published' ORDER BY published_at DESC`,[learner]);res.json({ok:true,rows:r.rows})}catch(e){console.error(e);res.status(500).json({error:'Could not load report cards.'})}});

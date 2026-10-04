@@ -843,7 +843,7 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
   <div id="schoolControlCentre" class="card school-dashboard-overview" style="margin-top:14px;display:none" aria-label="School Control Centre">
   <h3>🏫 School Control Centre</h3>
   <p class="small">These are the school functions available directly from your School Plan Dashboard.</p>
-  <div class="card" style="margin-top:12px;border:1px solid #dbe4f0;background:#f8fbff">
+  <div id="schoolAutoWorkspaceCard" class="card" style="margin-top:12px;border:1px solid #dbe4f0;background:#f8fbff">
     <h3 style="margin-top:0">🧭 Automatic School Workspace</h3>
     <p class="small">You do not choose an account type here. After the School Plan login, Tusome checks your active school membership and opens the workspace assigned to your account.</p>
     <div class="notice" style="margin:10px 0 14px"><b>Automatic routing:</b> School Admin → School Management · Bursar/Finance → Finance · Teacher → School Teacher Workspace · Learner → School Learner Workspace · Parent/Guardian → Parent Workspace.</div>
@@ -2343,6 +2343,10 @@ async function openSchoolDashboard(skipHistory=false){
 function showSchoolAdminDashboard(){
   ['schoolAuthGate','schoolNameGate','schoolAccessPanel'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none'});
   ['schoolControlCentre','schoolManagementCentre','schoolPlanCard','schoolWorkspaceCard','schoolGlanceCard','schoolExecutiveOverview','schoolGeneralEssentialCards'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='block'});
+  // The administrator dashboard does not need the automatic workspace explainer.
+  // Keep the card available for non-admin school roles, but hide it from School Admin.
+  const autoWorkspace=document.getElementById('schoolAutoWorkspaceCard');
+  if(autoWorkspace)autoWorkspace.style.display='none';
   loadSchoolManagement();
 }
 function showSchoolNameGate(message=''){const msg=document.getElementById('schoolNameAccessMessage');if(msg)msg.textContent=message;}

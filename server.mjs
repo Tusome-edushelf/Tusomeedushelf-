@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
-const APP_VERSION='v113-remove-school-control-centre';
+const APP_VERSION='v116-separated-member-lists';
 app.get('/api/version',(_req,res)=>{res.setHeader('Cache-Control','no-store');res.json({ok:true,version:APP_VERSION,build:'dashboard-sequential-bulk-transaction-parent-required',timestamp:new Date().toISOString()});});
 app.use(express.json({ limit: '18mb' }));
 
@@ -2180,7 +2180,7 @@ app.get('/api/schools/dashboard', requireSchoolMembership, async (req,res)=>{
   try{
     // Keep these reads sequential on one request. This avoids the PostgreSQL protocol/bind
     // failure seen in production while preserving the same response shape.
-    const members=await db.query(`SELECT user_email AS "email",member_role AS "memberRole",status,created_at AS "createdAt" FROM school_memberships WHERE school_id=$1 ORDER BY member_role,user_email`,[req.school.schoolId]);
+    const members=await db.query(`SELECT sm.user_email AS "email",u.display_name AS "fullName",u.username,sm.member_role AS "memberRole",sm.status,sm.created_at AS "createdAt",sm.class_id AS "classId",c.class_name AS "className",c.grade,c.stream FROM school_memberships sm LEFT JOIN users u ON u.email=sm.user_email LEFT JOIN school_classes c ON c.class_id=sm.class_id AND c.school_id=sm.school_id WHERE sm.school_id=$1 ORDER BY sm.member_role,COALESCE(u.display_name,sm.user_email),sm.user_email`,[req.school.schoolId]);
     const classes=await db.query(`SELECT c.class_id AS "classId",c.class_name AS "className",c.grade,c.stream,c.teacher_email AS "teacherEmail",COUNT(sm.user_email)::int AS "learnerCount" FROM school_classes c LEFT JOIN school_memberships sm ON sm.school_id=c.school_id AND sm.class_id=c.class_id AND sm.member_role='learner' AND sm.status='active' WHERE c.school_id=$1 GROUP BY c.class_id ORDER BY c.grade,c.class_name`,[req.school.schoolId]);
     const materials=await db.query(`SELECT m.id,m.title,m.subject,m.grade,m.approval_status AS "approvalStatus",m.teacher_email AS "teacherEmail",m.created_at AS "createdAt" FROM materials m WHERE m.approval_status='approved' ORDER BY m.created_at DESC LIMIT 40`);
     const invites=await db.query(`SELECT invite_id AS "inviteId",email,member_role AS "memberRole",class_id AS "classId",status,created_at AS "createdAt" FROM school_invites WHERE school_id=$1 ORDER BY created_at DESC LIMIT 100`,[req.school.schoolId]);
@@ -2289,6 +2289,7 @@ app.get('/api/schools/parents/credential-report', requireSchoolMembership, async
   try{
     const r=await db.query(`SELECT u.display_name AS "parentName",COALESCE(u.phone,u.username) AS "parentPhone",u.username,u.email, string_agg(DISTINCT COALESCE(lu.display_name,pgl.learner_email), '; ' ORDER BY COALESCE(lu.display_name,pgl.learner_email)) AS "linkedLearners" FROM parent_guardian_links pgl JOIN users u ON u.email=pgl.parent_email AND u.role='parent' LEFT JOIN users lu ON lu.email=pgl.learner_email WHERE pgl.school_id=$1 GROUP BY u.display_name,u.phone,u.username,u.email ORDER BY u.display_name,u.email`,[req.school.schoolId]);
     const csv=['Parent/Guardian Name,Parent Phone,Parent Username,Parent Email,Temporary Password,Account Status,Linked Learners',...r.rows.map(x=>[x.parentName,x.parentPhone,x.username,x.email,'Not recoverable - existing account','Existing parent account',x.linkedLearners||''].map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(','))].join('\n');
+    if(String(req.query?.format||'').toLowerCase()==='json') return res.json({ok:true,parents:r.rows});
     res.set('Content-Type','text/csv; charset=utf-8'); res.set('Content-Disposition',`attachment; filename=Tusome_Parent_Credentials_${new Date().toISOString().slice(0,10)}.csv`); res.send('\ufeff'+csv);
   }catch(e){console.error('parent credential report failed:',e);res.status(500).json({error:'Could not generate the parent credential report.'})}
 });

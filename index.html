@@ -2405,6 +2405,26 @@ async function schoolRegister(e){
 }
 
 function showPageDirect(id,skipHistory=false){
+  // Protected school dashboard must never expose its management content before authentication.
+  // Some internal flows intentionally use showPageDirect(), so enforce the gate here too.
+  if(id==='schoolDashboard'){
+    const role=getSessionRole();
+    const schoolAccess=sessionStorage.getItem('tusomeSchoolAccess')==='true';
+    if(!role && !schoolAccess){
+      const active=document.querySelector('.page.active');
+      const current=active?.id;
+      if(!skipHistory && current && current!=='schoolDashboard' && current!=='login'){
+        appPageHistory=appPageHistory.filter(x=>x!=='schoolDashboard');
+        appPageHistory.push(current);
+        if(appPageHistory.length>12)appPageHistory.shift();
+      }
+      document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+      const el=document.getElementById('schoolDashboard');if(el)el.classList.add('active');
+      showSchoolAuthGate();
+      window.scrollTo(0,0);
+      return;
+    }
+  }
   const active=document.querySelector('.page.active');
   const current=active?.id;
   if(!skipHistory && current && current!==id && current!=='login'){
@@ -2537,6 +2557,12 @@ function openSchoolRoleWorkspace(target){
 
 let __schoolManagementPromise=null;
 async function loadSchoolManagement(){
+  const role=getSessionRole();
+  const schoolAccess=sessionStorage.getItem('tusomeSchoolAccess')==='true';
+  if(!role && !schoolAccess){
+    showSchoolAuthGate();
+    return;
+  }
   if(__schoolManagementPromise)return __schoolManagementPromise;
   __schoolManagementPromise=(async()=>{
     const sel=document.getElementById('schoolWorkspaceSelect');if(!sel)return;

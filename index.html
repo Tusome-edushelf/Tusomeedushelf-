@@ -1817,7 +1817,8 @@ async function loadExamsPage(){
  [admin,teacher,report,learner].forEach(x=>{if(x)x.style.display='none'});
  if(!role)return;
  if(role==='learner'){learner.style.display='block';await loadLearnerResultsV44();return}
- if(['teacher','admin'].includes(role)){admin.style.display='block';teacher.style.display='block';if(role==='admin')report.style.display='block';await loadExamSetupV44();await loadExamListV44()}
+ if(role==='admin'){admin.style.display='block';teacher.style.display='block';report.style.display='block';await loadExamSetupV44();await loadExamListV44();await loadTeacherExamResultsCentre();return}
+ if(role==='teacher'){teacher.style.display='block';await loadTeacherExamResultsCentre();return}
 }
 async function loadExamSetupV44(){
  try{
@@ -1870,13 +1871,18 @@ async function getExamSchool(){
 }
 async function loadTeacherExamResultsCentre(){
   const notice=document.getElementById('teacherExamAccessNotice'),controls=document.getElementById('teacherExamResultsControls'),box=document.getElementById('teacherDashboardExamRows'),review=document.getElementById('examAdminReviewPanel');if(!notice||!controls||!box)return;notice.style.display='none';controls.style.display='none';
-  try{const schoolId=await getExamSchool();if(!schoolId){notice.textContent='Exam results require an active school workspace. Ask your school administrator to add your account.';notice.style.display='block';box.innerHTML='<tr><td colspan="6">No active school teaching workspace.</td></tr>';return}
-    const mr=await fetch('/api/schools/mine',{credentials:'include'}),md=await parseApiResponse(mr),me=(md.schools||[]).find(x=>x.schoolId===schoolId);const isAdmin=me?.memberRole==='admin';
-    const r=await fetch('/api/schools/exams?schoolId='+encodeURIComponent(schoolId),{credentials:'include'}),d=await parseApiResponse(r);if(!r.ok)throw new Error(d.error||'Could not load school exams.');teacherUploadExamRows=d.exams||[];
-    box.innerHTML=teacherUploadExamRows.map(x=>`<tr><td><b>${escHtml(x.title)}</b></td><td>${escHtml(x.className||'—')}</td><td>${escHtml(x.subjectName||'—')}</td><td>${escHtml(x.examDate||'—')}</td><td>${escHtml(x.maxMarks)}</td><td>${escHtml(x.status)} · ${escHtml(x.approvalStatus||'not submitted')}</td></tr>`).join('')||'<tr><td colspan="6">No exams yet. Create an exam from Exams & Results.</td></tr>';
-    const sel=document.getElementById('teacherUploadExam');sel.innerHTML=teacherUploadExamRows.map(x=>`<option value="${escHtml(x.examId)}">${escHtml(x.title)} — ${escHtml(x.className||'')}</option>`).join('')||'<option value="">No exams</option>';controls.style.display=teacherUploadExamRows.length?'block':'none';if(teacherUploadExamRows.length)await loadTeacherUploadExam();
-    if(review){review.style.display=isAdmin?'block':'none';if(isAdmin)renderExamAdminReview(teacherUploadExamRows)}
-  }catch(e){box.innerHTML=`<tr><td colspan="6">${escHtml(e.message)}</td></tr>`}
+  try{
+    const schoolId=await getExamSchool();if(!schoolId){notice.textContent='Exam results require an active school workspace. Ask your school administrator to add your account.';notice.style.display='block';box.innerHTML='<tr><td colspan="6">No active school teaching workspace.</td></tr>';return}
+    const mr=await fetch('/api/schools/mine',{credentials:'include'}),md=await parseApiResponse(mr);if(!mr.ok)throw new Error(md.error||'Could not load school membership.');const me=(md.schools||[]).find(x=>x.schoolId===schoolId);const isAdmin=me?.memberRole==='admin';
+    let rows=[];
+    if(isAdmin){const r=await fetch('/api/schools/exams?schoolId='+encodeURIComponent(schoolId),{credentials:'include'}),d=await parseApiResponse(r);if(!r.ok)throw new Error(d.error||'Could not load school exams.');rows=d.exams||[];}
+    else{const r=await fetch('/api/teacher/exam-assignments?schoolId='+encodeURIComponent(schoolId),{credentials:'include'}),d=await parseApiResponse(r);if(!r.ok)throw new Error(d.error||'Could not load your teaching assignments.');rows=(d.assignments||[]).filter(x=>x.examId);}
+    teacherUploadExamRows=rows;
+    box.innerHTML=rows.map(x=>`<tr><td><b>${escHtml(x.title||'No exam created yet')}</b></td><td>${escHtml(x.className||'—')} ${x.grade?`· ${escHtml(x.grade)}`:''}${x.stream?` — ${escHtml(x.stream)}`:''}</td><td>${escHtml(x.subjectName||'—')}</td><td>${escHtml(x.examDate||'—')}</td><td>${escHtml(x.maxMarks??'—')}</td><td>${escHtml(x.status||'—')} · ${escHtml(x.approvalStatus||'draft')}</td></tr>`).join('')||`<tr><td colspan="6">${isAdmin?'No exams have been created yet.':'No exams are currently assigned to you. Your school administrator must create an exam for one of your assigned class/subject combinations.'}</td></tr>`;
+    const sel=document.getElementById('teacherUploadExam');if(sel)sel.innerHTML=rows.map(x=>`<option value="${escHtml(x.examId)}">${escHtml(x.title)} — ${escHtml(x.className||'')}${x.stream?` — ${escHtml(x.stream)}`:''} — ${escHtml(x.subjectName||'')}</option>`).join('')||'<option value="">No assigned exams</option>';
+    controls.style.display=rows.length?'block':'none';if(rows.length)await loadTeacherUploadExam();
+    if(review){review.style.display=isAdmin?'block':'none';if(isAdmin)renderExamAdminReview(rows)}
+  }catch(e){notice.textContent=e.message;notice.style.display='block';box.innerHTML=`<tr><td colspan="6">${escHtml(e.message)}</td></tr>`}
 }
 async function loadTeacherUploadExam(){const id=document.getElementById('teacherUploadExam')?.value;if(!id)return;try{const r=await fetch('/api/schools/exams/'+encodeURIComponent(id)+'/marks?schoolId='+encodeURIComponent(selectedSchoolId),{credentials:'include'}),d=await parseApiResponse(r);if(!r.ok)throw new Error(d.error||'Could not load exam learners.');window.teacherUploadExam=d.exam;window.teacherUploadRoster=d.rows||[];document.getElementById('teacherResultsUploadStatus').textContent=`${d.exam.title} · ${d.rows.length} learners · ${d.exam.approval_status||d.exam.approvalStatus||'not submitted'}. CSV columns: learnerEmail, marks, comment.`;renderTeacherMarksGrid(d.rows,d.exam)}catch(e){document.getElementById('teacherResultsUploadStatus').textContent=e.message}}
 function renderTeacherMarksGrid(rows,exam){const box=document.getElementById('teacherResultsCsvPreview');if(!box)return;box.innerHTML='<h4>Online Mark Sheet</h4><table><thead><tr><th>Learner</th><th>Marks / '+escHtml(exam.max_marks)+'</th><th>Grade</th><th>Feedback</th></tr></thead><tbody>'+rows.map((x,i)=>`<tr data-mark-index="${i}"><td>${escHtml(x.learnerEmail)}</td><td><input type="number" min="0" max="${escHtml(exam.max_marks)}" step="0.01" value="${escHtml(x.marks||'')}" class="tm-mark"></td><td>${escHtml(x.grade||'—')}</td><td><input value="${escHtml(x.comment||'')}" maxlength="500" class="tm-comment"></td></tr>`).join('')+'</tbody></table>'}

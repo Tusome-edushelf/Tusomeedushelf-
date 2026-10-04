@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
-const APP_VERSION='v122-exam-creator-navigation-fix';
+const APP_VERSION='v126-admin-exam-review-prepublish-pdf';
 
 // KICD regular curriculum-design subjects currently listed for Junior School Grades 7-9.
 // Source: KICD Grade 7, Grade 8 and Grade 9 regular curriculum-design pages.
@@ -3040,8 +3040,12 @@ app.post('/api/schools/exams', requireSchoolMembership, async (req,res)=>{
   }catch(e){console.error(e);res.status(500).json({error:'Could not create exams.'})}
 });
 app.get('/api/schools/exams/:id/marks', requireSchoolMembership, async (req,res)=>{
-  try{const ex=await teacherExamAssignment(req,req.params.id);if(!ex)return res.status(404).json({error:'Exam not found.'});if(!(await assertTeacherCanAccessExam(req,ex)))return res.status(403).json({error:'You are not assigned to this class and subject.'});const r=await db.query(`SELECT sm.user_email AS "learnerEmail",COALESCE(u.display_name,sm.user_email) AS "fullName",COALESCE(p.admission_number,'') AS "admissionNumber",COALESCE(m.marks::text,'') AS marks,COALESCE(m.grade,'') AS grade,COALESCE(m.comment,'') AS comment,COALESCE(m.mark_status,'present') AS "markStatus" FROM school_memberships sm LEFT JOIN users u ON u.email=sm.user_email LEFT JOIN school_learner_profiles p ON p.school_id=sm.school_id AND p.learner_email=sm.user_email LEFT JOIN school_exam_marks m ON m.exam_id=$1 AND m.learner_email=sm.user_email WHERE sm.school_id=$2 AND sm.class_id=$3 AND sm.member_role='learner' AND sm.status='active' ORDER BY LOWER(COALESCE(u.display_name,sm.user_email)),COALESCE(p.admission_number,''),sm.user_email`,[req.params.id,req.school.schoolId,ex.class_id]);res.json({ok:true,exam:ex,rows:r.rows});}
-  catch(e){console.error(e);res.status(500).json({error:'Could not load exam marks.'})}
+  try{const ex=await teacherExamAssignment(req,req.params.id);if(!ex)return res.status(404).json({error:'Exam not found.'});
+    const isAdmin=req.school.memberRole==='admin'||req.user.role==='admin';
+    if(!isAdmin && !(await assertTeacherCanAccessExam(req,ex)))return res.status(403).json({error:'You are not assigned to this class and subject.'});
+    const r=await db.query(`SELECT sm.user_email AS "learnerEmail",COALESCE(u.display_name,sm.user_email) AS "fullName",COALESCE(p.admission_number,'') AS "admissionNumber",COALESCE(m.marks::text,'') AS marks,COALESCE(m.grade,'') AS grade,COALESCE(m.comment,'') AS comment,COALESCE(m.mark_status,'present') AS "markStatus" FROM school_memberships sm LEFT JOIN users u ON u.email=sm.user_email LEFT JOIN school_learner_profiles p ON p.school_id=sm.school_id AND p.learner_email=sm.user_email LEFT JOIN school_exam_marks m ON m.exam_id=$1 AND m.learner_email=sm.user_email WHERE sm.school_id=$2 AND sm.class_id=$3 AND sm.member_role='learner' AND sm.status='active' ORDER BY LOWER(COALESCE(u.display_name,sm.user_email)),COALESCE(p.admission_number,''),sm.user_email`,[req.params.id,req.school.schoolId,ex.class_id]);
+    res.json({ok:true,exam:ex,rows:r.rows});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not load exam marks.'})}
 });
 app.post('/api/schools/exams/:id/marks', requireSchoolMembership, async (req,res)=>{
   try{
@@ -3079,6 +3083,14 @@ app.post('/api/schools/exams/:id/review', requireSchoolMembership, async (req,re
 app.post('/api/schools/exams/:id/publish', requireSchoolMembership, async (req,res)=>{
   try{if(req.school.memberRole!=='admin'&&req.user.role!=='admin')return res.status(403).json({error:'School administrator access is required.'});const r=await db.query(`UPDATE school_exams SET status='published' WHERE exam_id=$1 AND school_id=$2 AND approval_status='approved' RETURNING exam_id`,[req.params.id,req.school.schoolId]);if(!r.rowCount)return res.status(400).json({error:'Only an approved exam can be published.'});res.json({ok:true,message:'Results published.'});}
   catch(e){console.error(e);res.status(500).json({error:'Could not publish exam results.'})}
+});
+app.post('/api/schools/exams/:id/approve-publish', requireSchoolMembership, async (req,res)=>{
+  try{
+    if(req.school.memberRole!=='admin'&&req.user.role!=='admin')return res.status(403).json({error:'School administrator access is required.'});
+    const r=await db.query(`UPDATE school_exams SET approval_status='approved',reviewed_by=$1,reviewed_at=NOW(),review_comment=$2,status='published' WHERE exam_id=$3 AND school_id=$4 AND approval_status='pending' RETURNING exam_id`,[req.user.email,String(req.body?.comment||'Pre-publication check completed.').slice(0,500),req.params.id,req.school.schoolId]);
+    if(!r.rowCount)return res.status(404).json({error:'Submitted exam not found or is no longer awaiting review.'});
+    res.json({ok:true,message:'Results approved and published by the school administrator.'});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not approve and publish exam results.'})}
 });
 app.get('/api/learner/exams', requireRole('learner'), async (req,res)=>{try{const r=await db.query(`SELECT e.exam_id AS "examId",e.title,e.exam_date AS "examDate",e.max_marks AS "maxMarks",m.marks,m.grade,m.comment,s.subject_name AS "subjectName",c.class_name AS "className",c.grade,c.stream FROM school_exam_marks m JOIN school_exams e ON e.exam_id=m.exam_id JOIN school_subjects s ON s.subject_id=e.subject_id JOIN school_classes c ON c.class_id=e.class_id WHERE m.learner_email=$1 AND e.status='published' ORDER BY e.exam_date DESC NULLS LAST,e.created_at DESC`,[req.user.email]);res.json({ok:true,rows:r.rows})}catch(e){console.error(e);res.status(500).json({error:'Could not load results.'})}});
 app.get('/api/parent/exams', requireRole('parent'), async (req,res)=>{try{const learner=req.query.learnerEmail;const linked=await db.query(`SELECT 1 FROM parent_learner_links WHERE parent_email=$1 AND learner_email=$2 AND status='active' LIMIT 1`,[req.user.email,learner]);if(!linked.rows[0])return res.status(403).json({error:'Learner is not linked to this parent account.'});const r=await db.query(`SELECT e.title,e.exam_date AS "examDate",e.max_marks AS "maxMarks",m.marks,m.grade,m.comment,s.subject_name AS "subjectName",c.class_name AS "className",c.grade,c.stream FROM school_exam_marks m JOIN school_exams e ON e.exam_id=m.exam_id JOIN school_subjects s ON s.subject_id=e.subject_id JOIN school_classes c ON c.class_id=e.class_id WHERE m.learner_email=$1 AND e.status='published' ORDER BY e.exam_date DESC NULLS LAST`,[learner]);res.json({ok:true,rows:r.rows})}catch(e){console.error(e);res.status(500).json({error:'Could not load learner results.'})}});

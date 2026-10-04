@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
-const APP_VERSION='v121-kicd-subject-selection-fix';
+const APP_VERSION='v122-exam-creator-navigation-fix';
 
 // KICD regular curriculum-design subjects currently listed for Junior School Grades 7-9.
 // Source: KICD Grade 7, Grade 8 and Grade 9 regular curriculum-design pages.

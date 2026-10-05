@@ -1,0 +1,19 @@
+TusomeEduShelf Automatic Exam Feedback
+
+Applied to the current uploaded index.html.
+
+Behavior:
+- After the teacher saves an exam mark sheet, blank feedback fields are automatically populated.
+- Existing teacher-written feedback is preserved and never overwritten.
+- Feedback is generated from percentage performance:
+  80-100%: excellent
+  70-79%: very good
+  60-69%: good
+  50-59%: fair effort / more revision
+  40-49%: developing understanding / support
+  below 40%: additional support recommended
+- Absent learners receive an attendance/exam follow-up message.
+- Irregular learners receive an examination-procedure message.
+- Generated feedback is sent with the saved marks so it persists with the mark record.
+
+No database migration or server.mjs change is required because the existing marks endpoint already accepts the comment field.

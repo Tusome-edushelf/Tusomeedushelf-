@@ -1,9 +1,14 @@
-PATCH NAME: TusomeEduShelf v126.3 — Exam Workflow Restore
-TARGET BASELINE: v126.2
-DATE: 2026-10-05
-PURPOSE: Restore complete school exam workflow UI/routing.
-FILES MODIFIED: index.html
-DATABASE CHANGES: None
-ENVIRONMENT CHANGES: None
-WORKFLOW: Teacher marks -> Save -> Submit for Review -> Admin Pre-Publish PDF -> physical check -> Admin Approve & Publish -> learner/parent published results only.
-ROLLBACK: Restore v126.2 index.html.
+Patch name: TusomeEduShelf v126.5 — Exam Admin Review Fix
+Target: current main / v126.x baseline
+Date: 2026-10-05
+Purpose: Fix admin exam review panel rendering and refresh behavior.
+Files to modify: index.html only.
+Files removed: none.
+Database changes: none.
+Environment changes: none.
+API changes: none.
+Migration required: no.
+Deployment: replace/apply the index.html changes, then deploy normally.
+Rollback: restore the previous index.html.
+Safety: server.mjs and PostgreSQL data are intentionally untouched.
+Verified finding: renderExamAdminReview() currently ignores its targetId argument.

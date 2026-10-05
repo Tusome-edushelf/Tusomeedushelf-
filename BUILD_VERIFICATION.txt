@@ -1,0 +1,26 @@
+TUSOME EDUSHELF v126.5 BUILD VERIFICATION
+
+Verified current GitHub main source before building:
+- School login endpoint present
+- GET /api/schools/classes present
+- GET /api/schools/subjects present
+- Exam submit endpoint present
+- Exam approve-publish endpoint present
+- Exam admin workflow loader present
+- Bulk learner registration UI present
+- Registered learner retrieval UI present
+- Submit for Review function present
+- Pre-Publish PDF function present
+- Approve & Publish function present
+
+Patch scope:
+- index.html only
+- Fixes renderExamAdminReview target panel
+- No database changes
+- No server.mjs changes
+- No GitHub push
+
+Database records preserved:
+- 230 learners
+- 4 classes
+- 10 exams

@@ -1,0 +1,18 @@
+TusomeEduShelf v126.6 Complete Deployment
+
+Files included:
+- index.html — current frontend baseline with v126.5 admin review fix and v126.6 automatic marks feedback
+- server.mjs — current backend from the project's main deployment source
+- package.json — Node/Express/PostgreSQL production dependencies and start script
+- data/ — runtime data directory (PostgreSQL is the production source of truth)
+- README.md — deployment notes
+
+v126.6:
+- Automatic learner feedback after marks are saved.
+- Teacher-written feedback is preserved when present.
+- Existing exam workflow, bulk registration, school login, pre-publish PDF and direct admin publication are retained.
+
+No database migration is required for automatic feedback.
+No GitHub or Render changes were made by this build.
+
+Deploy the complete contents of this folder as the application root and redeploy the Render service.

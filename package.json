@@ -1,9 +1,17 @@
 {
   "name": "tusome-edushelf",
-  "version": "126.6.0",
+  "version": "126.9.0",
   "private": true,
   "type": "module",
-  "scripts": {"start": "node server.mjs"},
-  "engines": {"node": ">=18"},
-  "dependencies": {"dotenv": "^16.4.7", "express": "^4.21.2", "pg": "^8.13.1"}
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "pg": "^8.13.1"
+  }
 }

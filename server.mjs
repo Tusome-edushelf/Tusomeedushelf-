@@ -2355,6 +2355,23 @@ app.delete('/api/schools/parent-links/:id', requireAuth, async (req,res)=>{
 });
 
 // v39 Academic Management: subjects, teacher allocations, terms and class assignments.
+// v126.1 Exam setup compatibility: the exam frontend loads classes and subjects
+// through these read-only endpoints. Keep the response shapes compatible with the
+// existing exam UI while using the same school-membership access control.
+app.get('/api/schools/classes', requireSchoolMembership, async (req,res)=>{
+  try{
+    const r=await db.query(`SELECT class_id AS "classId",class_name AS "className",grade,stream,teacher_email AS "teacherEmail" FROM school_classes WHERE school_id=$1 ORDER BY grade,class_name,stream`,[req.school.schoolId]);
+    res.json({ok:true,classes:r.rows,rows:r.rows});
+  }catch(e){console.error('school classes load failed:',e);res.status(500).json({error:'Could not load school classes.'})}
+});
+
+app.get('/api/schools/subjects', requireSchoolMembership, async (req,res)=>{
+  try{
+    const r=await db.query(`SELECT subject_id AS "subjectId",subject_name AS name,subject_name AS "subjectName",learning_area AS "learningArea" FROM school_subjects WHERE school_id=$1 ORDER BY subject_name`,[req.school.schoolId]);
+    res.json({ok:true,subjects:r.rows,rows:r.rows});
+  }catch(e){console.error('school subjects load failed:',e);res.status(500).json({error:'Could not load school subjects.'})}
+});
+
 app.get('/api/schools/academic', requireSchoolMembership, async (req,res)=>{
   try{
     const [subjects,allocations,terms,assignments]=await Promise.all([

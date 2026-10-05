@@ -1,49 +1,37 @@
-TusomeEduShelf v126 — Exam Review / Submit / Pre-Publish / Publish Update
+TusomeEduShelf Exam/API Regression Fix v126.1
+Target baseline: v126 / current main source inspected 2026-10-05
+Purpose: Restore the missing school classes/subjects GET API endpoints used by the existing Exams & Results frontend.
 
-Target: TusomeEduShelf v126 workflow
-Purpose: Restore/complete the school exam results review workflow and repair teacher Submit for Review.
+Files modified:
+- index.html — included unchanged from the inspected v126 baseline; preserves the existing Exams & Results UI and review/publish workflow.
+- server.mjs — added GET /api/schools/classes and GET /api/schools/subjects.
 
-FILES INCLUDED
-- index.html — updated frontend exam workflow
-- server.mjs — updated backend exam workflow
+Files added:
 - PATCH_MANIFEST.txt
 - PATCH_NOTES.md
 
-CHANGES
-1. Teacher Submit for Review is wired to POST /api/schools/exams/:id/submit.
-2. Server tracks exam approval_status, submitted_at, reviewed_at and published_at.
-3. Admin can review pending results.
-4. Admin can download a pre-publication result-check PDF.
-5. Admin can directly Approve & Publish; teacher is not required to publish.
-6. Learner and parent exam APIs return only published + approved results.
-7. Existing mark entry, grade calculation, CSV workflow and other platform features are preserved in the supplied baseline files.
+Files removed: none.
+Database changes: none.
+Environment-variable changes: none.
 
-DATABASE
-- No destructive migration.
-- server.mjs uses ALTER TABLE ... ADD COLUMN IF NOT EXISTS for the four exam workflow fields and creates an index.
+API endpoints restored:
+- GET /api/schools/classes
+- GET /api/schools/subjects
 
-ENVIRONMENT
-- No new environment variables.
+Existing exam endpoints preserved:
+- GET/POST /api/schools/exams
+- GET/POST /api/schools/exams/:id/marks
+- POST /api/schools/exams/:id/submit
+- POST /api/schools/exams/:id/review
+- POST /api/schools/exams/:id/approve-publish
+- POST /api/schools/exams/:id/publish
+- GET /api/learner/exams
+- GET /api/parent/exams
 
-API ROUTES
-POST /api/schools/exams/:id/submit
-POST /api/schools/exams/:id/review
-POST /api/schools/exams/:id/approve-publish
-POST /api/schools/exams/:id/publish
-GET  /api/learner/exams (published-only)
-GET  /api/parent/exams (published-only)
+Deployment:
+1. Replace/upload the included index.html and server.mjs in the project root.
+2. Deploy/redeploy normally on Render.
+3. Do not combine this ZIP with the older SubmitReview patch or another full-file ZIP.
 
-DEPLOYMENT
-1. Back up the current index.html and server.mjs.
-2. Replace both files with the ZIP versions.
-3. Deploy normally.
-4. Confirm the service starts successfully.
-5. Teacher: Save Mark Sheet -> Submit for Review.
-6. Admin: Results Review -> Pre-Publish PDF -> Approve & Publish.
-7. Confirm learner/parent cannot see results until publication.
-
-ROLLBACK
-Restore the two backed-up files. If the new exam columns were created, they are additive and harmless to the previous code; do not manually drop them.
-
-IMPORTANT
-This package is a safe manual-deployment package. No GitHub or Render changes were made.
+Rollback:
+Restore the previous working index.html and server.mjs files from your known-good backup/version.

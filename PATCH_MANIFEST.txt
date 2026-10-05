@@ -1,30 +1,9 @@
-PATCH: TusomeEduShelf v126.2 School Login + Exam API Recovery
-TARGET BASELINE: v126.1 (TusomeEduShelf_v126.1_Exam_API_Regression_Fix)
+PATCH NAME: TusomeEduShelf v126.3 — Exam Workflow Restore
+TARGET BASELINE: v126.2
 DATE: 2026-10-05
-
-PURPOSE
-Restore the School Dashboard login API and the school exam setup APIs that were still missing/mismatched, while preserving the existing exam workflow.
-
-FILES MODIFIED
-- index.html — retained from v126.1; no functional replacement needed.
-- server.mjs — corrected school login, school class/subject reads, and school membership role checks used by exams.
-
-KEY FIXES
-1. Added POST /api/schools/login, which the existing school login form already calls.
-2. Added GET /api/schools/classes for exam setup.
-3. Added GET /api/schools/subjects for exam setup.
-4. Corrected exam/report authorization checks from req.school.role to req.school.memberRole, matching requireSchoolMembership().
-5. Preserved /api/schools/exams, marks, submit, review, approve-publish, publish, learner results and parent results routes.
-
-DATABASE CHANGES
-None. Existing tables are used.
-
-ENVIRONMENT CHANGES
-None.
-
-DEPLOYMENT
-Replace server.mjs and index.html together from this ZIP on Render. Do not combine with older patches.
-After deployment, perform a fresh browser reload and test School Sign In before testing Exams & Results.
-
-ROLLBACK
-Restore the previous v126.1 server.mjs and index.html if another unrelated regression appears.
+PURPOSE: Restore complete school exam workflow UI/routing.
+FILES MODIFIED: index.html
+DATABASE CHANGES: None
+ENVIRONMENT CHANGES: None
+WORKFLOW: Teacher marks -> Save -> Submit for Review -> Admin Pre-Publish PDF -> physical check -> Admin Approve & Publish -> learner/parent published results only.
+ROLLBACK: Restore v126.2 index.html.

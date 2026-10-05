@@ -1,37 +1,30 @@
-TusomeEduShelf Exam/API Regression Fix v126.1
-Target baseline: v126 / current main source inspected 2026-10-05
-Purpose: Restore the missing school classes/subjects GET API endpoints used by the existing Exams & Results frontend.
+PATCH: TusomeEduShelf v126.2 School Login + Exam API Recovery
+TARGET BASELINE: v126.1 (TusomeEduShelf_v126.1_Exam_API_Regression_Fix)
+DATE: 2026-10-05
 
-Files modified:
-- index.html — included unchanged from the inspected v126 baseline; preserves the existing Exams & Results UI and review/publish workflow.
-- server.mjs — added GET /api/schools/classes and GET /api/schools/subjects.
+PURPOSE
+Restore the School Dashboard login API and the school exam setup APIs that were still missing/mismatched, while preserving the existing exam workflow.
 
-Files added:
-- PATCH_MANIFEST.txt
-- PATCH_NOTES.md
+FILES MODIFIED
+- index.html — retained from v126.1; no functional replacement needed.
+- server.mjs — corrected school login, school class/subject reads, and school membership role checks used by exams.
 
-Files removed: none.
-Database changes: none.
-Environment-variable changes: none.
+KEY FIXES
+1. Added POST /api/schools/login, which the existing school login form already calls.
+2. Added GET /api/schools/classes for exam setup.
+3. Added GET /api/schools/subjects for exam setup.
+4. Corrected exam/report authorization checks from req.school.role to req.school.memberRole, matching requireSchoolMembership().
+5. Preserved /api/schools/exams, marks, submit, review, approve-publish, publish, learner results and parent results routes.
 
-API endpoints restored:
-- GET /api/schools/classes
-- GET /api/schools/subjects
+DATABASE CHANGES
+None. Existing tables are used.
 
-Existing exam endpoints preserved:
-- GET/POST /api/schools/exams
-- GET/POST /api/schools/exams/:id/marks
-- POST /api/schools/exams/:id/submit
-- POST /api/schools/exams/:id/review
-- POST /api/schools/exams/:id/approve-publish
-- POST /api/schools/exams/:id/publish
-- GET /api/learner/exams
-- GET /api/parent/exams
+ENVIRONMENT CHANGES
+None.
 
-Deployment:
-1. Replace/upload the included index.html and server.mjs in the project root.
-2. Deploy/redeploy normally on Render.
-3. Do not combine this ZIP with the older SubmitReview patch or another full-file ZIP.
+DEPLOYMENT
+Replace server.mjs and index.html together from this ZIP on Render. Do not combine with older patches.
+After deployment, perform a fresh browser reload and test School Sign In before testing Exams & Results.
 
-Rollback:
-Restore the previous working index.html and server.mjs files from your known-good backup/version.
+ROLLBACK
+Restore the previous v126.1 server.mjs and index.html if another unrelated regression appears.

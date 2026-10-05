@@ -1287,6 +1287,24 @@ app.post('/api/auth/school-register', async (req,res)=>{
   }catch(e){console.error(e);res.status(500).json({error:'Could not create the school account.'})}
 });
 
+app.post('/api/schools/login', async (req,res)=>{
+  const identifier=String(req.body?.identifier||req.body?.username||req.body?.email||'').trim();
+  const password=String(req.body?.password||'');
+  if(!identifier||!password)return res.status(400).json({error:'School email/username and password are required.'});
+  try{
+    const user=await findUser(identifier);
+    if(!user || !verifyPassword(password,user.passwordHash)) return res.status(401).json({error:'Invalid school email/username and password.'});
+    if(!databaseReady || !db)return res.status(503).json({error:'The school database is not ready. Please try again shortly.'});
+    const memberships=await db.query(`SELECT sm.school_id AS "schoolId",sc.school_name AS "schoolName",sm.member_role AS "memberRole",sm.status,sc.status AS "schoolStatus" FROM school_memberships sm JOIN schools sc ON sc.school_id=sm.school_id WHERE sm.user_email=$1 AND sm.status='active' AND sc.status='active' ORDER BY sc.school_name`,[user.email]);
+    if(!memberships.rowCount)return res.status(403).json({error:'This account does not have an active school workspace.'});
+    const school=memberships.rows[0];
+    const sessionUser={email:user.email,username:user.username||null,role:user.role};
+    setSessionCookie(res,sessionUser);
+    void audit({user:sessionUser},'school_login','school',school.schoolId,{memberRole:school.memberRole});
+    res.json({ok:true,user:sessionUser,school:{schoolId:school.schoolId,schoolName:school.schoolName,memberRole:school.memberRole}});
+  }catch(e){console.error('school login failed:',e);res.status(500).json({error:'Could not sign in to the school workspace.'})}
+});
+
 app.post('/api/auth/login', async (req, res) => {
   const identifier=String(req.body?.identifier||req.body?.username||req.body?.email||'').trim();
   const password=String(req.body?.password||'');
@@ -2145,6 +2163,13 @@ app.get('/api/schools/dashboard', requireSchoolMembership, async (req,res)=>{
   }catch(e){console.error('school dashboard load failed:',e);res.status(500).json({error:'Could not load school dashboard.'})}
 });
 
+app.get('/api/schools/classes', requireSchoolMembership, async (req,res)=>{
+  try{
+    const r=await db.query(`SELECT class_id AS "classId",class_name AS "className",grade,stream,teacher_email AS "teacherEmail" FROM school_classes WHERE school_id=$1 ORDER BY grade,class_name,stream`,[req.school.schoolId]);
+    res.json({ok:true,classes:r.rows});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not load school classes.'})}
+});
+
 app.post('/api/schools/classes', requireAuth, async (req,res)=>{
   const fake={query:{},body:req.body}; req.query={schoolId:req.body?.schoolId};
   return requireSchoolMembership({...req,query:req.query},res,async()=>{
@@ -2355,23 +2380,6 @@ app.delete('/api/schools/parent-links/:id', requireAuth, async (req,res)=>{
 });
 
 // v39 Academic Management: subjects, teacher allocations, terms and class assignments.
-// v126.1 Exam setup compatibility: the exam frontend loads classes and subjects
-// through these read-only endpoints. Keep the response shapes compatible with the
-// existing exam UI while using the same school-membership access control.
-app.get('/api/schools/classes', requireSchoolMembership, async (req,res)=>{
-  try{
-    const r=await db.query(`SELECT class_id AS "classId",class_name AS "className",grade,stream,teacher_email AS "teacherEmail" FROM school_classes WHERE school_id=$1 ORDER BY grade,class_name,stream`,[req.school.schoolId]);
-    res.json({ok:true,classes:r.rows,rows:r.rows});
-  }catch(e){console.error('school classes load failed:',e);res.status(500).json({error:'Could not load school classes.'})}
-});
-
-app.get('/api/schools/subjects', requireSchoolMembership, async (req,res)=>{
-  try{
-    const r=await db.query(`SELECT subject_id AS "subjectId",subject_name AS name,subject_name AS "subjectName",learning_area AS "learningArea" FROM school_subjects WHERE school_id=$1 ORDER BY subject_name`,[req.school.schoolId]);
-    res.json({ok:true,subjects:r.rows,rows:r.rows});
-  }catch(e){console.error('school subjects load failed:',e);res.status(500).json({error:'Could not load school subjects.'})}
-});
-
 app.get('/api/schools/academic', requireSchoolMembership, async (req,res)=>{
   try{
     const [subjects,allocations,terms,assignments]=await Promise.all([
@@ -2383,6 +2391,13 @@ app.get('/api/schools/academic', requireSchoolMembership, async (req,res)=>{
     res.json({ok:true,subjects:subjects.rows,allocations:allocations.rows,terms:terms.rows,assignments:assignments.rows});
   }catch(e){console.error(e);res.status(500).json({error:'Could not load academic management.'})}
 });
+app.get('/api/schools/subjects', requireSchoolMembership, async (req,res)=>{
+  try{
+    const r=await db.query(`SELECT subject_id AS "subjectId",subject_name AS name,subject_name AS "subjectName",learning_area AS "learningArea" FROM school_subjects WHERE school_id=$1 ORDER BY subject_name`,[req.school.schoolId]);
+    res.json({ok:true,subjects:r.rows,rows:r.rows});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not load school subjects.'})}
+});
+
 app.post('/api/schools/subjects', requireAuth, async (req,res)=>{
   req.query={schoolId:req.body?.schoolId}; return requireSchoolMembership(req,res,async()=>{try{
     if(req.school.memberRole!=='admin'&&req.user.role!=='admin')return res.status(403).json({error:'School admin access is required.'});
@@ -2685,7 +2700,7 @@ app.get('/api/schools/exams', requireSchoolMembership, async (req,res)=>{
   catch(e){console.error(e);res.status(500).json({error:'Could not load exams.'})}
 });
 app.post('/api/schools/exams', requireSchoolMembership, async (req,res)=>{
-  try{if(!['teacher','admin'].includes(req.school.role))return res.status(403).json({error:'Teacher or school administrator access is required.'}); const {title,classId,subjectId,examDate,maxMarks}=req.body||{}; if(!title||!classId||!subjectId)return res.status(400).json({error:'Title, class and subject are required.'}); const id='exam_'+Date.now()+'_'+Math.random().toString(36).slice(2,8); await db.query(`INSERT INTO school_exams(exam_id,school_id,class_id,subject_id,title,exam_date,max_marks,status,approval_status,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,'open','draft',$8)`,[id,req.school.schoolId,classId,subjectId,String(title).trim().slice(0,160),examDate||null,Math.max(1,Number(maxMarks)||100),req.user.email]);res.json({ok:true,examId:id})}
+  try{if(!['teacher','admin'].includes(req.school.memberRole))return res.status(403).json({error:'Teacher or school administrator access is required.'}); const {title,classId,subjectId,examDate,maxMarks}=req.body||{}; if(!title||!classId||!subjectId)return res.status(400).json({error:'Title, class and subject are required.'}); const id='exam_'+Date.now()+'_'+Math.random().toString(36).slice(2,8); await db.query(`INSERT INTO school_exams(exam_id,school_id,class_id,subject_id,title,exam_date,max_marks,status,approval_status,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,'open','draft',$8)`,[id,req.school.schoolId,classId,subjectId,String(title).trim().slice(0,160),examDate||null,Math.max(1,Number(maxMarks)||100),req.user.email]);res.json({ok:true,examId:id})}
   catch(e){console.error(e);res.status(500).json({error:'Could not create exam.'})}
 });
 app.get('/api/schools/exams/:id/marks', requireSchoolMembership, async (req,res)=>{
@@ -2693,13 +2708,13 @@ app.get('/api/schools/exams/:id/marks', requireSchoolMembership, async (req,res)
   catch(e){console.error(e);res.status(500).json({error:'Could not load exam marks.'})}
 });
 app.post('/api/schools/exams/:id/marks', requireSchoolMembership, async (req,res)=>{
-  try{if(!['teacher','admin'].includes(req.school.role))return res.status(403).json({error:'Teacher or school administrator access is required.'}); const ex=(await db.query(`SELECT * FROM school_exams WHERE exam_id=$1 AND school_id=$2`,[req.params.id,req.school.schoolId])).rows[0];if(!ex)return res.status(404).json({error:'Exam not found.'}); const rows=Array.isArray(req.body?.rows)?req.body.rows:[];for(const x of rows){const m=x.marks===''||x.marks==null?null:Number(x.marks);if(m!==null&&(!Number.isFinite(m)||m<0||m>Number(ex.max_marks)))continue;const grade=m===null?'':(m/Number(ex.max_marks)>=.8?'EE':m/Number(ex.max_marks)>=.6?'ME':m/Number(ex.max_marks)>=.4?'AE':'BE');const id='mark_'+Date.now()+'_'+Math.random().toString(36).slice(2,8);await db.query(`INSERT INTO school_exam_marks(mark_id,exam_id,school_id,learner_email,marks,grade,comment,entered_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT(exam_id,learner_email) DO UPDATE SET marks=EXCLUDED.marks,grade=EXCLUDED.grade,comment=EXCLUDED.comment,entered_by=EXCLUDED.entered_by,updated_at=NOW()`,[id,req.params.id,req.school.schoolId,x.learnerEmail,m,grade,String(x.comment||'').slice(0,500),req.user.email])}res.json({ok:true,message:'Marks saved.'})}
+  try{if(!['teacher','admin'].includes(req.school.memberRole))return res.status(403).json({error:'Teacher or school administrator access is required.'}); const ex=(await db.query(`SELECT * FROM school_exams WHERE exam_id=$1 AND school_id=$2`,[req.params.id,req.school.schoolId])).rows[0];if(!ex)return res.status(404).json({error:'Exam not found.'}); const rows=Array.isArray(req.body?.rows)?req.body.rows:[];for(const x of rows){const m=x.marks===''||x.marks==null?null:Number(x.marks);if(m!==null&&(!Number.isFinite(m)||m<0||m>Number(ex.max_marks)))continue;const grade=m===null?'':(m/Number(ex.max_marks)>=.8?'EE':m/Number(ex.max_marks)>=.6?'ME':m/Number(ex.max_marks)>=.4?'AE':'BE');const id='mark_'+Date.now()+'_'+Math.random().toString(36).slice(2,8);await db.query(`INSERT INTO school_exam_marks(mark_id,exam_id,school_id,learner_email,marks,grade,comment,entered_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT(exam_id,learner_email) DO UPDATE SET marks=EXCLUDED.marks,grade=EXCLUDED.grade,comment=EXCLUDED.comment,entered_by=EXCLUDED.entered_by,updated_at=NOW()`,[id,req.params.id,req.school.schoolId,x.learnerEmail,m,grade,String(x.comment||'').slice(0,500),req.user.email])}res.json({ok:true,message:'Marks saved.'})}
   catch(e){console.error(e);res.status(500).json({error:'Could not save marks.'})}
 });
 
 app.post('/api/schools/exams/:id/submit', requireSchoolMembership, async (req,res)=>{
   try{
-    if(req.school.role!=='teacher') return res.status(403).json({error:'Teacher access is required to submit results.'});
+    if(req.school.memberRole!=='teacher') return res.status(403).json({error:'Teacher access is required to submit results.'});
     const ex=(await db.query(`SELECT * FROM school_exams WHERE exam_id=$1 AND school_id=$2`,[req.params.id,req.school.schoolId])).rows[0];
     if(!ex) return res.status(404).json({error:'Exam not found.'});
     if(ex.created_by!==req.user.email) return res.status(403).json({error:'You can only submit exams you created.'});
@@ -2713,7 +2728,7 @@ app.post('/api/schools/exams/:id/submit', requireSchoolMembership, async (req,re
 
 app.post('/api/schools/exams/:id/review', requireSchoolMembership, async (req,res)=>{
   try{
-    if(req.school.role!=='admin' && req.user.role!=='admin') return res.status(403).json({error:'School administrator access is required.'});
+    if(req.school.memberRole!=='admin' && req.user.role!=='admin') return res.status(403).json({error:'School administrator access is required.'});
     const action=String(req.body?.action||'').toLowerCase();
     if(!['approve','reject'].includes(action)) return res.status(400).json({error:'Review action must be approve or reject.'});
     const ex=(await db.query(`SELECT * FROM school_exams WHERE exam_id=$1 AND school_id=$2`,[req.params.id,req.school.schoolId])).rows[0];
@@ -2726,7 +2741,7 @@ app.post('/api/schools/exams/:id/review', requireSchoolMembership, async (req,re
 
 app.post('/api/schools/exams/:id/approve-publish', requireSchoolMembership, async (req,res)=>{
   try{
-    if(req.school.role!=='admin' && req.user.role!=='admin') return res.status(403).json({error:'School administrator access is required.'});
+    if(req.school.memberRole!=='admin' && req.user.role!=='admin') return res.status(403).json({error:'School administrator access is required.'});
     const ex=(await db.query(`SELECT * FROM school_exams WHERE exam_id=$1 AND school_id=$2`,[req.params.id,req.school.schoolId])).rows[0];
     if(!ex) return res.status(404).json({error:'Exam not found.'});
     if(ex.approval_status!=='approved' && ex.approval_status!=='pending') return res.status(400).json({error:'Results must be submitted for review before publishing.'});
@@ -2737,7 +2752,7 @@ app.post('/api/schools/exams/:id/approve-publish', requireSchoolMembership, asyn
 
 app.post('/api/schools/exams/:id/publish', requireSchoolMembership, async (req,res)=>{
   try{
-    if(req.school.role!=='admin' && req.user.role!=='admin') return res.status(403).json({error:'School administrator access is required.'});
+    if(req.school.memberRole!=='admin' && req.user.role!=='admin') return res.status(403).json({error:'School administrator access is required.'});
     const ex=(await db.query(`SELECT * FROM school_exams WHERE exam_id=$1 AND school_id=$2`,[req.params.id,req.school.schoolId])).rows[0];
     if(!ex) return res.status(404).json({error:'Exam not found.'});
     if(ex.approval_status!=='approved') return res.status(400).json({error:'Approve the results before publishing.'});
@@ -2748,7 +2763,7 @@ app.post('/api/schools/exams/:id/publish', requireSchoolMembership, async (req,r
 
 app.get('/api/learner/exams', requireRole('learner'), async (req,res)=>{try{const r=await db.query(`SELECT e.exam_id AS "examId",e.title,e.exam_date AS "examDate",e.max_marks AS "maxMarks",m.marks,m.grade,m.comment,s.name AS "subjectName",c.class_name AS "className" FROM school_exam_marks m JOIN school_exams e ON e.exam_id=m.exam_id JOIN school_subjects s ON s.subject_id=e.subject_id JOIN school_classes c ON c.class_id=e.class_id WHERE m.learner_email=$1 AND e.status='published' AND e.approval_status='approved' ORDER BY e.exam_date DESC NULLS LAST,e.created_at DESC`,[req.user.email]);res.json({ok:true,rows:r.rows})}catch(e){console.error(e);res.status(500).json({error:'Could not load results.'})}});
 app.get('/api/parent/exams', requireRole('parent'), async (req,res)=>{try{const learner=req.query.learnerEmail;const linked=await db.query(`SELECT 1 FROM parent_learner_links WHERE parent_email=$1 AND learner_email=$2 AND status='active' LIMIT 1`,[req.user.email,learner]);if(!linked.rows[0])return res.status(403).json({error:'Learner is not linked to this parent account.'});const r=await db.query(`SELECT e.title,e.exam_date AS "examDate",e.max_marks AS "maxMarks",m.marks,m.grade,m.comment,s.name AS "subjectName",c.class_name AS "className" FROM school_exam_marks m JOIN school_exams e ON e.exam_id=m.exam_id JOIN school_subjects s ON s.subject_id=e.subject_id JOIN school_classes c ON c.class_id=e.class_id WHERE m.learner_email=$1 AND e.status='published' AND e.approval_status='approved' ORDER BY e.exam_date DESC NULLS LAST`,[learner]);res.json({ok:true,rows:r.rows})}catch(e){console.error(e);res.status(500).json({error:'Could not load learner results.'})}});
-app.post('/api/schools/report-cards/generate', requireSchoolMembership, async (req,res)=>{try{if(req.school.role!=='admin')return res.status(403).json({error:'School administrator access is required.'});const classId=req.body?.classId;const termId=req.body?.termId||null;if(!classId)return res.status(400).json({error:'Class is required.'});const learners=await db.query(`SELECT user_email FROM school_memberships WHERE school_id=$1 AND class_id=$2 AND member_role='learner' AND status='active'`,[req.school.schoolId,classId]);let count=0;for(const l of learners.rows){const avg=await db.query(`SELECT AVG(m.marks/NULLIF(e.max_marks,0)*100) AS avg FROM school_exam_marks m JOIN school_exams e ON e.exam_id=m.exam_id WHERE m.school_id=$1 AND m.learner_email=$2 AND e.class_id=$3`,[req.school.schoolId,l.user_email,classId]);const id='report_'+Date.now()+'_'+Math.random().toString(36).slice(2,8);await db.query(`INSERT INTO school_report_cards(report_id,school_id,learner_email,class_id,term_id,status,overall_average,created_by) VALUES($1,$2,$3,$4,$5,'draft',$6,$7) ON CONFLICT DO NOTHING`,[id,req.school.schoolId,l.user_email,classId,termId,avg.rows[0]?.avg?Number(avg.rows[0].avg).toFixed(2):null,req.user.email]);count++}res.json({ok:true,count,message:'Draft report cards generated.'})}catch(e){console.error(e);res.status(500).json({error:'Could not generate report cards.'})}});
+app.post('/api/schools/report-cards/generate', requireSchoolMembership, async (req,res)=>{try{if(req.school.memberRole!=='admin')return res.status(403).json({error:'School administrator access is required.'});const classId=req.body?.classId;const termId=req.body?.termId||null;if(!classId)return res.status(400).json({error:'Class is required.'});const learners=await db.query(`SELECT user_email FROM school_memberships WHERE school_id=$1 AND class_id=$2 AND member_role='learner' AND status='active'`,[req.school.schoolId,classId]);let count=0;for(const l of learners.rows){const avg=await db.query(`SELECT AVG(m.marks/NULLIF(e.max_marks,0)*100) AS avg FROM school_exam_marks m JOIN school_exams e ON e.exam_id=m.exam_id WHERE m.school_id=$1 AND m.learner_email=$2 AND e.class_id=$3`,[req.school.schoolId,l.user_email,classId]);const id='report_'+Date.now()+'_'+Math.random().toString(36).slice(2,8);await db.query(`INSERT INTO school_report_cards(report_id,school_id,learner_email,class_id,term_id,status,overall_average,created_by) VALUES($1,$2,$3,$4,$5,'draft',$6,$7) ON CONFLICT DO NOTHING`,[id,req.school.schoolId,l.user_email,classId,termId,avg.rows[0]?.avg?Number(avg.rows[0].avg).toFixed(2):null,req.user.email]);count++}res.json({ok:true,count,message:'Draft report cards generated.'})}catch(e){console.error(e);res.status(500).json({error:'Could not generate report cards.'})}});
 app.get('/api/learner/report-cards', requireRole('learner'), async (req,res)=>{try{const r=await db.query(`SELECT report_id AS "reportId",class_id AS "classId",term_id AS "termId",status,overall_average AS "overallAverage",teacher_comment AS "teacherComment",created_at AS "createdAt",published_at AS "publishedAt" FROM school_report_cards WHERE learner_email=$1 AND status='published' ORDER BY created_at DESC`,[req.user.email]);res.json({ok:true,rows:r.rows})}catch(e){console.error(e);res.status(500).json({error:'Could not load report cards.'})}});
 app.get('/api/parent/report-cards', requireRole('parent'), async (req,res)=>{try{const learner=req.query.learnerEmail;const linked=await db.query(`SELECT 1 FROM parent_learner_links WHERE parent_email=$1 AND learner_email=$2 AND status='active' LIMIT 1`,[req.user.email,learner]);if(!linked.rows[0])return res.status(403).json({error:'Learner is not linked to this parent account.'});const r=await db.query(`SELECT report_id AS "reportId",class_id AS "classId",term_id AS "termId",overall_average AS "overallAverage",teacher_comment AS "teacherComment",published_at AS "publishedAt" FROM school_report_cards WHERE learner_email=$1 AND status='published' ORDER BY published_at DESC`,[learner]);res.json({ok:true,rows:r.rows})}catch(e){console.error(e);res.status(500).json({error:'Could not load report cards.'})}});
 

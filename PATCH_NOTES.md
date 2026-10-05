@@ -1,15 +1,10 @@
-TusomeEduShelf v126.9 — Submit for Review Fix
+TusomeEduShelf v126.10 — School Admin Mark Sheet Submission
 
-FIXED:
-- Restored the missing submitTeacherExamResults() frontend function.
-- Teacher "Submit for Review" now calls POST /api/schools/exams/:id/submit.
-- Added an administrator "Submit for Review" action to open/draft exams in the Exams list.
-- Administrator submission uses the same secure backend workflow and validates that every active learner has a recorded status/mark.
-- Existing admin edit, pre-publish PDF, return-for-correction, and approve-and-publish workflow is preserved.
-- Existing automatic feedback remains preserved.
-- No database migration or database replacement.
-- Existing PostgreSQL data is untouched.
-
-VERIFICATION:
-- server.mjs syntax: PASS
-- 7 inline JavaScript blocks: PASS
+FIX:
+- School Admin Exams dashboard now shows draft/open mark sheets in the administrator review/action panel.
+- Admin gets an explicit “Edit Mark Sheet” button for draft exams.
+- Admin gets an explicit “Submit Mark Sheet for Review” button for draft exams.
+- Pending exams retain Edit Submitted Marks, Pre-Publish PDF, Approve & Publish, and Return for Correction.
+- Backend /api/schools/exams/:id/submit now permits authorized school admins as well as assigned teachers.
+- Backend /api/schools/exams/:id/marks permits authorized school admins to edit draft/pending marks while still blocking approved/published exams.
+- No database migration, deletion, reset, or replacement.

@@ -1,0 +1,15 @@
+BUILD: TusomeEduShelf v126.10
+FILES:
+- index.html
+- server.mjs
+- package.json
+- PATCH_NOTES.md
+
+VERIFICATION:
+- server.mjs node --check: PASS
+- index.html inline JS blocks: 7, all PASS
+- Admin draft mark-sheet action: PRESENT
+- Admin submit-mark-sheet action: PRESENT
+- Admin submit endpoint permission: FIXED
+- Approved/published mark editing: BLOCKED
+- Database migration: NONE

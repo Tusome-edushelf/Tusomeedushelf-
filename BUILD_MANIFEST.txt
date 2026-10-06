@@ -1,15 +1,5 @@
-BUILD: TusomeEduShelf v126.11
-SOURCE: current exam frontend/backend source
-FILES:
-- index.html
-- server.mjs
-- package.json
-- PATCH_NOTES.md
-
-VERIFIED:
-- server.mjs: node --check PASS
-- index.html inline JavaScript: 7/7 PASS
-- Admin Submit Mark Sheet for Review button: PRESENT
-- Admin draft editor: PRESENT
-- Admin submission permission: PRESENT
-- Admin-only hiding of teacher Marks Entry panel: PRESENT
+BUILD: TusomeEduShelf v126.13
+FILES: index.html, server.mjs, package.json, PATCH_NOTES.md
+VERIFICATION: server.mjs node --check PASS; inline JS blocks 7/7 PASS
+WORKFLOW: save automatically exposes marks to admin; teacher/admin editing allowed before publication; pre-publish PDF retained; approve-publish retained; published results locked.
+DATABASE: no reset/migration/drop/truncate.

@@ -1,18 +1,23 @@
-# v126.11 — Real School Admin Mark Sheet Submission Fix
+# TusomeEduShelf v126.13 — Clean Auto-Save Exam Workflow
 
-This build is based on the actual current exam frontend/backend source.
+NEW WORKFLOW
+Teacher enters marks → Save Mark Sheet → immediately available to School Admin → Teacher/Admin can edit any time before publication → Admin downloads Pre-Publish PDF → Admin Approve & Publish → results locked and released.
 
-Fixed:
-1. The School Admin dashboard now shows draft/open exam mark sheets in Results Review & Publication.
-2. Admin has **Edit Mark Sheet** for draft exams.
-3. Admin has **Submit Mark Sheet for Review** for draft exams.
-4. Pending exams keep Edit Submitted Marks, Pre-Publish PDF, Return for Correction, and Approve & Publish.
-5. The teacher-only Marks Entry panel is hidden for school administrators.
-6. `/api/schools/exams/:id/submit` now authorizes school administrators as well as assigned teachers.
-7. `/api/schools/exams/:id/marks` now allows authorized school administrators to edit draft/pending sheets, while approved/published sheets remain locked.
-8. Existing learner/parent/teacher/exam data is not replaced or deleted.
+Removed from normal workflow:
+- Submit for Review
+- Submit Mark Sheet for Review
+- Return for Correction
+- Pending-review dependency
 
-IMPORTANT:
-- Deploy these files to the same Render service.
-- Keep the existing DATABASE_URL.
-- Do not create a new database.
+Kept:
+- Automatic feedback after saving marks
+- Admin mark-sheet editor
+- Pre-Publish PDF
+- Approve & Publish
+- Learner/parent visibility only after final publication
+
+Compatibility:
+The old submit/review API routes return HTTP 410 with an explanatory message rather than changing exam state. Existing unpublished exams, including old pending/returned records, remain editable and publishable through the new workflow.
+
+Data safety:
+No DROP, TRUNCATE, database replacement, migration, or data reset is included. Keep the existing Render DATABASE_URL.

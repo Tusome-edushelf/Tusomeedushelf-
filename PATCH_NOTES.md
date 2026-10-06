@@ -20,3 +20,7 @@ Built from v126.13 Clean Auto-Save Exam Workflow.
 - No database changes.
 - No destructive SQL.
 - Existing teacher/admin editing and Approve & Publish workflow retained.
+ the School Admin Mark Sheet Review & Publication panel.
+- The new button lets the administrator choose the class/stream when multiple unpublished exam groups exist, then generates the same consolidated all-subject Pre-Publish PDF.
+- The existing per-exam **📄 Pre-Publish PDF** buttons remain unchanged and continue to work.
+- No database changes and no publication state is changed by PDF generation.

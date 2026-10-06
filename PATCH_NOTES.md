@@ -1,10 +1,18 @@
-TusomeEduShelf v126.10 — School Admin Mark Sheet Submission
+# v126.11 — Real School Admin Mark Sheet Submission Fix
 
-FIX:
-- School Admin Exams dashboard now shows draft/open mark sheets in the administrator review/action panel.
-- Admin gets an explicit “Edit Mark Sheet” button for draft exams.
-- Admin gets an explicit “Submit Mark Sheet for Review” button for draft exams.
-- Pending exams retain Edit Submitted Marks, Pre-Publish PDF, Approve & Publish, and Return for Correction.
-- Backend /api/schools/exams/:id/submit now permits authorized school admins as well as assigned teachers.
-- Backend /api/schools/exams/:id/marks permits authorized school admins to edit draft/pending marks while still blocking approved/published exams.
-- No database migration, deletion, reset, or replacement.
+This build is based on the actual current exam frontend/backend source.
+
+Fixed:
+1. The School Admin dashboard now shows draft/open exam mark sheets in Results Review & Publication.
+2. Admin has **Edit Mark Sheet** for draft exams.
+3. Admin has **Submit Mark Sheet for Review** for draft exams.
+4. Pending exams keep Edit Submitted Marks, Pre-Publish PDF, Return for Correction, and Approve & Publish.
+5. The teacher-only Marks Entry panel is hidden for school administrators.
+6. `/api/schools/exams/:id/submit` now authorizes school administrators as well as assigned teachers.
+7. `/api/schools/exams/:id/marks` now allows authorized school administrators to edit draft/pending sheets, while approved/published sheets remain locked.
+8. Existing learner/parent/teacher/exam data is not replaced or deleted.
+
+IMPORTANT:
+- Deploy these files to the same Render service.
+- Keep the existing DATABASE_URL.
+- Do not create a new database.

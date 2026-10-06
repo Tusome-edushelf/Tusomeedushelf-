@@ -1,15 +1,15 @@
-BUILD: TusomeEduShelf v126.10
+BUILD: TusomeEduShelf v126.11
+SOURCE: current exam frontend/backend source
 FILES:
 - index.html
 - server.mjs
 - package.json
 - PATCH_NOTES.md
 
-VERIFICATION:
-- server.mjs node --check: PASS
-- index.html inline JS blocks: 7, all PASS
-- Admin draft mark-sheet action: PRESENT
-- Admin submit-mark-sheet action: PRESENT
-- Admin submit endpoint permission: FIXED
-- Approved/published mark editing: BLOCKED
-- Database migration: NONE
+VERIFIED:
+- server.mjs: node --check PASS
+- index.html inline JavaScript: 7/7 PASS
+- Admin Submit Mark Sheet for Review button: PRESENT
+- Admin draft editor: PRESENT
+- Admin submission permission: PRESENT
+- Admin-only hiding of teacher Marks Entry panel: PRESENT

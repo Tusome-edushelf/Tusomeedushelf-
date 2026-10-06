@@ -2044,11 +2044,15 @@ async function downloadExamPrePublishPdf(examId){
         cols.forEach((col,j)=>{c.push(`1 0 0 1 ${x+2} ${y+6} Tm`,`(${esc(String(cells[j]??'').slice(0,30))}) Tj`);x+=col.w});c.push('ET');y-=rowH;
       });
       // Draw the outer border and every row/column separator so the PDF is a real table.
-      c.push('0.35 G','0.5 w',`${margin} ${tableBottom} m ${margin+usableW} ${tableBottom} l`,`${margin} ${tableTop} m ${margin+usableW} ${tableTop} l`);
-      for(let r=1;r<pageRows.length+1;r++){const yy=tableTop-r*rowH;c.push(`${margin} ${yy} m ${margin+usableW} ${yy} l`)}
-      x=margin;c.push(`${x} ${tableBottom} m ${x} ${tableTop} l`);
-      for(const col of cols){x+=col.w;c.push(`${x} ${tableBottom} m ${x} ${tableTop} l`)}
-      c.push('S','0 G');
+      c.push('0 G','1 w');
+      // Draw every cell as an explicit rectangle. This produces a strong, unmistakable grid in PDF viewers and on printed copies.
+      let gridY=tableTop;
+      for(let r=0;r<=pageRows.length;r++){
+        let gridX=margin;
+        for(const col of cols){ c.push(`${gridX} ${gridY-rowH} ${col.w} ${rowH} re S`); gridX+=col.w; }
+        gridY-=rowH;
+      }
+      c.push('0 G');
       c.push('BT','/F1 6 Tf',`${margin} ${margin+7} Td`,`(${esc('Subject Key: '+keyLines.slice(0,210))}) Tj`,'ET');
       if(keyLines.length>210){c.push('BT','/F1 6 Tf',`${margin} ${margin-1} Td`,`(${esc(keyLines.slice(210,420))}) Tj`,'ET')}
       c.push('BT','/F1 6 Tf',`${margin} ${margin+18} Td`,`(${esc('Overall Class/Stream Mean: '+fmt(classMean)+'%')}) Tj`,'ET');
@@ -2071,9 +2075,15 @@ async function downloadExamPrePublishPdf(examId){
         x=margin;c.push('BT','/F1 8 Tf');vals.forEach((v,j)=>{c.push(`1 0 0 1 ${x+3} ${yy+6} Tm`,`(${esc(v)}) Tj`);x+=widths[j]});c.push('ET');yy-=row;
       });
       const bottom=yy, top=headY+row;
-      c.push('0.35 G','0.5 w',`${margin} ${bottom} m ${margin+tw} ${bottom} l`,`${margin} ${top} m ${margin+tw} ${top} l`);
-      for(let r=1;r<=subjectRows.length+1;r++){const ly=top-r*row;c.push(`${margin} ${ly} m ${margin+tw} ${ly} l`)}
-      x=margin;c.push(`${x} ${bottom} m ${x} ${top} l`);for(const w of widths){x+=w;c.push(`${x} ${bottom} m ${x} ${top} l`)}c.push('S','0 G');
+      c.push('0 G','1 w');
+      // Explicit cell rectangles for a strong printable summary table grid.
+      let gridY=top;
+      for(let r=0;r<=subjectRows.length;r++){
+        let gridX=margin;
+        for(const w of widths){ c.push(`${gridX} ${gridY-row} ${w} ${row} re S`); gridX+=w; }
+        gridY-=row;
+      }
+      c.push('0 G');
       const content=addObj(`<< /Length ${c.join('\n').length} >>\nstream\n${c.join('\n')}\nendstream`);contentRefs.push(content);
       pages.push(null);
     }

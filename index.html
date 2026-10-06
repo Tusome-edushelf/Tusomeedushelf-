@@ -2037,7 +2037,7 @@ async function downloadExamPrePublishPdf(examId){
       y-=rowH;
       pageRows.forEach((l,idx)=>{
         x=margin;c.push('BT','/F1 7 Tf');
-        const cells=[String(offset+idx+1),l.admissionNumber||'',l.fullName||'Learner',...subjects.map(s=>{const v=l.marks[String(s.examId)]||{};return v.status==='absent'?'X':v.status==='irregular'?'Y':(v.marks??'')}),fmt(l.mean)];
+        const cells=[String(pi*linesPerPage+idx+1),l.admissionNumber||'',l.fullName||'Learner',...subjects.map(s=>{const v=l.marks[String(s.examId)]||{};return v.status==='absent'?'X':v.status==='irregular'?'Y':(v.marks??'')}),fmt(l.mean)];
         cols.forEach((col,j)=>{c.push(`1 0 0 1 ${x+2} ${y+6} Tm`,`(${esc(String(cells[j]??'').slice(0,30))}) Tj`);x+=col.w});c.push('ET');y-=rowH;
       });
       c.push('BT','/F1 6 Tf',`${margin} ${margin+7} Td`,`(${esc('Subject Key: '+keyLines.slice(0,210))}) Tj`,'ET');

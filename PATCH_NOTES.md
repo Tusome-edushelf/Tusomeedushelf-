@@ -1,23 +1,22 @@
-# TusomeEduShelf v126.13 — Clean Auto-Save Exam Workflow
+# TusomeEduShelf v126.14 — Consolidated Pre-Publish PDF Upgrade
 
-NEW WORKFLOW
-Teacher enters marks → Save Mark Sheet → immediately available to School Admin → Teacher/Admin can edit any time before publication → Admin downloads Pre-Publish PDF → Admin Approve & Publish → results locked and released.
+Built from v126.13 Clean Auto-Save Exam Workflow.
 
-Removed from normal workflow:
-- Submit for Review
-- Submit Mark Sheet for Review
-- Return for Correction
-- Pending-review dependency
+## Pre-Publish PDF
+- Pre-Publish PDF now consolidates all unpublished subjects for the same class/stream and assessment title into one report.
+- Uses one learner per row and subjects as compact columns.
+- Uses standard subject abbreviations where configured (MATH, ENG, KISW, INT SCI, SST, AGR, PRE-TECH, etc.).
+- Includes a Subject Key showing each abbreviation's full subject name.
+- Includes learner admission number and individual subject marks.
+- Preserves X (absent) and Y (irregularity) indicators.
+- Calculates each subject mean using percentage-normalized marks, so different maximum marks are handled correctly.
+- Calculates each learner mean from their available subject percentages.
+- Includes the overall class/stream mean in the report header.
+- Includes subject means in the report footer.
+- Uses landscape A4-style PDF pages and automatically continues learners across pages.
+- The PDF remains a pre-publication check only; it does not publish or alter marks.
 
-Kept:
-- Automatic feedback after saving marks
-- Admin mark-sheet editor
-- Pre-Publish PDF
-- Approve & Publish
-- Learner/parent visibility only after final publication
-
-Compatibility:
-The old submit/review API routes return HTTP 410 with an explanatory message rather than changing exam state. Existing unpublished exams, including old pending/returned records, remain editable and publishable through the new workflow.
-
-Data safety:
-No DROP, TRUNCATE, database replacement, migration, or data reset is included. Keep the existing Render DATABASE_URL.
+## Safety
+- No database changes.
+- No destructive SQL.
+- Existing teacher/admin editing and Approve & Publish workflow retained.

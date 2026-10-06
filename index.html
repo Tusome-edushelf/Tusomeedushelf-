@@ -1930,16 +1930,112 @@ async function saveAdminExamMarks(examId){
 async function downloadExamPrePublishPdf(examId){
   try{
     if(!examId)throw new Error('Exam is required.');
-    const r=await fetch('/api/schools/exams/'+encodeURIComponent(examId)+'/marks?schoolId='+encodeURIComponent(selectedSchoolId),{credentials:'include',cache:'no-store'});
-    const d=await parseApiResponse(r);if(!r.ok)throw new Error(d.error||'Could not load the submitted mark sheet.');
-    const ex=d.exam||{}, rows=d.rows||[];if(!rows.length)throw new Error('No learner results are available for this exam.');
-    const header=['Learner Name','Admission No.','Status','Marks','Grade','Feedback'];
-    const csv=[header,...rows.map(x=>[x.fullName||'Learner',x.admissionNumber||'',x.markStatus==='absent'?'X':x.markStatus==='irregular'?'Y':'Present',x.marks??'',x.markStatus==='absent'?'X':x.markStatus==='irregular'?'Y':(x.grade||''),x.comment||''])].map(row=>row.map(v=>{const s=String(v??'');return /[\",\n]/.test(s)?'\"'+s.replace(/\"/g,'\"\"')+'\"':s}).join(',')).join('\n');
-    const title='PRE-PUBLICATION RESULT CHECK — '+(ex.title||'Exam')+' — '+(ex.className||'')+(ex.stream?' — '+ex.stream:'')+' — '+(ex.subjectName||'')+' — Max '+(ex.max_marks??'');
-    downloadTextFile(makeTableCredentialPdf(csv,title),'Tusome_Pre_Publication_Exam_'+String(examId).replace(/[^A-Za-z0-9_-]/g,'_')+'_'+new Date().toISOString().slice(0,10)+'.pdf','application/pdf');
-    showToast?.('Pre-publication exam PDF downloaded.','success');
-  }catch(e){showToast?.(e.message||'Could not create the pre-publication PDF.','error')}
+    const base=await fetch('/api/schools/exams/'+encodeURIComponent(examId)+'/marks?schoolId='+encodeURIComponent(selectedSchoolId),{credentials:'include',cache:'no-store'});
+    const first=await parseApiResponse(base);if(!base.ok)throw new Error(first.error||'Could not load the mark sheet.');
+    const anchor=first.exam||{};
+    const all=await fetch('/api/schools/exams?schoolId='+encodeURIComponent(selectedSchoolId),{credentials:'include',cache:'no-store'});
+    const allData=await parseApiResponse(all);if(!all.ok)throw new Error(allData.error||'Could not load the examination subjects.');
+    const exams=(allData.exams||[]).filter(x=>String(x.classId)===String(anchor.class_id||anchor.classId));
+    const sameAssessment=exams.filter(x=>String(x.title||'').trim()===String(anchor.title||'').trim());
+    const selectedExams=(sameAssessment.length?sameAssessment:exams).filter(x=>String(x.status||'').toLowerCase()!=='published');
+    const unique=[];const seen=new Set();
+    for(const x of selectedExams){if(!seen.has(String(x.examId))){seen.add(String(x.examId));unique.push(x)}}
+    if(!unique.length)throw new Error('No unpublished subjects were found for this class/stream.');
+    const detailById=new Map();
+    for(const ex of unique){
+      const rr=await fetch('/api/schools/exams/'+encodeURIComponent(ex.examId)+'/marks?schoolId='+encodeURIComponent(selectedSchoolId),{credentials:'include',cache:'no-store'});
+      const dd=await parseApiResponse(rr);if(!rr.ok)throw new Error(dd.error||('Could not load '+(ex.subjectName||'subject')+' results.'));
+      detailById.set(String(ex.examId),dd);
+    }
+    const learnerMap=new Map();
+    const subjects=[];
+    for(const ex of unique){
+      const dd=detailById.get(String(ex.examId))||{};
+      const subject={examId:ex.examId,name:ex.subjectName||dd.exam?.subjectName||'Subject',max:Number(ex.maxMarks??dd.exam?.max_marks??100)};
+      subjects.push(subject);
+      for(const row of (dd.rows||[])){
+        const key=String(row.learnerEmail||row.admissionNumber||row.fullName||'').toLowerCase();if(!key)continue;
+        if(!learnerMap.has(key))learnerMap.set(key,{fullName:row.fullName||'Learner',admissionNumber:row.admissionNumber||'',email:row.learnerEmail||'',marks:{}});
+        learnerMap.get(key).marks[String(ex.examId)]={status:row.markStatus||'present',marks:row.marks,grade:row.grade||''};
+      }
+    }
+    const learners=[...learnerMap.values()].sort((a,b)=>String(a.fullName).localeCompare(String(b.fullName),undefined,{sensitivity:'base'}));
+    if(!learners.length)throw new Error('No learner results are available for this class/stream.');
+    const abbreviationMap={
+      'Mathematics':'MATH','English':'ENG','Kiswahili':'KISW','Integrated Science':'INT SCI','Social Studies':'SST','Agriculture':'AGR',
+      'Pre-Technical Studies':'PRE-TECH','Creative Arts':'CART','Religious Education':'RE','Christian Religious Education':'CRE',
+      'Islamic Religious Education':'IRE','Hindu Religious Education':'HRE','Computer Studies':'COMP','Business Studies':'BUS','French':'FRE','German':'GER','Arabic':'ARB','Mandarin':'MAN','Indigenous Language':'IND LANG'
+    };
+    const used=new Set();
+    function subjectAbbrev(name){
+      const raw=String(name||'Subject').trim();if(abbreviationMap[raw])return abbreviationMap[raw];
+      const words=raw.replace(/[^A-Za-z0-9 ]/g,' ').split(/\s+/).filter(Boolean);
+      let a=words.length>1?words.slice(0,3).map(w=>w[0]).join('').toUpperCase():raw.replace(/[^A-Za-z0-9]/g,'').slice(0,6).toUpperCase();
+      if(!a)a='SUB';let n=a,i=2;while(used.has(n))n=a+(i++);used.add(n);return n;
+    }
+    subjects.forEach(x=>x.abbr=subjectAbbrev(x.name));
+    const subjectRows=subjects.map(sub=>{
+      const vals=learners.map(l=>l.marks[String(sub.examId)]||{}).filter(v=>v.status==='present'&&v.marks!==null&&v.marks!=='');
+      const nums=vals.map(v=>Number(v.marks)).filter(Number.isFinite);
+      const mean=nums.length?nums.reduce((a,b)=>a+(b/sub.max*100),0)/nums.length:null;
+      return {...sub,mean};
+    });
+    learners.forEach(l=>{
+      const vals=subjects.map(sub=>l.marks[String(sub.examId)]||{}).filter(v=>v.status==='present'&&v.marks!==null&&v.marks!=='').map((v,i)=>Number(v.marks)/subjects[i].max*100).filter(Number.isFinite);
+      l.mean=vals.length?vals.reduce((a,b)=>a+b,0)/vals.length:null;
+    });
+    const allMeans=learners.map(l=>l.mean).filter(Number.isFinite);
+    const classMean=allMeans.length?allMeans.reduce((a,b)=>a+b,0)/allMeans.length:null;
+    const grade=anchor.grade||'';
+    const className=anchor.className||'';
+    const stream=anchor.stream||'';
+    const title=anchor.title||'Examination';
+    const date=anchor.examDate||'';
+    const keyLines=subjects.map(s=>`${s.abbr}=${s.name}`).join(' | ');
+    const esc=v=>String(v??'').replace(/[\x00-\x1F\x7F]/g,' ').replace(/\\/g,'\\\\').replace(/\(/g,'\\(').replace(/\)/g,'\\)');
+    const fmt=v=>Number.isFinite(Number(v))?Number(v).toFixed(1):'—';
+    const pageW=842,pageH=595,margin=22,headerH=78,footerH=24,rowH=18,usableW=pageW-margin*2;
+    const cols=[{key:'no',label:'#',w:24},{key:'adm',label:'ADM',w:55},{key:'name',label:'LEARNER',w:155},...subjects.map(s=>({key:String(s.examId),label:s.abbr,w:Math.max(42,Math.min(62,s.abbr.length*8+18))})),{key:'mean',label:'MEAN',w:48}];
+    const totalW=cols.reduce((a,c)=>a+c.w,0);const scale=Math.min(1,usableW/totalW);cols.forEach(c=>c.w*=scale);
+    const linesPerPage=Math.max(1,Math.floor((pageH-margin-headerH-footerH)/rowH));
+    const pages=[];
+    for(let offset=0;offset<learners.length;offset+=linesPerPage)pages.push(learners.slice(offset,offset+linesPerPage));
+    const objects=[];const addObj=x=>{objects.push(x);return objects.length};
+    const pagesObj=[];const contentRefs=[];
+    for(let pi=0;pi<pages.length;pi++){
+      const pageRows=pages[pi];let c=[];
+      const reportLine=`${grade} ${className}${stream?' - '+stream:''} | ${title} | Date: ${date}`;
+      const statsLine=`Learners: ${learners.length} | Subjects: ${subjects.length} | Stream/Class Mean: ${fmt(classMean)}% | Page ${pi+1}/${pages.length}`;
+      c.push('BT','/F1 14 Tf',`${margin} ${pageH-margin-14} Td`,`(${esc('TUSOME EDUSHELF - PRE-PUBLISH CONSOLIDATED RESULT')}) Tj`,'/F1 9 Tf','0 -16 Td',`(${esc(reportLine)}) Tj`,'0 -13 Td',`(${esc(statsLine)}) Tj`,'ET');
+      let y=pageH-margin-headerH;c.push('0.92 g',`${margin} ${y} ${usableW} ${rowH} re f`,'0 g');
+      let x=margin;c.push('BT','/F1 7 Tf');for(const col of cols){c.push(`1 0 0 1 ${x+2} ${y+6} Tm`,`(${esc(col.label)}) Tj`);x+=col.w}c.push('ET');
+      y-=rowH;
+      pageRows.forEach((l,idx)=>{
+        x=margin;c.push('BT','/F1 7 Tf');
+        const cells=[String(offset+idx+1),l.admissionNumber||'',l.fullName||'Learner',...subjects.map(s=>{const v=l.marks[String(s.examId)]||{};return v.status==='absent'?'X':v.status==='irregular'?'Y':(v.marks??'')}),fmt(l.mean)];
+        cols.forEach((col,j)=>{c.push(`1 0 0 1 ${x+2} ${y+6} Tm`,`(${esc(String(cells[j]??'').slice(0,30))}) Tj`);x+=col.w});c.push('ET');y-=rowH;
+      });
+      c.push('BT','/F1 6 Tf',`${margin} ${margin+7} Td`,`(${esc('Subject Key: '+keyLines.slice(0,210))}) Tj`,'ET');
+      if(keyLines.length>210){c.push('BT','/F1 6 Tf',`${margin} ${margin-1} Td`,`(${esc(keyLines.slice(210,420))}) Tj`,'ET')}
+      const streamMeans=subjectRows.map(s=>`${s.abbr} ${fmt(s.mean)}%`).join(' | ');
+      c.push('BT','/F1 6 Tf',`${margin} ${margin+18} Td`,`(${esc('Subject Means: '+streamMeans.slice(0,210))}) Tj`,'ET');
+      if(streamMeans.length>210){c.push('BT','/F1 6 Tf',`${margin} ${margin+11} Td`,`(${esc(streamMeans.slice(210,420))}) Tj`,'ET')}
+      const content=addObj(`<< /Length ${c.join('\n').length} >>\nstream\n${c.join('\n')}\nendstream`);contentRefs.push(content);
+    }
+    const font=addObj('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
+    for(let i=0;i<pages.length;i++){pagesObj.push(addObj(`<< /Type /Page /Parent __PAGES__ 0 R /MediaBox [0 0 ${pageW} ${pageH}] /Resources << /Font << /F1 ${font} 0 R >> >> /Contents ${contentRefs[i]} 0 R >>`))}
+    const pagesRef=addObj(`<< /Type /Pages /Kids [${pagesObj.map(x=>x+' 0 R').join(' ')}] /Count ${pagesObj.length} >>`);
+    const catalog=addObj(`<< /Type /Catalog /Pages ${pagesRef} 0 R >>`);
+    let pdf='%PDF-1.4\n% TusomeEduShelf\n',offsets=[0];
+    for(let n=0;n<objects.length;n++){let obj=objects[n].replace(/__PAGES__/g,String(pagesRef));offsets[n+1]=pdf.length;pdf+=`${n+1} 0 obj\n${obj}\nendobj\n`}
+    const xref=pdf.length;pdf+=`xref\n0 ${objects.length+1}\n0000000000 65535 f \n`;for(let n=1;n<=objects.length;n++)pdf+=String(offsets[n]).padStart(10,'0')+' 00000 n \n';pdf+=`trailer\n<< /Size ${objects.length+1} /Root ${catalog} 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+    const blob=new Blob([pdf],{type:'application/pdf'});
+    const safe=String(`${grade}_${className}_${stream}_${title}`).replace(/[^A-Za-z0-9_-]+/g,'_').replace(/^_+|_+$/g,'');
+    downloadTextFile(blob,'Tusome_Pre_Publish_Consolidated_'+safe+'_'+new Date().toISOString().slice(0,10)+'.pdf','application/pdf');
+    showToast?.(`Consolidated Pre-Publish PDF downloaded: ${subjects.length} subjects, ${learners.length} learners. Class/stream mean ${fmt(classMean)}%.`,'success');
+  }catch(e){showToast?.(e.message||'Could not create the consolidated pre-publication PDF.','error')}
 }
+
 async function adminApproveAndPublishExam(examId){
   if(!confirm('Approve and publish these results now? The results will become visible to learners/parents and the teacher will not need to publish them.'))return;
   try{const r=await fetch('/api/schools/exams/'+encodeURIComponent(examId)+'/approve-publish?schoolId='+encodeURIComponent(selectedSchoolId),{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({comment:'Pre-publication physical check completed by school administrator.'})});const d=await parseApiResponse(r);if(!r.ok)throw new Error(d.error||'Could not approve and publish results.');showToast?.('Results approved and published.','success');await loadTeacherExamResultsCentre();}catch(e){showToast?.(e.message||'Could not approve and publish results.','error')}}

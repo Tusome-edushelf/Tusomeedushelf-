@@ -1,26 +1,12 @@
-# TusomeEduShelf v126.14 — Consolidated Pre-Publish PDF Upgrade
+# TusomeEduShelf v126.19 — Report Cards & General Results
 
-Built from v126.13 Clean Auto-Save Exam Workflow.
-
-## Pre-Publish PDF
-- Pre-Publish PDF now consolidates all unpublished subjects for the same class/stream and assessment title into one report.
-- Uses one learner per row and subjects as compact columns.
-- Uses standard subject abbreviations where configured (MATH, ENG, KISW, INT SCI, SST, AGR, PRE-TECH, etc.).
-- Includes a Subject Key showing each abbreviation's full subject name.
-- Includes learner admission number and individual subject marks.
-- Preserves X (absent) and Y (irregularity) indicators.
-- Calculates each subject mean using percentage-normalized marks, so different maximum marks are handled correctly.
-- Calculates each learner mean from their available subject percentages.
-- Includes the overall class/stream mean in the report header.
-- Includes subject means in the report footer.
-- Uses landscape A4-style PDF pages and automatically continues learners across pages.
-- The PDF remains a pre-publication check only; it does not publish or alter marks.
-
-## Safety
-- No database changes.
-- No destructive SQL.
-- Existing teacher/admin editing and Approve & Publish workflow retained.
- the School Admin Mark Sheet Review & Publication panel.
-- The new button lets the administrator choose the class/stream when multiple unpublished exam groups exist, then generates the same consolidated all-subject Pre-Publish PDF.
-- The existing per-exam **📄 Pre-Publish PDF** buttons remain unchanged and continue to work.
-- No database changes and no publication state is changed by PDF generation.
+- Added Admin stream bulk Report Card PDF download.
+- Admin selects a class/stream and downloads all published learner report cards in one PDF.
+- Each learner receives a separate report-card page with a strong grid/table.
+- Added Admin General Results PDF for the selected stream.
+- Added Learner Report Card PDF and General Results PDF buttons.
+- Added Parent/Guardian Report Card PDF and General Results PDF buttons for the selected linked learner.
+- Learner/parent result APIs now include mark status so X/Y can be represented correctly.
+- Learner/parent downloads use published, approved results only.
+- Existing Pre-Publish PDF, Auto-Save, Admin editing and Approve & Publish workflow retained.
+- No database reset, drop, truncate, or migration added.

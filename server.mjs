@@ -3118,14 +3118,21 @@ app.get('/api/report-cards/context', async (req,res)=>{
       const mr=await db.query(`SELECT member_role AS "memberRole" FROM school_memberships WHERE school_id=$1 AND user_email=$2 AND status='active' LIMIT 1`,[schoolId,user.email]);
       if(!mr.rows[0] || mr.rows[0].memberRole!=='admin')return res.status(403).json({error:'School administrator access is required.'});
     }
-    let target=requestedLearner || (role==='admin' && requestedClass ? '' : String(user.email||'').trim());
-    if(role==='admin' && requestedClass && !target){const ar=await db.query(`SELECT user_email FROM school_memberships WHERE school_id=$1 AND class_id=$2 AND member_role='learner' AND status='active' ORDER BY user_email LIMIT 1`,[schoolId,requestedClass]);target=ar.rows[0]?.user_email||'';}
+    // A school administrator may have a global role such as `school` while their
+    // authority for this workspace is represented by school_memberships.member_role='admin'.
+    // Treat that active membership as admin access for class/stream report-card selection.
+    const adminAccess = role==='admin' || role==='school' || role==='school_admin' || role==='administrator' || role==='schooladministrator' || role==='school-administrator' || role==='school administrator';
+    let target=requestedLearner || ((adminAccess || requestedClass) && requestedClass ? '' : String(user.email||'').trim());
+    if(requestedClass && !target){
+      const ar=await db.query(`SELECT user_email FROM school_memberships WHERE school_id=$1 AND class_id=$2 AND member_role='learner' AND status='active' ORDER BY user_email LIMIT 1`,[schoolId,requestedClass]);
+      target=ar.rows[0]?.user_email||'';
+    }
     if(!target)return res.status(400).json({error:'Learner is required.'});
     const tr=await db.query(`SELECT COALESCE(u.display_name,u.email) AS "fullName",COALESCE(p.admission_number,'') AS "admissionNumber",sm.class_id AS "classId",c.class_name AS "className",c.grade,c.stream FROM school_memberships sm JOIN users u ON u.email=sm.user_email JOIN school_classes c ON c.class_id=sm.class_id LEFT JOIN school_learner_profiles p ON p.school_id=sm.school_id AND p.learner_email=sm.user_email WHERE sm.school_id=$1 AND sm.user_email=$2 AND sm.member_role='learner' AND sm.status='active' LIMIT 1`,[schoolId,target]);
     if(!tr.rows[0])return res.status(404).json({error:'Learner is not actively enrolled in the selected school/class.'});
     const t=tr.rows[0];
-    if(role!=='admin' && String(target).toLowerCase()!==String(user.email||'').toLowerCase())return res.status(403).json({error:'Access denied.'});
-    if(role==='admin' && requestedClass && String(t.classId)!==requestedClass)return res.status(403).json({error:'Learner is not in the selected class/stream.'});
+    if(!adminAccess && String(target).toLowerCase()!==String(user.email||'').toLowerCase())return res.status(403).json({error:'Access denied.'});
+    if(adminAccess && requestedClass && String(t.classId)!==requestedClass)return res.status(403).json({error:'Learner is not in the selected class/stream.'});
     const all=await db.query(`SELECT m.learner_email AS "learnerEmail",u.display_name AS "fullName",p.admission_number AS "admissionNumber",e.title,e.exam_date AS "examDate",e.created_at AS "createdAt",e.max_marks AS "maxMarks",s.subject_name AS "subjectName",m.marks,m.grade,m.comment,m.mark_status AS "markStatus",c.class_id AS "classId",c.class_name AS "className",c.grade,c.stream FROM school_exam_marks m JOIN school_exams e ON e.exam_id=m.exam_id JOIN school_subjects s ON s.subject_id=e.subject_id JOIN school_classes c ON c.class_id=e.class_id JOIN school_learner_profiles p ON p.school_id=m.school_id AND p.learner_email=m.learner_email JOIN users u ON u.email=m.learner_email WHERE m.school_id=$1 AND e.status='published' AND e.approval_status='approved' ORDER BY e.exam_date DESC NULLS LAST,e.created_at DESC,s.subject_name,LOWER(COALESCE(u.display_name,m.learner_email))`,[schoolId]);
     const rows=all.rows, keyOf=x=>`${String(x.title||'').trim()}||${x.examDate?new Date(x.examDate).toISOString().slice(0,10):String(x.createdAt||'').slice(0,10)}`;
     const targetAllRows=rows.filter(x=>String(x.learnerEmail).toLowerCase()===target.toLowerCase());
@@ -3144,7 +3151,7 @@ app.get('/api/report-cards/context', async (req,res)=>{
     const previous=history.length>1?history[history.length-2].mean:null;
     const current={title:targetRows[0].title,examDate:targetRows[0].examDate,totalMarks:total,totalMax,mean:currentMean,meanGrade:meanGrade(currentMean),streamRank:rank(streamScores,target),streamCount:streamScores.length,overallRank:rank(gradeScores,target),overallCount:gradeScores.length,classMean:avg(currentRows.filter(x=>String(x.classId)===String(t.classId))),subjectMeans,subjects:targetRows.map(x=>({subjectName:x.subjectName,marks:x.marks,maxMarks:x.maxMarks,markStatus:x.markStatus,grade:x.grade||'—',comment:x.comment||''})),history,targetDelta:previous!==null&&currentMean!==null?currentMean-previous:null};
     const response={learner:{...t,learnerEmail:target},current,baseline:null,targetScores:null,teacherRemark:null,principalRemark:null,openingDate:null,closingDate:null,feeExpectation:null};
-    if(role==='admin' && requestedClass){
+    if(adminAccess && requestedClass){
       const classRows=rows.filter(x=>String(x.classId)===requestedClass), emails=[...new Set(classRows.map(x=>x.learnerEmail))];
       response.classLearners=emails.map(email=>{const xr=classRows.filter(x=>x.learnerEmail===email&&keyOf(x)===currentKey), profile=xr[0], mean=avg(xr); return {learnerEmail:email,fullName:profile?.fullName||email,admissionNumber:profile?.admissionNumber||'—',mean,meanGrade:meanGrade(mean),streamRank:rank(streamScores,email),overallRank:rank(gradeScores,email),subjects:xr.map(x=>({subjectName:x.subjectName,marks:x.marks,maxMarks:x.maxMarks,markStatus:x.markStatus,grade:x.grade||'—',comment:x.comment||''})),history:cycles.map(k=>{const hs=classRows.filter(x=>x.learnerEmail===email&&keyOf(x)===k);return {label:hs[0]?.title||k,examDate:hs[0]?.examDate||null,mean:avg(hs)}}).filter(x=>x.mean!==null).slice(0,12).reverse()};});
     }

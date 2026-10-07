@@ -1905,8 +1905,8 @@ function richLearnerFromContext(ctx){return {...ctx.learner,...ctx.current}}
 function buildRichBulkReportPdf(ctx,schoolName){const learners=(ctx.classLearners||[]).map(x=>({...x,stream:ctx.learner?.stream,className:ctx.learner?.className,grade:ctx.learner?.grade,title:ctx.current?.title,examDate:ctx.current?.examDate,baseline:null,targetGrade:null,targetScore:null,teacherRemark:null,principalRemark:null,openingDate:null,closingDate:null,feeExpectation:null}));const objects=[];/* build each learner separately then merge PDFs is not possible client-side; use single rich builder below */return learners}
 
 function learnerMean(l){const vals=l.marks.filter(x=>x.markStatus==='present'&&Number.isFinite(Number(x.marks))&&Number(x.max)>0).map(x=>Number(x.marks)/Number(x.max)*100);return vals.length?(vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(2):'—';}
-async function downloadAdminStreamReportCardsPdf(){try{const cid=document.getElementById('reportClass')?.value;if(!cid)throw new Error('Select a class/stream first.');const cls=(window.__examClasses||[]).find(x=>String(x.classId||x.id)===String(cid));const ctx=await fetchRichReportContext({classId:cid,schoolId:selectedSchoolId});if(!ctx.classLearners?.length)throw new Error('No published results are available for this stream.');const pages=ctx.classLearners.map(x=>({...x,className:cls?.className||ctx.learner?.className,grade:cls?.grade||ctx.learner?.grade,stream:cls?.stream||ctx.learner?.stream,title:ctx.current?.title,examDate:ctx.current?.examDate,subjectMeans:ctx.current?.subjectMeans,classMean:ctx.current?.classMean}));const pdf=buildRichBulkPdf(pages,'Tusome EduShelf');downloadTextFile(pdf,'Tusome_Report_Cards_'+(cls?.grade||'Class')+'_'+(cls?.stream||'Stream')+'.pdf','application/pdf');showToast?.(`Downloaded ${pages.length} enhanced stream report cards.`,'success')}catch(e){showToast?.(e.message||'Could not create stream report cards.','error')}}
-async function downloadAdminGeneralResultsPdf(){try{const cid=document.getElementById('reportClass')?.value;if(!cid)throw new Error('Select a class/stream first.');const cls=(window.__examClasses||[]).find(x=>String(x.classId||x.id)===String(cid));const bundles=await fetchPublishedExamBundle(selectedSchoolId,cid);if(!bundles.length)throw new Error('No published results are available for this stream.');const learners=groupBundleByLearner(bundles),subjects=[...new Set(bundles.map(b=>b.exam.subjectName||'Subject'))],rows=learners.map(l=>[l.name,l.admission,...subjects.map(s=>{const x=l.marks.find(m=>m.subject===s);return x?(x.markStatus==='present'?`${x.marks}/${x.max}`:x.markStatus==='absent'?'X':'Y'):'—'}),learnerMean(l)]);const pdf=buildSimpleReportPdf('Tusome EduShelf — General Results',`${cls?.className||''} ${cls?.grade||''} ${cls?.stream?'— '+cls.stream:''} · ${learners.length} learners · Published results`,['Learner','Adm. No.',...subjects,'Mean'],rows);downloadTextFile(pdf,'Tusome_General_Results_'+(cls?.grade||'Class')+'_'+(cls?.stream||'Stream')+'.pdf','application/pdf');showToast?.('General results PDF downloaded.','success')}catch(e){showToast?.(e.message||'Could not create general results PDF.','error')}}
+async function downloadAdminStreamReportCardsPdf(){try{const cid=document.getElementById('reportClass')?.value||window.__selectedReportClassId||'';if(!cid)throw new Error('Select a class/stream first.');const cls=(window.__examClasses||[]).find(x=>String(x.classId||x.id)===String(cid));const ctx=await fetchRichReportContext({classId:cid,schoolId:selectedSchoolId});if(!ctx.classLearners?.length)throw new Error('No published results are available for this stream.');const pages=ctx.classLearners.map(x=>({...x,className:cls?.className||ctx.learner?.className,grade:cls?.grade||ctx.learner?.grade,stream:cls?.stream||ctx.learner?.stream,title:ctx.current?.title,examDate:ctx.current?.examDate,subjectMeans:ctx.current?.subjectMeans,classMean:ctx.current?.classMean}));const pdf=buildRichBulkPdf(pages,'Tusome EduShelf');downloadTextFile(pdf,'Tusome_Report_Cards_'+(cls?.grade||'Class')+'_'+(cls?.stream||'Stream')+'.pdf','application/pdf');showToast?.(`Downloaded ${pages.length} enhanced stream report cards.`,'success')}catch(e){showToast?.(e.message||'Could not create stream report cards.','error')}}
+async function downloadAdminGeneralResultsPdf(){try{const cid=document.getElementById('reportClass')?.value||window.__selectedReportClassId||'';if(!cid)throw new Error('Select a class/stream first.');const cls=(window.__examClasses||[]).find(x=>String(x.classId||x.id)===String(cid));const bundles=await fetchPublishedExamBundle(selectedSchoolId,cid);if(!bundles.length)throw new Error('No published results are available for this stream.');const learners=groupBundleByLearner(bundles),subjects=[...new Set(bundles.map(b=>b.exam.subjectName||'Subject'))],rows=learners.map(l=>[l.name,l.admission,...subjects.map(s=>{const x=l.marks.find(m=>m.subject===s);return x?(x.markStatus==='present'?`${x.marks}/${x.max}`:x.markStatus==='absent'?'X':'Y'):'—'}),learnerMean(l)]);const pdf=buildSimpleReportPdf('Tusome EduShelf — General Results',`${cls?.className||''} ${cls?.grade||''} ${cls?.stream?'— '+cls.stream:''} · ${learners.length} learners · Published results`,['Learner','Adm. No.',...subjects,'Mean'],rows);downloadTextFile(pdf,'Tusome_General_Results_'+(cls?.grade||'Class')+'_'+(cls?.stream||'Stream')+'.pdf','application/pdf');showToast?.('General results PDF downloaded.','success')}catch(e){showToast?.(e.message||'Could not create general results PDF.','error')}}
 async function getCurrentLearnerPublishedBundle(){const r=await fetch('/api/learner/exams',{credentials:'include'}),d=await parseApiResponse(r);if(!r.ok)throw new Error(d.error||'Could not load published results.');return d.rows||[];}
 async function downloadMyGeneralResultsPdf(){try{const rows=await getCurrentLearnerPublishedBundle();if(!rows.length)throw new Error('No published results are available yet.');const subjects=[...new Set(rows.map(x=>x.subjectName||'Subject'))];const data=subjects.map(s=>{const x=rows.find(y=>y.subjectName===s);return [s,x?.marks!=null?`${x.marks}/${x.maxMarks}`:x?.markStatus==='absent'?'X':x?.markStatus==='irregular'?'Y':'—',x?.grade||'—',x?.comment||'']});const pdf=buildSimpleReportPdf('Tusome EduShelf — My General Results','Published school results',['Subject','Marks','Grade','Feedback'],data,{widths:[180,100,90,380]});downloadTextFile(pdf,'Tusome_My_General_Results.pdf','application/pdf');showToast?.('General results PDF downloaded.','success')}catch(e){showToast?.(e.message||'Could not create results PDF.','error')}}
 async function downloadMyReportCardPdf(){try{const ctx=await fetchRichReportContext();const l=richLearnerFromContext(ctx);l.subjects=ctx.current.subjects;l.history=ctx.current.history;l.subjectMeans=ctx.current.subjectMeans;l.targetDelta=ctx.current.targetDelta;const pdf=buildRichBulkPdf([l],'Tusome EduShelf');downloadTextFile(pdf,'Tusome_My_Report_Card.pdf','application/pdf');showToast?.('Enhanced report card PDF downloaded.','success')}catch(e){showToast?.(e.message||'Could not create report card PDF.','error')}}
@@ -1924,15 +1924,36 @@ async function loadExamsPage(){
 }
 async function loadExamSetupV44(){
  try{
+  // Always establish the active school before loading class/stream selectors.
+  // The report-card selector must not depend on a previously selected dashboard workspace.
+  if(!selectedSchoolId){
+    const ws=document.getElementById('schoolWorkspaceSelect');
+    if(ws?.value) selectedSchoolId=ws.value;
+  }
+  if(!selectedSchoolId){
+    const mr=await fetch('/api/schools/mine',{credentials:'include'}),md=await parseApiResponse(mr);
+    const school=(md.schools||[]).find(x=>['admin','teacher'].includes(x.memberRole)) || (md.schools||[])[0];
+    if(school) selectedSchoolId=school.schoolId;
+  }
+  if(!selectedSchoolId) throw new Error('No active school workspace is selected.');
   const r=await fetch('/api/schools/classes?schoolId='+encodeURIComponent(selectedSchoolId),{credentials:'include'}),d=await parseApiResponse(r);
   if(!r.ok)throw new Error(d.error||'Could not load classes.');
   const classes=d.classes||d.rows||[];
   window.__examClasses=classes;
   const classLabel=x=>{const base=[x.className||x.name,x.grade].filter(Boolean).join(' · ');return x.stream?`${base} — ${x.stream}`:base};
+  const options=classes.map(x=>`<option value="${escHtml(x.classId||x.id)}">${escHtml(classLabel(x))}</option>`).join('');
   const examClass=document.getElementById('examClass');
-  if(examClass)examClass.innerHTML=classes.map(x=>`<option value="${escHtml(x.classId||x.id)}">${escHtml(classLabel(x))}</option>`).join('')||'<option value="">No classes</option>';
+  if(examClass){examClass.innerHTML=options||'<option value="">No classes</option>';examClass.disabled=!classes.length;}
   const reportClass=document.getElementById('reportClass');
-  if(reportClass)reportClass.innerHTML=classes.map(x=>`<option value="${escHtml(x.classId||x.id)}">${escHtml(classLabel(x))}</option>`).join('')||'<option value="">No classes</option>';
+  if(reportClass){
+    const previous=reportClass.value;
+    reportClass.innerHTML='<option value="">Select class / stream</option>'+options;
+    if(classes.some(x=>String(x.classId||x.id)===String(previous))) reportClass.value=previous;
+    reportClass.disabled=!classes.length;
+    reportClass.onchange=()=>{window.__selectedReportClassId=reportClass.value;};
+    if(!reportClass.value && classes.length===1) reportClass.value=String(classes[0].classId||classes[0].id);
+    window.__selectedReportClassId=reportClass.value||'';
+  }
   await updateExamSubjectsForSelectedClasses();
  }catch(e){showToast?.(e.message,'error')}
 }

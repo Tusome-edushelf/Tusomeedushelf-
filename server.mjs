@@ -3121,8 +3121,8 @@ app.get('/api/report-cards/context', async (req,res)=>{
     let target=requestedLearner || (role==='admin' && requestedClass ? '' : String(user.email||'').trim());
     if(role==='admin' && requestedClass && !target){const ar=await db.query(`SELECT user_email FROM school_memberships WHERE school_id=$1 AND class_id=$2 AND member_role='learner' AND status='active' ORDER BY user_email LIMIT 1`,[schoolId,requestedClass]);target=ar.rows[0]?.user_email||'';}
     if(!target)return res.status(400).json({error:'Learner is required.'});
-    const tr=await db.query(`SELECT u.display_name AS "fullName",p.admission_number AS "admissionNumber",sm.class_id AS "classId",c.class_name AS "className",c.grade,c.stream FROM school_learner_profiles p JOIN users u ON u.email=p.learner_email JOIN school_memberships sm ON sm.school_id=p.school_id AND sm.user_email=p.learner_email AND sm.member_role='learner' AND sm.status='active' JOIN school_classes c ON c.class_id=sm.class_id WHERE p.school_id=$1 AND p.learner_email=$2 LIMIT 1`,[schoolId,target]);
-    if(!tr.rows[0])return res.status(404).json({error:'Learner profile not found.'});
+    const tr=await db.query(`SELECT COALESCE(u.display_name,u.email) AS "fullName",COALESCE(p.admission_number,'') AS "admissionNumber",sm.class_id AS "classId",c.class_name AS "className",c.grade,c.stream FROM school_memberships sm JOIN users u ON u.email=sm.user_email JOIN school_classes c ON c.class_id=sm.class_id LEFT JOIN school_learner_profiles p ON p.school_id=sm.school_id AND p.learner_email=sm.user_email WHERE sm.school_id=$1 AND sm.user_email=$2 AND sm.member_role='learner' AND sm.status='active' LIMIT 1`,[schoolId,target]);
+    if(!tr.rows[0])return res.status(404).json({error:'Learner is not actively enrolled in the selected school/class.'});
     const t=tr.rows[0];
     if(role!=='admin' && String(target).toLowerCase()!==String(user.email||'').toLowerCase())return res.status(403).json({error:'Access denied.'});
     if(role==='admin' && requestedClass && String(t.classId)!==requestedClass)return res.status(403).json({error:'Learner is not in the selected class/stream.'});

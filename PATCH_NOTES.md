@@ -1,13 +1,15 @@
-TusomeEduShelf v126.22 — School Admin Access Fix
+# TusomeEduShelf v126.23 — Report Card School Admin Access Fix
 
-Fixes the report-card/admin workflow returning “School administrator access is required” even when the user is an active school admin.
+Fixed the remaining “School administrator access is required.” error in `/api/report-cards/context`.
 
-Root cause:
-- /api/schools/report-cards/generate checked req.school.role.
-- requireSchoolMembership provides req.school.memberRole, not req.school.role.
+Cause: the endpoint checked the global `user.role` for admin access, while school administrators are represented by an active `school_memberships.member_role='admin'` record.
 
-Fix:
-- Accept req.school.memberRole === 'admin' or platform req.user.role === 'admin'.
-- No database/schema changes.
-- No destructive SQL.
-- Preserves v126.21 stream selector and report-card/general-results functionality.
+The endpoint now verifies the requested school ID against the logged-in user's active school membership and requires `member_role='admin'`.
+
+Preserved:
+- Stream selector
+- Bulk stream report-card PDF
+- General Results PDF
+- Learner/parent published-result restrictions
+- Existing exam workflow and Pre-Publish PDF
+- No database/schema changes

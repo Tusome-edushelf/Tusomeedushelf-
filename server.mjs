@@ -3111,7 +3111,12 @@ app.get('/api/report-cards/context', async (req,res)=>{
       const lr=await db.query(`SELECT p.school_id AS "schoolId" FROM parent_learner_links l JOIN school_learner_profiles p ON p.learner_email=l.learner_email WHERE l.parent_email=$1 AND l.learner_email=$2 AND l.status='active' LIMIT 1`,[user.email,requestedLearner]);
       if(!lr.rows[0])return res.status(403).json({error:'Learner is not linked to this parent account.'}); schoolId=lr.rows[0].schoolId;
     }else{
-      if(role!=='admin')return res.status(403).json({error:'School administrator access is required.'}); schoolId=String(req.query.schoolId||'').trim(); if(!schoolId)return res.status(400).json({error:'School ID is required.'}); const mr=await db.query(`SELECT 1 FROM school_memberships WHERE school_id=$1 AND user_email=$2 AND member_role='admin' AND status='active' LIMIT 1`,[schoolId,user.email]); if(!mr.rows[0])return res.status(403).json({error:'School administrator access is required.'});
+      schoolId=String(req.query.schoolId||'').trim();
+      if(!schoolId)return res.status(400).json({error:'School ID is required.'});
+      // School administrators are identified by their active school membership,
+      // not necessarily by the global user role.
+      const mr=await db.query(`SELECT member_role AS "memberRole" FROM school_memberships WHERE school_id=$1 AND user_email=$2 AND status='active' LIMIT 1`,[schoolId,user.email]);
+      if(!mr.rows[0] || mr.rows[0].memberRole!=='admin')return res.status(403).json({error:'School administrator access is required.'});
     }
     let target=requestedLearner || (role==='admin' && requestedClass ? '' : String(user.email||'').trim());
     if(role==='admin' && requestedClass && !target){const ar=await db.query(`SELECT user_email FROM school_memberships WHERE school_id=$1 AND class_id=$2 AND member_role='learner' AND status='active' ORDER BY user_email LIMIT 1`,[schoolId,requestedClass]);target=ar.rows[0]?.user_email||'';}

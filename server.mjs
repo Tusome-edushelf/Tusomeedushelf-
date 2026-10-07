@@ -3142,6 +3142,8 @@ app.get('/api/report-cards/context', async (req,res)=>{
     const avg=xs=>{const v=xs.map(validPct).filter(v=>v!==null);return v.length?v.reduce((a,b)=>a+b,0)/v.length:null};
     const currentRows=rows.filter(x=>keyOf(x)===currentKey), targetRows=currentRows.filter(x=>String(x.learnerEmail).toLowerCase()===target.toLowerCase());
     if(!targetRows.length)return res.status(404).json({error:'No published results are available for this learner yet.'});
+    const schoolInfo=await db.query(`SELECT school_name AS "schoolName" FROM schools WHERE school_id=$1 LIMIT 1`,[schoolId]);
+    const schoolName=schoolInfo.rows[0]?.schoolName||'Tusome EduShelf';
     const learnerGroups=new Map(); for(const x of currentRows){if(!learnerGroups.has(x.learnerEmail))learnerGroups.set(x.learnerEmail,[]);learnerGroups.get(x.learnerEmail).push(x)}
     const scores=[...learnerGroups.entries()].map(([email,xs])=>({email,mean:avg(xs),classId:xs[0]?.classId,grade:xs[0]?.grade})).filter(x=>x.mean!==null);
     const streamScores=scores.filter(x=>String(x.classId)===String(t.classId)).sort((a,b)=>b.mean-a.mean), gradeScores=scores.filter(x=>String(x.grade)===String(t.grade)).sort((a,b)=>b.mean-a.mean);
@@ -3150,12 +3152,48 @@ app.get('/api/report-cards/context', async (req,res)=>{
     const subjectMeans={}; for(const x of currentRows){const p=validPct(x);if(p===null)continue;(subjectMeans[x.subjectName]??=[]).push(p)} Object.keys(subjectMeans).forEach(k=>subjectMeans[k]=avg(subjectMeans[k]));
     const history=cycles.map(k=>{const xs=rows.filter(x=>keyOf(x)===k&&String(x.learnerEmail).toLowerCase()===target.toLowerCase());return {label:xs[0]?.title||k,examDate:xs[0]?.examDate||null,mean:avg(xs)}}).filter(x=>x.mean!==null).slice(0,12).reverse();
     const meanGrade=p=>p===null?'—':p>=90?'EE1':p>=75?'EE2':p>=58?'ME1':p>=41?'ME2':p>=31?'AE1':p>=21?'AE2':p>=11?'BE1':'BE2';
+    // v126.28: automatic CBE report-card comments. These are generated from
+    // the learner's published performance and trend; they do not invent
+    // discipline/attendance facts that are not present in the assessment data.
+    const automaticRemarks=(xs,mean,delta)=>{
+      const level=meanGrade(mean);
+      const valid=xs.map(x=>({name:x.subjectName,p:validPct(x)})).filter(x=>x.p!==null).sort((a,b)=>b.p-a.p);
+      const strong=valid[0]?.name||'the assessed learning areas';
+      const focus=[...valid].reverse()[0]?.name||'the assessed learning areas';
+      let teacher='';
+      if(level==='EE1') teacher=`Outstanding performance. The learner demonstrates exceptional mastery across the assessed learning areas, with particular strength in ${strong}. Continue with challenging tasks to sustain this high level of achievement.`;
+      else if(level==='EE2') teacher=`Very good performance. The learner is demonstrating strong mastery, especially in ${strong}. Continued practice and extension activities should help maintain and strengthen this achievement.`;
+      else if(level==='ME1') teacher=`Good progress. The learner is meeting expectations in the assessed work, with a relative strength in ${strong}. More focused practice in ${focus} will help move performance towards the exceeding-expectation level.`;
+      else if(level==='ME2') teacher=`The learner is making steady progress but needs more consistent practice to strengthen mastery. ${strong} is a relative strength; focused support in ${focus} is recommended.`;
+      else if(level==='AE1') teacher=`The learner is approaching the expected level. Regular guided practice, revision and targeted support in ${focus} are recommended, while the learner should continue building on strengths in ${strong}.`;
+      else if(level==='AE2') teacher=`The learner is developing foundational understanding but requires additional support and regular practice. Priority should be given to ${focus}, with continued encouragement in ${strong}.`;
+      else if(level==='BE1') teacher=`The learner is below the expected level and needs structured support, frequent revision and close follow-up. Additional practice should focus on ${focus} and the core skills needed for the next learning stage.`;
+      else teacher=`The learner requires intensive support to build the foundational skills assessed in this examination. A focused intervention plan, regular practice and close follow-up are recommended, especially in ${focus}.`;
+      if(delta!=null){
+        if(delta>=3) teacher+=` Performance has improved by ${Number(delta).toFixed(2)} percentage points from the previous published cycle.`;
+        else if(delta<=-3) teacher+=` Performance has declined by ${Math.abs(Number(delta)).toFixed(2)} percentage points from the previous published cycle; additional support is recommended.`;
+      }
+      let principal='';
+      if(level==='EE1') principal=`Excellent achievement at CBE level ${level}. The learner has demonstrated exceptional mastery and should be encouraged to sustain the standard through enrichment and higher-order learning opportunities.`;
+      else if(level==='EE2') principal=`Strong achievement at CBE level ${level}. The learner is performing above the expected standard. Continued support and enrichment are recommended to sustain this progress.`;
+      else if(level==='ME1') principal=`The learner is meeting expectations at CBE level ${level}. Continued revision, consistent effort and targeted practice should support further progress towards exceeding expectations.`;
+      else if(level==='ME2') principal=`The learner is progressing at CBE level ${level} but requires greater consistency to consolidate the expected competencies. Continued monitoring and targeted academic support are recommended.`;
+      else if(level==='AE1') principal=`The learner is approaching expectations at CBE level ${level}. A focused support programme and regular progress monitoring are recommended to strengthen the required competencies.`;
+      else if(level==='AE2') principal=`The learner is developing at CBE level ${level}. Additional intervention, guided practice and regular monitoring are recommended to build confidence and foundational competencies.`;
+      else if(level==='BE1') principal=`The learner is below expectations at CBE level ${level}. The school should provide structured intervention, close monitoring and coordinated support to address identified learning gaps.`;
+      else principal=`The learner is at CBE level ${level} and requires intensive academic intervention. A structured support plan, regular monitoring and collaboration between school and home are recommended.`;
+      if(delta!=null && delta>=3) principal+=' The upward trend is encouraging and should be maintained.';
+      else if(delta!=null && delta<=-3) principal+=' The recent decline should be addressed promptly through targeted support.';
+      return {teacherRemark:teacher,principalRemark:principal};
+    };
     const previous=history.length>1?history[history.length-2].mean:null;
-    const current={title:targetRows[0].title,examDate:targetRows[0].examDate,totalMarks:total,totalMax,mean:currentMean,meanGrade:meanGrade(currentMean),streamRank:rank(streamScores,target),streamCount:streamScores.length,overallRank:rank(gradeScores,target),overallCount:gradeScores.length,classMean:avg(currentRows.filter(x=>String(x.classId)===String(t.classId))),subjectMeans,subjects:targetRows.map(x=>({subjectName:x.subjectName,marks:x.marks,maxMarks:x.maxMarks,markStatus:x.markStatus,grade:x.grade||'—',comment:x.comment||''})),history,targetDelta:previous!==null&&currentMean!==null?currentMean-previous:null};
-    const response={learner:{...t,learnerEmail:target},current,baseline:null,targetScores:null,teacherRemark:null,principalRemark:null,openingDate:null,closingDate:null,feeExpectation:null};
+    const currentDelta=previous!==null&&currentMean!==null?currentMean-previous:null;
+    const currentRemarks=automaticRemarks(targetRows,currentMean,currentDelta);
+    const current={title:targetRows[0].title,examDate:targetRows[0].examDate,totalMarks:total,totalMax,mean:currentMean,meanGrade:meanGrade(currentMean),streamRank:rank(streamScores,target),streamCount:streamScores.length,overallRank:rank(gradeScores,target),overallCount:gradeScores.length,classMean:avg(currentRows.filter(x=>String(x.classId)===String(t.classId))),subjectMeans,subjects:targetRows.map(x=>({subjectName:x.subjectName,marks:x.marks,maxMarks:x.maxMarks,markStatus:x.markStatus,grade:x.grade||'—',comment:x.comment||''})),history,targetDelta:currentDelta};
+    const response={schoolName,learner:{...t,learnerEmail:target},current,baseline:null,targetScores:null,teacherRemark:currentRemarks.teacherRemark,principalRemark:currentRemarks.principalRemark,openingDate:null,closingDate:null,feeExpectation:null};
     if(adminAccess && requestedClass){
       const classRows=rows.filter(x=>String(x.classId)===requestedClass), emails=[...new Set(classRows.map(x=>x.learnerEmail))];
-      response.classLearners=emails.map(email=>{const xr=classRows.filter(x=>x.learnerEmail===email&&keyOf(x)===currentKey), profile=xr[0], mean=avg(xr); return {learnerEmail:email,fullName:profile?.fullName||email,admissionNumber:profile?.admissionNumber||'—',mean,meanGrade:meanGrade(mean),streamRank:rank(streamScores,email),overallRank:rank(gradeScores,email),subjects:xr.map(x=>({subjectName:x.subjectName,marks:x.marks,maxMarks:x.maxMarks,markStatus:x.markStatus,grade:x.grade||'—',comment:x.comment||''})),history:cycles.map(k=>{const hs=classRows.filter(x=>x.learnerEmail===email&&keyOf(x)===k);return {label:hs[0]?.title||k,examDate:hs[0]?.examDate||null,mean:avg(hs)}}).filter(x=>x.mean!==null).slice(0,12).reverse()};});
+      response.classLearners=emails.map(email=>{const xr=classRows.filter(x=>x.learnerEmail===email&&keyOf(x)===currentKey), profile=xr[0], mean=avg(xr); const history=cycles.map(k=>{const hs=classRows.filter(x=>x.learnerEmail===email&&keyOf(x)===k);return {label:hs[0]?.title||k,examDate:hs[0]?.examDate||null,mean:avg(hs)}}).filter(x=>x.mean!==null).slice(0,12).reverse(); const previousMean=history.length>1?history[history.length-2].mean:null; const delta=previousMean!==null&&mean!==null?mean-previousMean:null; const remarks=automaticRemarks(xr,mean,delta); return {learnerEmail:email,fullName:profile?.fullName||email,admissionNumber:profile?.admissionNumber||'—',mean,meanGrade:meanGrade(mean),streamRank:rank(streamScores,email),overallRank:rank(gradeScores,email),targetDelta:delta,teacherRemark:remarks.teacherRemark,principalRemark:remarks.principalRemark,subjects:xr.map(x=>({subjectName:x.subjectName,marks:x.marks,maxMarks:x.maxMarks,markStatus:x.markStatus,grade:x.grade||'—',comment:x.comment||''})),history};});
     }
     res.json({ok:true,...response});
   }catch(e){console.error(e);res.status(500).json({error:'Could not prepare the report-card context.'})}

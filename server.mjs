@@ -3199,6 +3199,31 @@ app.get('/api/report-cards/context', async (req,res)=>{
   }catch(e){console.error(e);res.status(500).json({error:'Could not prepare the report-card context.'})}
 });
 
+// v126.34 robust consolidated General Results endpoint — published results only.
+app.get('/api/schools/general-results', requireSchoolMembership, async (req,res)=>{
+  try{
+    if(req.school.memberRole!=='admin' && req.user.role!=='admin')return res.status(403).json({error:'School administrator access is required.'});
+    const classId=String(req.query.classId||'').trim();
+    if(!classId)return res.status(400).json({error:'Class/stream is required.'});
+    const cls=await db.query(`SELECT class_id AS "classId",class_name AS "className",grade,stream FROM school_classes WHERE school_id=$1 AND class_id=$2 LIMIT 1`,[req.school.schoolId,classId]);
+    if(!cls.rows[0])return res.status(404).json({error:'Class/stream not found.'});
+    const r=await db.query(`
+      SELECT e.exam_id AS "examId",e.title,e.exam_date AS "examDate",e.max_marks AS "maxMarks",
+             s.subject_name AS "subjectName",m.learner_email AS "learnerEmail",
+             COALESCE(u.display_name,m.learner_email) AS "fullName",
+             COALESCE(p.admission_number,'') AS "admissionNumber",
+             m.marks,m.grade,m.comment,m.mark_status AS "markStatus"
+      FROM school_exams e
+      JOIN school_subjects s ON s.subject_id=e.subject_id
+      JOIN school_exam_marks m ON m.exam_id=e.exam_id
+      LEFT JOIN users u ON u.email=m.learner_email
+      LEFT JOIN school_learner_profiles p ON p.school_id=e.school_id AND p.learner_email=m.learner_email
+      WHERE e.school_id=$1 AND e.class_id=$2 AND e.status='published' AND e.approval_status='approved'
+      ORDER BY LOWER(COALESCE(u.display_name,m.learner_email)),COALESCE(p.admission_number,''),e.exam_date DESC NULLS LAST,e.created_at DESC,s.subject_name
+    `,[req.school.schoolId,classId]);
+    res.json({ok:true,class:cls.rows[0],rows:r.rows});
+  }catch(e){console.error(e);res.status(500).json({error:'Could not load general results.'})}
+});
 app.get('/api/learner/exams', requireRole('learner'), async (req,res)=>{try{const r=await db.query(`SELECT e.exam_id AS "examId",e.title,e.exam_date AS "examDate",e.max_marks AS "maxMarks",m.marks,m.grade,m.comment,m.mark_status AS "markStatus",s.subject_name AS "subjectName",c.class_name AS "className",c.grade,c.stream FROM school_exam_marks m JOIN school_exams e ON e.exam_id=m.exam_id JOIN school_subjects s ON s.subject_id=e.subject_id JOIN school_classes c ON c.class_id=e.class_id WHERE m.learner_email=$1 AND e.status='published' AND e.approval_status='approved' ORDER BY e.exam_date DESC NULLS LAST,e.created_at DESC`,[req.user.email]);res.json({ok:true,rows:r.rows})}catch(e){console.error(e);res.status(500).json({error:'Could not load results.'})}});
 app.get('/api/parent/exams', requireRole('parent'), async (req,res)=>{try{const learner=req.query.learnerEmail;const linked=await db.query(`SELECT 1 FROM parent_learner_links WHERE parent_email=$1 AND learner_email=$2 AND status='active' LIMIT 1`,[req.user.email,learner]);if(!linked.rows[0])return res.status(403).json({error:'Learner is not linked to this parent account.'});const r=await db.query(`SELECT e.title,e.exam_date AS "examDate",e.max_marks AS "maxMarks",m.marks,m.grade,m.comment,m.mark_status AS "markStatus",s.subject_name AS "subjectName",c.class_name AS "className",c.grade,c.stream FROM school_exam_marks m JOIN school_exams e ON e.exam_id=m.exam_id JOIN school_subjects s ON s.subject_id=e.subject_id JOIN school_classes c ON c.class_id=e.class_id WHERE m.learner_email=$1 AND e.status='published' AND e.approval_status='approved' ORDER BY e.exam_date DESC NULLS LAST`,[learner]);res.json({ok:true,rows:r.rows})}catch(e){console.error(e);res.status(500).json({error:'Could not load learner results.'})}});
 app.post('/api/schools/report-cards/generate', requireSchoolMembership, async (req,res)=>{try{if(req.school.memberRole!=='admin' && req.user.role!=='admin')return res.status(403).json({error:'School administrator access is required.'});const classId=req.body?.classId;const termId=req.body?.termId||null;if(!classId)return res.status(400).json({error:'Class is required.'});const learners=await db.query(`SELECT user_email FROM school_memberships WHERE school_id=$1 AND class_id=$2 AND member_role='learner' AND status='active'`,[req.school.schoolId,classId]);let count=0;for(const l of learners.rows){const avg=await db.query(`SELECT AVG(m.marks/NULLIF(e.max_marks,0)*100) AS avg FROM school_exam_marks m JOIN school_exams e ON e.exam_id=m.exam_id WHERE m.school_id=$1 AND m.learner_email=$2 AND e.class_id=$3`,[req.school.schoolId,l.user_email,classId]);const id='report_'+Date.now()+'_'+Math.random().toString(36).slice(2,8);await db.query(`INSERT INTO school_report_cards(report_id,school_id,learner_email,class_id,term_id,status,overall_average,created_by) VALUES($1,$2,$3,$4,$5,'draft',$6,$7) ON CONFLICT DO NOTHING`,[id,req.school.schoolId,l.user_email,classId,termId,avg.rows[0]?.avg?Number(avg.rows[0].avg).toFixed(2):null,req.user.email]);count++}res.json({ok:true,count,message:'Draft report cards generated.'})}catch(e){console.error(e);res.status(500).json({error:'Could not generate report cards.'})}});

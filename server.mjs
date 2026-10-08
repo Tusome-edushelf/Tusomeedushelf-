@@ -3205,7 +3205,7 @@ app.get('/api/schools/general-results', requireSchoolMembership, async (req,res)
     if(req.school.memberRole!=='admin' && req.user.role!=='admin')return res.status(403).json({error:'School administrator access is required.'});
     const classId=String(req.query.classId||'').trim();
     if(!classId)return res.status(400).json({error:'Class/stream is required.'});
-    const cls=await db.query(`SELECT class_id AS "classId",class_name AS "className",grade,stream FROM school_classes WHERE school_id=$1 AND class_id=$2 LIMIT 1`,[req.school.schoolId,classId]);
+    const cls=await db.query(`SELECT c.class_id AS "classId",c.class_name AS "className",c.grade,c.stream,s.school_name AS "schoolName" FROM school_classes c JOIN schools s ON s.school_id=c.school_id WHERE c.school_id=$1 AND c.class_id=$2 LIMIT 1`,[req.school.schoolId,classId]);
     if(!cls.rows[0])return res.status(404).json({error:'Class/stream not found.'});
     const r=await db.query(`
       SELECT e.exam_id AS "examId",e.title,e.exam_date AS "examDate",e.max_marks AS "maxMarks",
@@ -3221,7 +3221,7 @@ app.get('/api/schools/general-results', requireSchoolMembership, async (req,res)
       WHERE e.school_id=$1 AND e.class_id=$2 AND e.status='published' AND e.approval_status='approved'
       ORDER BY LOWER(COALESCE(u.display_name,m.learner_email)),COALESCE(p.admission_number,''),e.exam_date DESC NULLS LAST,e.created_at DESC,s.subject_name
     `,[req.school.schoolId,classId]);
-    res.json({ok:true,class:cls.rows[0],rows:r.rows});
+    res.json({ok:true,schoolName:cls.rows[0]?.schoolName||req.school.schoolName||'Tusome EduShelf',class:cls.rows[0],rows:r.rows});
   }catch(e){console.error(e);res.status(500).json({error:'Could not load general results.'})}
 });
 app.get('/api/learner/exams', requireRole('learner'), async (req,res)=>{try{const r=await db.query(`SELECT e.exam_id AS "examId",e.title,e.exam_date AS "examDate",e.max_marks AS "maxMarks",m.marks,m.grade,m.comment,m.mark_status AS "markStatus",s.subject_name AS "subjectName",c.class_name AS "className",c.grade,c.stream FROM school_exam_marks m JOIN school_exams e ON e.exam_id=m.exam_id JOIN school_subjects s ON s.subject_id=e.subject_id JOIN school_classes c ON c.class_id=e.class_id WHERE m.learner_email=$1 AND e.status='published' AND e.approval_status='approved' ORDER BY e.exam_date DESC NULLS LAST,e.created_at DESC`,[req.user.email]);res.json({ok:true,rows:r.rows})}catch(e){console.error(e);res.status(500).json({error:'Could not load results.'})}});

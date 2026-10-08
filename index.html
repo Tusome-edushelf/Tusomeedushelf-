@@ -2104,21 +2104,43 @@ function buildRichBulkReportPdf(ctx,schoolName){const learners=(ctx.classLearner
 function learnerMean(l){const vals=l.marks.filter(x=>x.markStatus==='present'&&Number.isFinite(Number(x.marks))&&Number(x.max)>0).map(x=>Number(x.marks)/Number(x.max)*100);return vals.length?(vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(2):'—';}
 async function downloadAdminStreamReportCardsPdf(){try{const cid=document.getElementById('reportClass')?.value||window.__selectedReportClassId||'';if(!cid)throw new Error('Select a class/stream first.');const cls=(window.__examClasses||[]).find(x=>String(x.classId||x.id)===String(cid));const ctx=await fetchRichReportContext({classId:cid,schoolId:selectedSchoolId});if(!ctx.classLearners?.length)throw new Error('No published results are available for this stream.');const pages=ctx.classLearners.map(x=>({...x,className:cls?.className||ctx.learner?.className,grade:cls?.grade||ctx.learner?.grade,stream:cls?.stream||ctx.learner?.stream,title:ctx.current?.title,examDate:ctx.current?.examDate,subjectMeans:ctx.current?.subjectMeans,classMean:ctx.current?.classMean,teacherRemark:x.teacherRemark,principalRemark:x.principalRemark,targetDelta:x.targetDelta}));const pdf=buildRichBulkPdf(pages,ctx.schoolName||'Tusome EduShelf');downloadTextFile(pdf,'Tusome_Report_Cards_'+(cls?.grade||'Class')+'_'+(cls?.stream||'Stream')+'.pdf','application/pdf');showToast?.(`Downloaded ${pages.length} enhanced stream report cards.`,'success')}catch(e){showToast?.(e.message||'Could not create stream report cards.','error')}}
 function buildGeneralResultsRankingPdf(schoolName, cls, learners, subjects, stats={}){
-  const W=842,H=595,m=28,headerH=88,bottom=30,rowH=21;
+  const W=842,H=595,m=24,headerH=84,bottom=28,rowH=20;
   const usable=W-2*m;
   const esc=v=>pdfEscapeText(String(v??''));
   const objects=[],add=o=>(objects.push(o),objects.length),cat=add(''),po=add('');
   const font=add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
   const bold=add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>');
   const refs=[];
-  const textAt=(c,x,y,size,v,b=false)=>c.push('BT',`/${b?'F2':'F1'} ${size} Tf`,`1 0 0 1 ${x} ${y} Tm`,'('+esc(v)+') Tj','ET');
+  const textAt=(c,x,y,size,v,b=false)=>c.push('BT',`/${b?'F2':'F1'} ${size} Tf`,`0 g`,`1 0 0 1 ${x} ${y} Tm`,'('+esc(v)+') Tj','ET');
   const line=(c,x1,y1,x2,y2)=>c.push(`${x1} ${y1} m ${x2} ${y2} l S`);
   const fill=(c,r,g,b)=>c.push(`${r} ${g} ${b} rg`);
   const stroke=(c,r,g,b)=>c.push(`${r} ${g} ${b} RG`);
   const rect=(c,x,y,w,h,filled=false)=>c.push(`${x} ${y} ${w} ${h} re ${filled?'f':'S'}`);
   const fmtPct=v=>v==null||!Number.isFinite(Number(v))?'—':`${Number(v).toFixed(1)}%`;
+  const abbrSubject=(name)=>{
+    const s=String(name||'Subject').trim();
+    const exact={
+      'Agriculture':'AGR','Arabic':'ARB','Christian Religious Education':'CRE','CRE':'CRE',
+      'Creative Arts':'CA','English':'ENG','French':'FRE','German':'GER','Hindu Religious Education':'HRE','HRE':'HRE',
+      'Indigenous Language':'IL','Integrated Science':'IS','Islamic Religious Education':'IRE','IRE':'IRE',
+      'Kiswahili':'KIS','Mandarin':'MAN','Mathematics':'MATH','Pre-Technical Studies':'PTS','Social Studies':'SST'
+    };
+    if(exact[s]) return exact[s];
+    const words=s.replace(/[^A-Za-z0-9 ]+/g,' ').trim().split(/\s+/).filter(Boolean);
+    if(words.length>=2) return words.slice(0,4).map(w=>w[0]).join('').toUpperCase().slice(0,5);
+    return s.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,5) || 'SUBJ';
+  };
+  const manySubjects=subjects.length>8;
+  const baseCols=manySubjects?[['POS',30],['ADM.',54],['LEARNER',122]]:[['POS',34],['ADM. NO.',62],['LEARNER NAME',142]];
+  const fixed=manySubjects?[['MEAN %',52],['CBE',42]]:[['MEAN %',56],['CBE',50]];
+  const reserved=baseCols.reduce((a,b)=>a+b[1],0)+fixed.reduce((a,b)=>a+b[1],0);
+  const subjectW=Math.max(manySubjects?29:46,Math.floor((usable-reserved-2)/Math.max(1,subjects.length)));
+  const cols=[...baseCols,...subjects.map(s=>[manySubjects?abbrSubject(s):s,subjectW]),...fixed];
+  const totalW=cols.reduce((a,b)=>a+b[1],0);
   const title=`GENERAL RESULTS — ${cls.className||'Class'}${cls.grade?' · Grade '+cls.grade:''}${cls.stream?' · Stream '+cls.stream:''}`;
-  const totalPages=Math.ceil(learners.length/18);
+  const firstPageRows=manySubjects?13:14;
+  const laterPageRows=manySubjects?18:19;
+  const totalPages=learners.length<=firstPageRows?1:1+Math.ceil((learners.length-firstPageRows)/laterPageRows);
   const avg=stats.averageMean==null?'—':fmtPct(stats.averageMean);
   const highest=stats.highestMean==null?'—':fmtPct(stats.highestMean);
   const lowest=stats.lowestMean==null?'—':fmtPct(stats.lowestMean);
@@ -2126,75 +2148,74 @@ function buildGeneralResultsRankingPdf(schoolName, cls, learners, subjects, stat
   const topLevel=stats.topCbe||'—';
   const remark=stats.generalRemark||'Overall performance summary is not available.';
 
-  // Keep all learner entries as percentages. X/Y remain status indicators rather than numeric percentages.
-  const baseCols=[['POS',38],['ADM. NO.',66],['LEARNER NAME',155]];
-  const fixed=[['MEAN %',56],['CBE',50]];
-  const subjectW=Math.max(54,Math.floor((usable-baseCols.reduce((a,b)=>a+b[1],0)-fixed.reduce((a,b)=>a+b[1],0)-2)/Math.max(1,subjects.length)));
-  const cols=[...baseCols,...subjects.map(s=>[s,subjectW]),...fixed];
-  const totalW=cols.reduce((a,b)=>a+b[1],0);
-  const rowStart=(H-m-headerH);
-
   for(let page=0;page<totalPages;page++){
-    const chunk=learners.slice(page*18,(page+1)*18);
-    const c=['1 1 1 rg','0 G','0.6 w'];
-    // Header
-    fill(c,0.03,0.20,0.38); rect(c,m,H-m-52,usable,52,true);
-    c.push('1 1 1 rg');
-    textAt(c,m+12,H-m-20,15,schoolName,true);
-    textAt(c,m+12,H-m-36,9,title,true);
-    textAt(c,m+12,H-m-48,6.5,'ACADEMIC PERFORMANCE SUMMARY | PUBLISHED RESULTS | ALL SCORES SHOWN AS PERCENTAGES');
-    textAt(c,W-m-128,H-m-20,7.5,'TUSOMEEDUSHELF',true);
-    textAt(c,W-m-128,H-m-34,6,'POWERED BY',true);
-    textAt(c,W-m-128,H-m-48,6,`PAGE ${page+1} OF ${totalPages}`,true);
+    const start=page===0?0:firstPageRows+(page-1)*laterPageRows;
+    const count=page===0?firstPageRows:laterPageRows;
+    const chunk=learners.slice(start,start+count);
+    const c=['1 1 1 rg','0 G','0.8 w'];
+
+    // Header: high-contrast school identity and report title.
+    fill(c,0.90,0.95,0.98);rect(c,m,H-m-50,usable,50,true);
+    textAt(c,m+12,H-m-19,14,schoolName,true);
+    textAt(c,m+12,H-m-34,8.2,title,true);
+    textAt(c,m+12,H-m-45,5.8,'ACADEMIC PERFORMANCE SUMMARY  |  PUBLISHED RESULTS  |  ALL SCORES AS PERCENTAGES',true);
+    textAt(c,W-m-112,H-m-19,6.3,'TUSOMEEDUSHELF',true);
+    textAt(c,W-m-112,H-m-31,5.2,'POWERED BY',true);
+    textAt(c,W-m-112,H-m-43,5.2,`PAGE ${page+1} OF ${totalPages}`,true);
     c.push('0 G');
 
-    // First-page overall statistics block.
-    let top=rowStart;
+    let top=H-m-60;
     if(page===0){
-      const sy=top-74;
-      stroke(c,0.35,0.65,0.86);fill(c,0.96,0.985,1);rect(c,m,sy,usable,62,true);c.push('0 G');
-      const boxes=[
-        ['TOTAL LEARNERS',String(stats.totalLearners??learners.length)],
-        ['HIGHEST MEAN',highest],
-        ['AVERAGE MEAN',avg],
-        ['LOWEST MEAN',lowest],
-        ['TOP CBE LEVEL',topLevel]
-      ];
+      const sy=top-62;
+      stroke(c,0.45,0.62,0.72);fill(c,0.94,0.975,0.99);rect(c,m,sy,usable,52,true);c.push('0 G');
+      const boxes=[['TOTAL LEARNERS',String(stats.totalLearners??learners.length)],['HIGHEST MEAN',highest],['AVERAGE MEAN',avg],['LOWEST MEAN',lowest],['TOP CBE LEVEL',topLevel]];
       const bw=usable/5;
-      boxes.forEach((b,i)=>{const x=m+i*bw;if(i)line(c,x,sy+10,x,sy+52);textAt(c,x+9,sy+43,6.2,b[0],true);textAt(c,x+9,sy+24,11.5,b[1],true);});
-      textAt(c,m+9,sy+10,5.5,`Highest: ${topName}`);
-      top=sy-12;
-      // General remark box
-      const rh=42,ry=top-rh;stroke(c,0.35,0.65,0.86);fill(c,0.98,0.99,1);rect(c,m,ry,usable,rh,true);c.push('0 G');
-      textAt(c,m+9,top-13,6.4,'GENERAL REMARK',true);
-      const words=String(remark).split(/\s+/);let lineTxt='',yy=top-25;for(const w of words){const test=lineTxt?lineTxt+' '+w:w;if(test.length>145){textAt(c,m+9,yy,6.2,lineTxt);yy-=9;lineTxt=w;}else lineTxt=test;}if(lineTxt)textAt(c,m+9,yy,6.2,lineTxt);
-      top=ry-10;
+      boxes.forEach((b,i)=>{const x=m+i*bw;if(i)line(c,x,sy+8,x,sy+44);textAt(c,x+8,sy+35,6.0,b[0],true);textAt(c,x+8,sy+18,10.8,b[1],true);});
+      textAt(c,m+8,sy+5,5.2,`Highest learner: ${topName}`);
+      top=sy-8;
+      const rh=38,ry=top-rh;
+      stroke(c,0.45,0.62,0.72);fill(c,0.98,0.99,1);rect(c,m,ry,usable,rh,true);c.push('0 G');
+      textAt(c,m+8,top-11,6.0,'GENERAL REMARK',true);
+      const words=String(remark).split(/\s+/);let lineTxt='',yy=top-22;
+      for(const w of words){const test=lineTxt?lineTxt+' '+w:w;if(test.length>150){textAt(c,m+8,yy,6.2,lineTxt);yy-=9;lineTxt=w;}else lineTxt=test;}
+      if(lineTxt)textAt(c,m+8,yy,6.2,lineTxt);
+      top=ry-8;
+      if(manySubjects){
+        textAt(c,m+2,top-5,5.1,'SUBJECT KEY: '+subjects.map(s=>`${abbrSubject(s)}=${s}`).join('   |   '),false);
+        top-=13;
+      }
+    }else if(manySubjects){
+      textAt(c,m+2,top-4,5.0,'SUBJECT ABBREVIATIONS: '+subjects.map(s=>`${abbrSubject(s)}=${s}`).join('   |   '),false);
+      top-=11;
     }
 
-    // Table header
     const tableTop=top;
-    fill(c,0.03,0.20,0.38);rect(c,m,tableTop-rowH,totalW,rowH,true);c.push('1 1 1 rg');
-    let x=m;cols.forEach(([h,w])=>{textAt(c,x+3,tableTop-14,6.2,String(h).slice(0,18),true);x+=w;});
-    c.push('0 G');stroke(c,0.60,0.68,0.75);
-    // Grid and rows
+    // Strong header and grid for readability on phone PDF viewers.
+    fill(c,0.04,0.16,0.30);rect(c,m,tableTop-rowH,totalW,rowH,true);
+    c.push('1 1 1 rg');
+    let x=m;cols.forEach(([h,w])=>{const label=String(h);textAt(c,x+2.5,tableTop-13, manySubjects?5.4:6.0,label,true);x+=w;});
+    c.push('0 G','0.75 w');
     for(let r=0;r<=chunk.length+1;r++)line(c,m,tableTop-r*rowH,m+totalW,tableTop-r*rowH);
     x=m;for(let j=0;j<=cols.length;j++){line(c,x,tableTop,x,tableTop-(chunk.length+1)*rowH);if(j<cols.length)x+=cols[j][1];}
     chunk.forEach((l,ri)=>{
       const y=tableTop-(ri+2)*rowH;
-      if(ri%2===1){fill(c,0.965,0.98,0.99);rect(c,m,y,totalW,rowH,true);c.push('0 G');}
+      if(ri%2===1){fill(c,0.94,0.95,0.96);rect(c,m,y,totalW,rowH,true);c.push('0 G');}
       x=m;
       const vals=[l.rank,l.admission,l.name,...subjects.map(s=>l.bySubject[s]||'—'),l.mean==null?'—':fmtPct(l.mean),l.grade||'—'];
       vals.forEach((v,j)=>{
-        let val=String(v??'—').replace(/[\r\n]+/g,' ');const max=Math.max(5,Math.floor(cols[j][1]/4.0));if(val.length>max)val=val.slice(0,Math.max(1,max-2))+'..';
-        textAt(c,x+4,y+7,7,val,j<3||j===cols.length-2);
+        let val=String(v??'—').replace(/[\r\n]+/g,' ');
+        const max=manySubjects?Math.max(3,Math.floor(cols[j][1]/3.8)):Math.max(5,Math.floor(cols[j][1]/4.1));
+        if(val.length>max)val=val.slice(0,Math.max(1,max-1))+'…';
+        const isNumeric=j===0||j>=3;
+        textAt(c,x+3,y+6.2,manySubjects?6.8:7.2,val,isNumeric||j===2);
         x+=cols[j][1];
       });
     });
 
-    // Footer
-    const fy=26;fill(c,0.03,0.20,0.38);rect(c,m,fy,usable,22,true);c.push('1 1 1 rg');
-    textAt(c,m+8,fy+8,5.8,`${schoolName} | ${title}`);
-    textAt(c,W-m-155,fy+8,5.8,`Published • Ranked by mean % • Page ${page+1} of ${totalPages}`);
+    const fy=18;fill(c,0.90,0.95,0.98);rect(c,m,fy,usable,22,true);c.push('1 1 1 rg');
+    textAt(c,m+7,fy+8,5.6,`${schoolName} | ${title}`,true);
+    textAt(c,W-m-165,fy+8,5.6,`PUBLISHED • RANKED BY MEAN % • PAGE ${page+1} OF ${totalPages}`,true);
+
     const stream=c.join('\n');
     const cr=add(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
     refs.push(add(`<< /Type /Page /Parent ${po} 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /Font << /F1 ${font} 0 R /F2 ${bold} 0 R >> >> /Contents ${cr} 0 R >>`));

@@ -1902,9 +1902,11 @@ function buildRichBulkPdf(learners,schoolName){
   objects[cat-1]=`<< /Type /Catalog /Pages ${po} 0 R >>`;objects[po-1]=`<< /Type /Pages /Kids [${refs.map(x=>x+' 0 R').join(' ')}] /Count ${refs.length} >>`;let pdf='%PDF-1.4\n% TusomeEduShelf\n',off=[0];for(let i=0;i<objects.length;i++){off[i+1]=pdf.length;pdf+=`${i+1} 0 obj\n${objects[i]}\nendobj\n`}const xr=pdf.length;pdf+=`xref\n0 ${objects.length+1}\n0000000000 65535 f \n`;for(let i=1;i<=objects.length;i++)pdf+=String(off[i]).padStart(10,'0')+' 00000 n \n';pdf+=`trailer\n<< /Size ${objects.length+1} /Root ${cat} 0 R >>\nstartxref\n${xr}\n%%EOF\n`;return new Blob([pdf],{type:'application/pdf'});
 }
 function reportCardPagesForObjects(learner,schoolName){
-  // A4 portrait report card: 595 x 842 points. One page per learner for the
-  // normal stream report; the layout compresses gracefully for larger subject sets.
-  const W=595,H=842,m=32,subjects=learner.subjects||[];
+  // v126.31 — A4 portrait, reference-style learner report card.
+  // Every learner gets exactly one balanced A4 page; sections are laid out from
+  // the bottom of the subject table so short subject lists do not leave a large
+  // unused blank area.
+  const W=595,H=842,m=32,subjects=learner.subjects||learner.marks||[];
   const pct=x=>reportPct(x), vals=subjects.map(pct).filter(v=>v!==null);
   const mean=learner.mean!=null?Number(learner.mean):(vals.length?vals.reduce((a,b)=>a+b,0)/vals.length:null);
   const total=learner.totalMarks!=null?Number(learner.totalMarks):subjects.filter(x=>x.markStatus==='present').reduce((a,x)=>a+Number(x.marks||0),0);
@@ -1912,96 +1914,110 @@ function reportCardPagesForObjects(learner,schoolName){
   const title=learner.title||'Published Examination', date=learner.examDate||'—';
   const safe=v=>String(v??'—');
   const rankText=(r,c)=>r?`${r} / ${c||'—'}`:'—';
-  const objects=[],add=o=>(objects.push(o),objects.length),cat=add(''),po=add(''),font=add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>'),refs=[];
-  const setFill=(c,r,g,b)=>c.push(`${r} ${g} ${b} rg`), resetFill=c=>c.push('0 g');
+  const objects=[],add=o=>(objects.push(o),objects.length),cat=add(''),po=add('');
+  const font=add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
+  const bold=add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>');
+  const refs=[];
+  const setFill=(c,r,g,b)=>c.push(`${r} ${g} ${b} rg`),resetFill=c=>c.push('0 g');
+  const rect=(c,x,y,w,h,fill=null,stroke=true)=>{if(fill){setFill(c,...fill);c.push(`${x} ${y} ${w} ${h} re f`);resetFill(c)}if(stroke)c.push(`${x} ${y} ${w} ${h} re S`)};
   const line=(c,x1,y1,x2,y2)=>c.push(`${x1} ${y1} m ${x2} ${y2} l S`);
-  const rect=(c,x,y,w,h,fill=null)=>{if(fill){setFill(c,...fill);c.push(`${x} ${y} ${w} ${h} re f`);resetFill(c)}else c.push(`${x} ${y} ${w} ${h} re S`)};
-  const txt=(c,x,y,size,text,bold=false)=>{c.push('BT',`/F1 ${size} Tf`,`1 0 0 1 ${x} ${y} Tm`,'('+escPdf(String(text??''))+') Tj','ET')};
-  const wrap=(c,x,y,w,size,text,leading=8,maxLines=2)=>{const raw=String(text??'').replace(/\s+/g,' ').trim();if(!raw)return;const max=Math.max(8,Math.floor(w/(size*.50)));let words=raw.split(' '),ln='',arr=[];for(const word of words){const t=ln?ln+' '+word:word;if(t.length>max){if(ln)arr.push(ln);ln=word}else ln=t}if(ln)arr.push(ln);arr.slice(0,maxLines).forEach((z,i)=>txt(c,x,y-i*leading,size,z));};
-  const c=['0 G','0.65 w'];
+  const txt=(c,x,y,size,text,b=false)=>c.push('BT',`/${b?'F2':'F1'} ${size} Tf`,`1 0 0 1 ${x} ${y} Tm`,'('+escPdf(String(text??''))+') Tj','ET');
+  const wrap=(c,x,y,w,size,text,leading=8,maxLines=2,b=false)=>{const raw=String(text??'').replace(/\s+/g,' ').trim();if(!raw)return 0;const max=Math.max(8,Math.floor(w/(size*.50)));let words=raw.split(' '),ln='',arr=[];for(const word of words){const t=ln?ln+' '+word:word;if(t.length>max){if(ln)arr.push(ln);ln=word}else ln=t}if(ln)arr.push(ln);arr=arr.slice(0,maxLines);arr.forEach((z,i)=>txt(c,x,y-i*leading,size,z,b));return arr.length*leading};
+  const c=['0 G','0.7 w'];
+  const innerW=W-2*m;
 
-  // Header: school identity + TusomeEduShelf branding.
-  txt(c,m,H-34,17,schoolName||'School Name',true);
-  txt(c,W-m-145,H-31,6.5,'POWERED BY TUSOMEEDUSHELF',true);
-  txt(c,m,H-52,8,'OFFICIAL STUDENT ACADEMIC REPORT',true);
-  txt(c,m+170,H-52,11,`ACADEMIC PERFORMANCE REPORT — ${title}`,true);
-  line(c,m,H-60,W-m,H-60);
+  // ---------- SCHOOL HEADER ----------
+  // Simple monogram badge gives the header the same visual weight as the reference
+  // without requiring a separate image/logo asset.
+  const schoolInitials=(String(schoolName||'School').match(/[A-Za-z]/g)||['S']).slice(0,2).join('').toUpperCase();
+  setFill(c,0.05,0.56,0.80);c.push(`${m} ${H-70} 48 48 re f`);resetFill(c);
+  txt(c,m+15,H-52,15,schoolInitials,true);
+  txt(c,m+62,H-35,17,String(schoolName||'School Name').slice(0,62),true);
+  txt(c,m+62,H-49,7.2,'OFFICIAL STUDENT ACADEMIC REPORT',true);
+  txt(c,W-m-150,H-31,6.5,'POWERED BY TUSOMEEDUSHELF',true);
+  txt(c,m+62,H-61,8.5,`ACADEMIC PERFORMANCE REPORT — ${title}`,true);
+  line(c,m,H-77,W-m,H-77);
 
-  // Learner identity block.
-  const iy=H-78, ih=76;
-  rect(c,m,iy-ih,W-2*m,ih,[0.95,0.97,0.98]);
-  const col1=m+10,col2=m+180,col3=m+365;
-  txt(c,col1,iy-19,7,'LEARNER NAME',true);txt(c,col1,iy-34,10.5,safe(learner.fullName||learner.name||'Learner'),true);
-  txt(c,col2,iy-19,7,'ADMISSION NO.',true);txt(c,col2,iy-34,10.5,safe(learner.admissionNumber||learner.admission),true);
-  txt(c,col3,iy-19,7,'CLASS & STREAM',true);txt(c,col3,iy-34,10.5,`${safe(learner.className)}${learner.stream?' — '+safe(learner.stream):''}`,true);
-  txt(c,col1,iy-55,7,'GENDER',true);txt(c,col1,iy-68,8.5,safe(learner.gender||'Not set'),true);
-  txt(c,col2,iy-55,7,'KCPE/KPSEA ENTRY SCORE',true);txt(c,col2,iy-68,8.5,safe(learner.baseline||'Not set'),true);
-  txt(c,col3,iy-55,7,'EXAM SESSION / DATE',true);txt(c,col3,iy-68,8.5,`${safe(title)} · ${safe(date)}`,true);
+  // ---------- LEARNER IDENTITY ----------
+  const iy=H-91,ih=74;
+  rect(c,m,iy-ih,innerW,ih,[0.94,0.97,0.98]);
+  const c1=m+10,c2=m+178,c3=m+352;
+  txt(c,c1,iy-18,6.5,'LEARNER NAME',true);txt(c,c1,iy-33,10.5,safe(learner.fullName||learner.name||'Learner'),true);
+  txt(c,c2,iy-18,6.5,'ADMISSION NO.',true);txt(c,c2,iy-33,10.5,safe(learner.admissionNumber||learner.admission),true);
+  txt(c,c3,iy-18,6.5,'CLASS & STREAM',true);txt(c,c3,iy-33,9.7,`${safe(learner.className)}${learner.stream?' — '+safe(learner.stream):''}`,true);
+  txt(c,c1,iy-53,6.5,'KCPE/KPSEA ENTRY SCORE',true);txt(c,c1,iy-66,8.2,safe(learner.baseline||'Not set'),true);
+  txt(c,c2,iy-53,6.5,'EXAM SESSION',true);txt(c,c2,iy-66,8.2,safe(title),true);
+  txt(c,c3,iy-53,6.5,'GENDER / DATE',true);txt(c,c3,iy-66,8.2,`${safe(learner.gender||'Not set')} · ${safe(date)}`,true);
 
-  // Overall performance banner.
-  const by=iy-ih-14,bh=50;
-  rect(c,m,by-bh,W-2*m,bh,[0.91,0.96,0.99]);
+  // ---------- OVERALL PERFORMANCE BANNER ----------
+  const by=iy-ih-13,bh=52;
+  rect(c,m,by-bh,innerW,bh,[0.90,0.96,0.99]);
   const metrics=[['TOTAL MARKS',`${Number(total).toFixed(0)} / ${totalMax||'—'}`],['MEAN SCORE',mean==null?'—':mean.toFixed(2)+'%'],['CBE LEVEL',cbeGrade(mean)],['STREAM RANK',rankText(learner.streamRank,learner.streamCount)],['OVERALL RANK',rankText(learner.overallRank,learner.overallCount)],['DEVIATION',learner.targetDelta==null?'—':`${learner.targetDelta>=0?'+':''}${Number(learner.targetDelta).toFixed(2)}`]];
-  const mw=(W-2*m)/metrics.length;
-  metrics.forEach((a,i)=>{const x=m+i*mw+7;txt(c,x,by-16,6.4,a[0],true);txt(c,x,by-34,10.5,a[1],true)});
+  const mw=innerW/metrics.length;metrics.forEach((a,i)=>{const x=m+i*mw+5;txt(c,x,by-16,5.8,a[0],true);txt(c,x,by-34,9.8,a[1],true)});
+  txt(c,m+6,by-47,5.7,`Performance movement: ${learner.targetDelta==null?'Not available':(learner.targetDelta>=0?'Improved by ':'Changed by ')+Math.abs(Number(learner.targetDelta)).toFixed(2)+' points'}`);
 
-  // Subject results table.
-  const secY=by-bh-18;txt(c,m,secY,10,'SUBJECT PERFORMANCE BREAKDOWN',true);
-  const top=secY-10;
-  const rowH=subjects.length<=8?20:subjects.length<=12?17:14;
-  const cols=[m,m+105,m+155,m+205,m+265,m+325,m+390,W-m];
-  const bottom=top-(subjects.length+1)*rowH;
-  rect(c,m,bottom,W-2*m,(subjects.length+1)*rowH,[0.995,0.995,0.995]);
-  rect(c,m,top-rowH,W-2*m,rowH,[0.06,0.09,0.16]);
+  // ---------- SUBJECT RESULTS ----------
+  const secY=by-bh-16;txt(c,m,secY,9.5,'SUBJECT PERFORMANCE BREAKDOWN',true);
+  const top=secY-9;
+  const nsub=subjects.length;
+  const rowH=nsub<=6?24:nsub<=8?22:nsub<=11?18:nsub<=14?16:14;
+  const cols=[m,m+94,m+145,m+185,m+242,m+300,m+356,W-m];
+  const bottom=top-(nsub+1)*rowH;
+  rect(c,m,bottom,innerW,(nsub+1)*rowH,[0.995,0.995,0.995]);
+  rect(c,m,top-rowH,innerW,rowH,[0.04,0.08,0.15]);
   cols.forEach(x=>line(c,x,top,x,bottom));
-  for(let r=0;r<=subjects.length+1;r++)line(c,m,top-r*rowH,W-m,top-r*rowH);
-  ['SUBJECT','SCORE','%','CBE LEVEL','CLASS MEAN','TARGET','TEACHER REMARK'].forEach((h,i)=>{c.push('1 1 1 rg');txt(c,cols[i]+4,top-rowH+6,rowH>=17?6.2:5.2,h,true);c.push('0 g')});
+  for(let r=0;r<=nsub+1;r++)line(c,m,top-r*rowH,W-m,top-r*rowH);
+  ['SUBJECT','SCORE','%','CBE LEVEL','CLASS MEAN','TARGET','TEACHER REMARK'].forEach((h,i)=>{c.push('1 1 1 rg');txt(c,cols[i]+3,top-rowH+Math.max(5,rowH-12),rowH>=18?5.7:4.9,h,true);c.push('0 g')});
   subjects.forEach((x,i)=>{
-    const rowTop=top-(i+1)*rowH, y=rowTop-rowH+Math.max(4,rowH/2-2), p=pct(x), cm=learner.subjectMeans?.[x.subjectName];
-    if(i%2===1)rect(c,m,rowTop-rowH,W-2*m,rowH,[0.95,0.98,0.99]);
-    txt(c,cols[0]+4,y,rowH>=17?6.5:5.4,safe(x.subjectName),true);
-    txt(c,cols[1]+4,y,rowH>=17?6.2:5.2,x.markStatus==='absent'?'X':x.markStatus==='irregular'?'Y':`${x.marks??'—'} / ${x.maxMarks??'—'}`);
-    txt(c,cols[2]+4,y,rowH>=17?6.2:5.2,p==null?'—':p.toFixed(1));
-    txt(c,cols[3]+4,y,rowH>=17?6.2:5.2,cbeGrade(p),true);
-    txt(c,cols[4]+4,y,rowH>=17?6.2:5.2,cm==null?'—':Number(cm).toFixed(1));
-    txt(c,cols[5]+4,y,rowH>=17?6.2:5.2,x.target??'Not set');
-    const remark=x.comment||'—';wrap(c,cols[6]+4,y+2,W-m-cols[6]-6,rowH>=17?5.8:5.0,remark,rowH>=17?6.5:5.5,1);
+    const rowTop=top-(i+1)*rowH,y=rowTop-rowH+Math.max(4,rowH/2-2),p=pct(x),cm=learner.subjectMeans?.[x.subjectName];
+    if(i%2===1)rect(c,m,rowTop-rowH,innerW,rowH,[0.94,0.98,0.99],false);
+    txt(c,cols[0]+3,y,rowH>=18?6.2:5.1,safe(x.subjectName),true);
+    txt(c,cols[1]+3,y,rowH>=18?5.8:4.9,x.markStatus==='absent'?'X':x.markStatus==='irregular'?'Y':`${x.marks??'—'} / ${x.maxMarks??'—'}`);
+    txt(c,cols[2]+3,y,rowH>=18?5.8:4.9,p==null?'—':p.toFixed(1));
+    txt(c,cols[3]+3,y,rowH>=18?5.8:4.9,cbeGrade(p),true);
+    txt(c,cols[4]+3,y,rowH>=18?5.8:4.9,cm==null?'—':Number(cm).toFixed(1));
+    txt(c,cols[5]+3,y,rowH>=18?5.8:4.9,x.target??'Not set');
+    wrap(c,cols[6]+3,y+2,W-m-cols[6]-5,rowH>=18?5.1:4.5,x.comment||'—',rowH>=18?5.5:4.8,1);
   });
 
-  // Analytics: two compact charts.
-  const chartTop=bottom-16;
-  const chartH=subjects.length>12?70:subjects.length>8?82:92;
-  const gap=10,chartW=(W-2*m-gap)/2;
-  txt(c,m,chartTop,8.2,'SUBJECT PERFORMANCE VS CLASS AVERAGE',true);
-  txt(c,m+chartW+gap,chartTop,8.2,'PERFORMANCE TREND (%)',true);
-  const gx=m+18,gy=chartTop-chartH+7,gw=chartW-28;
+  // ---------- ANALYTICS ----------
+  // The charts are deliberately placed immediately under the table, so the
+  // page remains balanced whether the learner has 2 or 16 assessed subjects.
+  const afterTable=bottom-14;
+  const chartH=nsub<=6?108:nsub<=10?98:82;
+  const gap=10,chartW=(innerW-gap)/2;
+  txt(c,m,afterTable,8,'SUBJECT PERFORMANCE VS CLASS AVERAGE',true);
+  txt(c,m+chartW+gap,afterTable,8,'PERFORMANCE TREND (%)',true);
+  const chartTop=afterTable-8,gy=chartTop-chartH+8,gx=m+18,gw=chartW-27;
   line(c,gx,gy,gx,gy+chartH);line(c,gx,gy,gx+gw,gy);
-  [0,50,100].forEach(v=>{const yy=gy+chartH*v/100;line(c,gx,yy,gx+gw,yy);txt(c,m+1,yy-2,4.8,String(v));});
-  const n=Math.max(1,subjects.length),step=gw/n;
-  subjects.forEach((x,i)=>{const p=pct(x),cm=learner.subjectMeans?.[x.subjectName],bx=gx+3+i*step,bw=Math.min(7,Math.max(3,step/4));const ph=p==null?0:chartH*Math.min(1,p/100),ch=cm==null?0:chartH*Math.min(1,Number(cm)/100);if(ch)rect(c,bx+bw+1,gy,bw,ch,[0.72,0.80,0.87]);if(ph)rect(c,bx,gy,bw,ph,[0.08,0.53,0.78]);txt(c,bx-2,gy-9,4.2,String(x.subjectName||'').slice(0,7));});
-  const tx=m+chartW+gap+18,ty=gy,tW=chartW-28,tH=chartH;line(c,tx,ty,tx,ty+tH);line(c,tx,ty,tx+tW,ty);[0,50,100].forEach(v=>{const yy=ty+tH*v/100;line(c,tx,yy,tx+tW,yy);txt(c,m+chartW+gap+2,yy-2,4.8,String(v));});
-  const hist=learner.history||[];let px=null,py=null;hist.forEach((h,i)=>{const xx=tx+(hist.length===1?tW/2:i*tW/(hist.length-1)),v=Math.max(0,Math.min(100,Number(h.mean)||0)),yy=ty+tH*v/100;if(px!==null)line(c,px,py,xx,yy);rect(c,xx-2,yy-2,4,4,[0.08,0.53,0.78]);txt(c,xx-13,ty-9,4.2,String(h.label||'').slice(0,10));txt(c,xx-8,yy+5,4.8,v.toFixed(1));px=xx;py=yy;});
-  if(!hist.length)txt(c,tx+8,ty+tH/2,6,'No previous published cycle available.');
+  [0,50,100].forEach(v=>{const yy=gy+chartH*v/100;line(c,gx,yy,gx+gw,yy);txt(c,m+1,yy-2,4.6,String(v));});
+  const step=gw/Math.max(1,nsub);
+  subjects.forEach((x,i)=>{const p=pct(x),cm=learner.subjectMeans?.[x.subjectName],bx=gx+2+i*step,bw=Math.min(8,Math.max(3,step/4));const ph=p==null?0:chartH*Math.min(1,p/100),ch=cm==null?0:chartH*Math.min(1,Number(cm)/100);if(ch)rect(c,bx+bw+1,gy,bw,ch,[0.70,0.78,0.86],false);if(ph)rect(c,bx,gy,bw,ph,[0.05,0.56,0.82],false);txt(c,bx-2,gy-9,4.1,String(x.subjectName||'').slice(0,7));});
+  txt(c,m+chartW-68,gy+chartH-8,4.5,'Student');txt(c,m+chartW-68,gy+chartH-16,4.5,'Class mean');
+  const tx=m+chartW+gap+18,ty=gy,tW=chartW-27,tH=chartH;line(c,tx,ty,tx,ty+tH);line(c,tx,ty,tx+tW,ty);[0,50,100].forEach(v=>{const yy=ty+tH*v/100;line(c,tx,yy,tx+tW,yy);txt(c,m+chartW+gap+1,yy-2,4.6,String(v));});
+  const hist=learner.history||[];let px=null,py=null;
+  hist.forEach((h,i)=>{const xx=tx+(hist.length===1?tW/2:i*tW/(hist.length-1)),v=Math.max(0,Math.min(100,Number(h.mean)||0)),yy=ty+tH*v/100;if(px!==null)line(c,px,py,xx,yy);rect(c,xx-2,yy-2,4,4,[0.05,0.56,0.82],false);txt(c,xx-12,ty-10,4.0,String(h.label||'').slice(0,11));txt(c,xx-8,yy+5,4.4,v.toFixed(1));px=xx;py=yy;});
+  if(!hist.length)txt(c,tx+7,ty+tH/2,5.7,'No previous published cycle available.');
 
-  // Automatic official comments.
-  const ry=gy-18,boxH=64,half=(W-2*m-8)/2;
-  rect(c,m,ry-boxH,half,boxH,[0.94,0.97,0.98]);rect(c,m+half+8,ry-boxH,half,boxH,[0.94,0.97,0.98]);
-  txt(c,m+8,ry-14,8,'CLASS TEACHER REMARKS',true);wrap(c,m+8,ry-28,half-16,6.2,learner.teacherRemark||'Automatic comment not available.',7,4);
-  txt(c,m+half+16,ry-14,8,"PRINCIPAL'S REMARKS",true);wrap(c,m+half+16,ry-28,half-80,6.2,learner.principalRemark||'Automatic comment not available.',7,4);
-  rect(c,m+half+16,ry-55,72,18,[0.89,0.94,0.97]);txt(c,m+half+22,ry-48,5.2,'OFFICIAL STAMP',true);
+  // ---------- OFFICIAL COMMENTS ----------
+  const commentTop=gy-16,boxH=nsub<=6?82:nsub<=10?74:64,half=(innerW-10)/2;
+  rect(c,m,commentTop-boxH,half,boxH,[0.94,0.97,0.98]);rect(c,m+half+10,commentTop-boxH,half,boxH,[0.94,0.97,0.98]);
+  txt(c,m+9,commentTop-14,7.5,'CLASS TEACHER REMARKS',true);wrap(c,m+9,commentTop-28,half-18,5.8,learner.teacherRemark||'Automatic comment not available.',7,Math.max(3,Math.floor((boxH-30)/7)));
+  txt(c,m+half+19,commentTop-14,7.5,"PRINCIPAL'S REMARKS",true);wrap(c,m+half+19,commentTop-28,half-30,5.8,learner.principalRemark||'Automatic comment not available.',7,Math.max(3,Math.floor((boxH-30)/7)));
+  rect(c,m+half+19,commentTop-boxH+8,84,18,[0.89,0.94,0.97]);txt(c,m+half+26,commentTop-boxH+15,4.8,'OFFICIAL STAMP / SIGNATURE',true);
 
-  // Target / term information strip.
-  const targetY=ry-boxH-12;rect(c,m,targetY-35,W-2*m,35,[0.06,0.09,0.16]);c.push('1 1 1 rg');
-  txt(c,m+8,targetY-14,6.4,'TARGET',true);txt(c,m+62,targetY-14,6.2,`Target grade: ${safe(learner.targetGrade||'Not set')}`);txt(c,m+190,targetY-14,6.2,`Target score: ${safe(learner.targetScore||'Not set')}`);txt(c,m+315,targetY-14,6.2,`Actual CBE: ${cbeGrade(mean)}`);txt(c,m+415,targetY-14,6.2,`Deviation: ${learner.targetDelta==null?'—':(learner.targetDelta>=0?'+':'')+Number(learner.targetDelta).toFixed(2)}`);c.push('0 g');
-  txt(c,m,targetY-49,6.1,`Next term opening: ${safe(learner.openingDate||'Not set')}   ·   Closing date: ${safe(learner.closingDate||'Not set')}   ·   Fee expectation: ${safe(learner.feeExpectation||'Not set')}`);
+  // ---------- TARGET / TERM STRIP ----------
+  const targetTop=commentTop-boxH-12;
+  rect(c,m,targetTop-36,innerW,36,[0.04,0.08,0.15]);c.push('1 1 1 rg');
+  txt(c,m+8,targetTop-14,5.8,'TARGET',true);txt(c,m+58,targetTop-14,5.5,`Target grade: ${safe(learner.targetGrade||'Not set')}`);txt(c,m+170,targetTop-14,5.5,`Target score: ${safe(learner.targetScore||'Not set')}`);txt(c,m+286,targetTop-14,5.5,`Actual CBE: ${cbeGrade(mean)}`);txt(c,m+395,targetTop-14,5.5,`Deviation: ${learner.targetDelta==null?'—':(learner.targetDelta>=0?'+':'')+Number(learner.targetDelta).toFixed(2)}`);c.push('0 g');
+  txt(c,m,targetTop-50,5.3,`Next term opening: ${safe(learner.openingDate||'Not set')}   ·   Closing date: ${safe(learner.closingDate||'Not set')}   ·   Fee expectation: ${safe(learner.feeExpectation||'Not set')}`);
 
-  // Footer and CBE legend.
-  line(c,m,48,W-m,48);
-  txt(c,m,34,5.7,'CBE LEVELS: EE1/EE2 = Exceeding Expectation · ME1/ME2 = Meeting Expectation · AE1/AE2 = Approaching Expectation · BE1/BE2 = Below Expectation.');
-  txt(c,W-m-112,34,5.7,'OFFICIAL RESULT: PUBLISHED');
-  txt(c,W-m-55,22,5.7,'Page 1 of 1');
+  // ---------- FOOTER ----------
+  const footerY=Math.max(25,targetTop-67);line(c,m,footerY,W-m,footerY);
+  txt(c,m,footerY-12,4.8,'CBE LEVELS: EE1/EE2 — Exceeding Expectation · ME1/ME2 — Meeting Expectation · AE1/AE2 — Approaching Expectation · BE1/BE2 — Below Expectation.');
+  txt(c,W-m-122,footerY-12,4.8,'OFFICIAL RESULT: PUBLISHED');txt(c,W-m-48,footerY-25,4.8,'Page 1 of 1');
 
-  const stream=c.join('\n'),cr=add(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`),pr=add(`<< /Type /Page /Parent ${po} 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /Font << /F1 ${font} 0 R >> >> /Contents ${cr} 0 R >>`);refs.push(pr);
+  const stream=c.join('\n'),cr=add(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`),pr=add(`<< /Type /Page /Parent ${po} 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /Font << /F1 ${font} 0 R /F2 ${bold} 0 R >> >> /Contents ${cr} 0 R >>`);refs.push(pr);
   objects[cat-1]=`<< /Type /Catalog /Pages ${po} 0 R >>`;objects[po-1]=`<< /Type /Pages /Kids [${refs.map(x=>x+' 0 R').join(' ')}] /Count ${refs.length} >>`;
   return [stream];
 }

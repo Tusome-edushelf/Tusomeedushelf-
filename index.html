@@ -2108,7 +2108,7 @@ async function downloadAdminGeneralResultsPdf(){
     const cid=document.getElementById('reportClass')?.value||window.__selectedReportClassId||'';
     if(!cid)throw new Error('Select a class/stream first.');
     if(!selectedSchoolId)throw new Error('No active school workspace is selected.');
-    const r=await fetch('/api/schools/general-results?classId='+encodeURIComponent(cid),{credentials:'include',cache:'no-store'});
+    const workspace=document.getElementById('schoolWorkspaceSelect');if(workspace?.value) selectedSchoolId=workspace.value;if(!selectedSchoolId && Array.isArray(schoolWorkspaces) && schoolWorkspaces.length) selectedSchoolId=schoolWorkspaces[0].schoolId;if(!selectedSchoolId)throw new Error('School workspace could not be determined. Please select your school workspace and try again.');const r=await fetch('/api/schools/general-results?schoolId='+encodeURIComponent(selectedSchoolId)+'&classId='+encodeURIComponent(cid),{credentials:'include',cache:'no-store'});
     const d=await parseApiResponse(r); if(!r.ok)throw new Error(d.error||'Could not load general results.');
     const cls=d.class||{}; const raw=d.rows||[];
     if(!raw.length)throw new Error('No published results are available for this stream. Approve & Publish the mark sheets first.');

@@ -2140,15 +2140,25 @@ function buildGeneralResultsRankingPdf(schoolName, cls, learners, subjects, stat
   const title=`GENERAL RESULTS — ${cls.className||'Class'}${cls.grade?' · Grade '+cls.grade:''}${cls.stream?' · Stream '+cls.stream:''}`;
   const firstPageRows=manySubjects?13:14;
   const laterPageRows=manySubjects?18:19;
-  const totalPages=learners.length<=firstPageRows?1:1+Math.ceil((learners.length-firstPageRows)/laterPageRows);
+  const dataPages=learners.length<=firstPageRows?1:1+Math.ceil((learners.length-firstPageRows)/laterPageRows);
+  const totalPages=dataPages+1;
   const avg=stats.averageMean==null?'—':fmtPct(stats.averageMean);
   const highest=stats.highestMean==null?'—':fmtPct(stats.highestMean);
   const lowest=stats.lowestMean==null?'—':fmtPct(stats.lowestMean);
   const topName=stats.topLearner||'—';
   const topLevel=stats.topCbe||'—';
   const remark=stats.generalRemark||'Overall performance summary is not available.';
+  const subjectStats=subjects.map(subject=>{
+    const vals=[];
+    for(const l of learners){
+      const row=(l.marks||[]).find(x=>String(x.subjectName||'Subject')===String(subject));
+      if(row && row.markStatus!=='absent' && row.markStatus!=='irregular' && row.marks!=null && Number(row.maxMarks)>0) vals.push(Number(row.marks)/Number(row.maxMarks)*100);
+    }
+    return {subject,mean:vals.length?vals.reduce((a,b)=>a+b,0)/vals.length:null,highest:vals.length?Math.max(...vals):null,lowest:vals.length?Math.min(...vals):null,count:vals.length};
+  });
+  const intervention=learners.filter(l=>Number.isFinite(l.mean)&&l.mean<50).slice(0,10);
 
-  for(let page=0;page<totalPages;page++){
+  for(let page=0;page<dataPages;page++){
     const start=page===0?0:firstPageRows+(page-1)*laterPageRows;
     const count=page===0?firstPageRows:laterPageRows;
     const chunk=learners.slice(start,start+count);
@@ -2219,6 +2229,51 @@ function buildGeneralResultsRankingPdf(schoolName, cls, learners, subjects, stat
     const stream=c.join('\n');
     const cr=add(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
     refs.push(add(`<< /Type /Page /Parent ${po} 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /Font << /F1 ${font} 0 R /F2 ${bold} 0 R >> >> /Contents ${cr} 0 R >>`));
+  }
+
+  // FINAL ACADEMIC ANALYTICS PAGE.
+  {
+    const c=['1 1 1 rg','0 G','0.8 w'];
+    fill(c,0.90,0.95,0.98);rect(c,m,H-m-58,usable,58,true);
+    textAt(c,m+12,H-m-22,14,schoolName,true);
+    textAt(c,m+12,H-m-38,8.2,`${title} — ACADEMIC ANALYTICS`,true);
+    textAt(c,m+12,H-m-50,5.8,'SUBJECT PERFORMANCE • CBE DISTRIBUTION • INTERVENTION SUMMARY',true);
+    textAt(c,W-m-112,H-m-22,6.3,'TUSOMEEDUSHELF',true);
+    textAt(c,W-m-112,H-m-34,5.2,'POWERED BY',true);
+    textAt(c,W-m-112,H-m-46,5.2,`PAGE ${totalPages} OF ${totalPages}`,true);
+    c.push('0 G');
+    let top=H-m-72;
+
+    const boxH=48, bw=(usable-16)/3;
+    const statBoxes=[['CLASS MEAN',fmtPct(stats.averageMean)],['LEARNERS BELOW 50%',`${learners.filter(l=>Number.isFinite(l.mean)&&l.mean<50).length}/${learners.length}`],['TOP CBE LEVEL',topLevel]];
+    statBoxes.forEach((b,i)=>{const x=m+i*(bw+8);stroke(c,0.45,0.62,0.72);fill(c,0.97,0.985,0.995);rect(c,x,top-boxH,bw,boxH,true);c.push('0 G');textAt(c,x+9,top-16,6.2,b[0],true);textAt(c,x+9,top-36,11,b[1],true);});
+    top-=boxH+14;
+
+    const leftW=usable*0.64, rightW=usable-leftW-12;
+    const tableTop=top, row=20, tableH=Math.min(260,(subjectStats.length+1)*row+8);
+    stroke(c,0.35,0.45,0.55);fill(c,0.98,0.99,1);rect(c,m,tableTop-tableH,leftW,tableH,true);c.push('0 G');
+    textAt(c,m+8,tableTop-14,7.2,'SUBJECT PERFORMANCE',true);
+    const colX=[m+8,m+170,m+255,m+335];
+    textAt(c,colX[0],tableTop-31,5.7,'SUBJECT',true);textAt(c,colX[1],tableTop-31,5.7,'MEAN %',true);textAt(c,colX[2],tableTop-31,5.7,'HIGH',true);textAt(c,colX[3],tableTop-31,5.7,'LOW',true);
+    line(c,m+6,tableTop-37,m+leftW-6,tableTop-37);
+    subjectStats.forEach((st,i)=>{if(tableTop-42-(i*row)<tableTop-tableH+5)return;const y=tableTop-51-i*row;if(i%2){fill(c,0.94,0.95,0.96);rect(c,m+6,y-5,leftW-12,row,true);c.push('0 G');}textAt(c,colX[0],y,5.8,abbrSubject(st.subject)+' — '+String(st.subject).slice(0,25),true);textAt(c,colX[1],y,5.8,fmtPct(st.mean),true);textAt(c,colX[2],y,5.8,fmtPct(st.highest),true);textAt(c,colX[3],y,5.8,fmtPct(st.lowest),true);});
+
+    const rx=m+leftW+12;
+    stroke(c,0.35,0.45,0.55);fill(c,0.98,0.99,1);rect(c,rx,tableTop-tableH,rightW,tableH,true);c.push('0 G');
+    textAt(c,rx+8,tableTop-14,7.2,'CBE DISTRIBUTION',true);
+    const order=['EE1','EE2','ME1','ME2','AE1','AE2','BE1','BE2'];
+    order.forEach((g,i)=>{const count=learners.filter(l=>l.grade===g).length;const yy=tableTop-34-i*22;textAt(c,rx+9,yy,6.2,g,true);textAt(c,rx+42,yy,6.2,`${count} learners`,true);const barMax=rightW-110;const bwv=learners.length?barMax*count/learners.length:0;fill(c,0.12,0.35,0.58);rect(c,rx+105,yy-4,bwv,8,true);c.push('0 G');textAt(c,rx+110+bwv,yy,5.2,learners.length?`${(count/learners.length*100).toFixed(1)}%`:'0%',true);});
+
+    const iy=tableTop-tableH-14, ih=104;
+    stroke(c,0.35,0.45,0.55);fill(c,0.98,0.99,1);rect(c,m,iy-ih,usable,ih,true);c.push('0 G');
+    textAt(c,m+8,iy-14,7.2,'ACADEMIC INTERVENTION LIST',true);
+    if(!intervention.length){textAt(c,m+8,iy-31,6.2,'No learner is currently below the 50% intervention threshold.',false);}else{
+      const n=Math.min(10,intervention.length);intervention.slice(0,n).forEach((l,i)=>{const x=m+8+(i%2)*(usable/2), y=iy-31-Math.floor(i/2)*15;textAt(c,x,y,5.8,`${l.rank}. ${String(l.name).slice(0,28)} — ${fmtPct(l.mean)}`,true);});
+    }
+    const remarkY=iy-ih-14;stroke(c,0.35,0.45,0.55);fill(c,0.98,0.99,1);rect(c,m,remarkY-60,usable,60,true);c.push('0 G');textAt(c,m+8,remarkY-14,7.2,'GENERAL REMARK',true);
+    const words=String(remark).split(/\s+/);let lineTxt='',yy=remarkY-27;for(const w of words){const test=lineTxt?lineTxt+' '+w:w;if(test.length>165){textAt(c,m+8,yy,6.2,lineTxt);yy-=9;lineTxt=w;}else lineTxt=test;}if(lineTxt)textAt(c,m+8,yy,6.2,lineTxt);
+    const fy=18;fill(c,0.04,0.16,0.30);rect(c,m,fy,usable,22,true);c.push('1 1 1 rg');textAt(c,m+7,fy+8,5.6,`${schoolName} | ${title}`,true);textAt(c,W-m-165,fy+8,5.6,`PUBLISHED • ACADEMIC ANALYTICS • PAGE ${totalPages} OF ${totalPages}`,true);
+    const stream=c.join('\n');const cr=add(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);refs.push(add(`<< /Type /Page /Parent ${po} 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /Font << /F1 ${font} 0 R /F2 ${bold} 0 R >> >> /Contents ${cr} 0 R >>`));
   }
   objects[cat-1]=`<< /Type /Catalog /Pages ${po} 0 R >>`;
   objects[po-1]=`<< /Type /Pages /Kids [${refs.map(x=>x+' 0 R').join(' ')}] /Count ${refs.length} >>`;

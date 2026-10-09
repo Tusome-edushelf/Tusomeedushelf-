@@ -1977,7 +1977,23 @@ function renderSchoolMemberGroups(members){
   if(tr)tr.innerHTML=teachers.length?teachers.map(m=>`<tr><td><b>${escapeHtml(m.fullName||'—')}</b></td><td>${escapeHtml(m.email||'—')}</td><td>${escapeHtml(m.username||'—')}</td><td>${escapeHtml(m.status||'—')}</td></tr>`).join(''):'<tr><td colspan="4">No registered teachers yet.</td></tr>';
   const pr=document.getElementById('schoolParentMemberRows');
   const parents=Array.isArray(__schoolParentMembersCache)?__schoolParentMembersCache:[];
-  if(pr)pr.innerHTML=parents.length?parents.map(m=>`<tr><td><b>${escapeHtml(m.parentName||'—')}</b></td><td>${escapeHtml(m.parentPhone||'—')}</td><td>${escapeHtml(m.username||'—')}</td><td>${escapeHtml(m.email||'—')}</td><td>${escapeHtml(m.linkedLearners||'—')}</td></tr>`).join(''):'<tr><td colspan="5">No registered parents / guardians yet.</td></tr>';
+  if(pr)pr.innerHTML=parents.length?parents.map(m=>`<tr><td><b>${escapeHtml(m.parentName||'—')}</b></td><td>${escapeHtml(m.parentPhone||'—')}</td><td>${escapeHtml(m.username||'—')}</td><td>${escapeHtml(m.email||'—')}</td><td>${escapeHtml(m.linkedLearners||'—')}</td><td><button class="btn primary" type="button" onclick="resetParentPassword('${encodeURIComponent(m.email||'')}')">Reset password &amp; download CSV</button></td></tr>`).join(''):'<tr><td colspan="6">No registered parents / guardians yet.</td></tr>';
+}
+
+async function resetParentPassword(encodedEmail){
+  const parentEmail=decodeURIComponent(String(encodedEmail||''));
+  if(!selectedSchoolId)return showToast?.('Select a school workspace first.','error');
+  if(!parentEmail)return showToast?.('Parent email is missing.','error');
+  if(!confirm('Reset this parent account password? The current password will stop working. A new temporary password CSV will download.'))return;
+  try{
+    const r=await fetch('/api/schools/parents/reset-password',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({schoolId:selectedSchoolId,parentEmail})});
+    const d=await parseApiResponse(r);if(!r.ok)throw new Error(d.error||'Could not reset the parent password.');
+    const p=d.parent||{};
+    const csvCell=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
+    const csv=['Parent/Guardian Name,Parent Username,Parent Email,Phone,Temporary Password,Account Status', [p.parentName||'',p.username||p.phone||'',p.email||parentEmail,p.phone||'',d.temporaryPassword||'','Password reset — give to parent privately'].map(csvCell).join(',')].join('\n');
+    downloadTextFile('\ufeff'+csv,'Tusome_Parent_Password_Reset_'+new Date().toISOString().slice(0,10)+'.csv','text/csv;charset=utf-8');
+    showToast?.('Parent password reset. Store the downloaded CSV securely and share the temporary password privately.','success');
+  }catch(e){showToast?.(e.message||'Could not reset the parent password.','error')}
 }
 
 function toggleSchoolParentLinksPanel(){const p=document.getElementById('schoolParentLinksPanel');if(!p)return;const open=p.style.display==='none';p.style.display=open?'block':'none';if(open)loadSchoolParentLinks()}

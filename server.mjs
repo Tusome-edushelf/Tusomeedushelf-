@@ -2317,6 +2317,23 @@ app.get('/api/schools/parents/credential-report', requireSchoolMembership, async
   }catch(e){console.error('parent credential report failed:',e);res.status(500).json({error:'Could not generate the parent credential report.'})}
 });
 
+app.post('/api/schools/parents/reset-password', requireSchoolMembership, async (req,res)=>{
+  if(req.school.memberRole!=='admin'&&req.user.role!=='admin') return res.status(403).json({error:'School admin access is required.'});
+  const parentEmail=String(req.body?.parentEmail||'').trim().toLowerCase();
+  if(!parentEmail) return res.status(400).json({error:'Select a parent account first.'});
+  try{
+    // Only allow a reset for a parent already linked to this school; never change an unrelated account.
+    const linked=await db.query(`SELECT u.email,u.username,u.phone,u.display_name AS "parentName" FROM users u WHERE lower(u.email)=$1 AND u.role='parent' AND EXISTS (SELECT 1 FROM parent_guardian_links p WHERE p.school_id=$2 AND lower(p.parent_email)=lower(u.email)) LIMIT 1`,[parentEmail,req.school.schoolId]);
+    if(!linked.rowCount) return res.status(404).json({error:'That parent account is not linked to this school.'});
+    const temporaryPassword=crypto.randomBytes(9).toString('base64url');
+    const passwordHash=await hashPasswordAsync(temporaryPassword);
+    const updated=await db.query(`UPDATE users SET password_hash=$1,updated_at=NOW() WHERE lower(email)=$2 AND role='parent' RETURNING email,username,phone,display_name AS "parentName"`,[passwordHash,parentEmail]);
+    if(!updated.rowCount) return res.status(404).json({error:'Parent account was not found.'});
+    void audit({user:req.user},'reset_parent_password','user',updated.rows[0].email,{schoolId:req.school.schoolId});
+    res.json({ok:true,parent:{...updated.rows[0]},temporaryPassword,message:'Password reset. Download and store the credential CSV securely, then share the temporary password privately with the parent.'});
+  }catch(e){console.error('parent password reset failed:',e);res.status(500).json({error:'Could not reset the parent password. No password was changed if the reset failed.'})}
+});
+
 app.post('/api/schools/learners/reset', requireAuth, async (req,res)=>{
   req.query={schoolId:req.body?.schoolId};
   return requireSchoolMembership(req,res,async()=>{

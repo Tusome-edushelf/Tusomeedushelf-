@@ -1,4 +1,3 @@
-
 // v103 API burst protection + universal API response guard: never let an HTML error page surface as
 // the misleading browser error `Unexpected token '<' ... is not valid JSON`.
 async function parseApiResponse(response){
@@ -845,24 +844,228 @@ function buildRichBulkReportPdf(ctx,schoolName){const learners=(ctx.classLearner
 
 function learnerMean(l){const vals=l.marks.filter(x=>x.markStatus==='present'&&Number.isFinite(Number(x.marks))&&Number(x.max)>0).map(x=>Number(x.marks)/Number(x.max)*100);return vals.length?(vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(2):'—';}
 async function downloadAdminStreamReportCardsPdf(){try{const cid=document.getElementById('reportClass')?.value||window.__selectedReportClassId||'';if(!cid)throw new Error('Select a class/stream first.');const cls=(window.__examClasses||[]).find(x=>String(x.classId||x.id)===String(cid));const ctx=await fetchRichReportContext({classId:cid,schoolId:selectedSchoolId});if(!ctx.classLearners?.length)throw new Error('No published results are available for this stream.');const pages=ctx.classLearners.map(x=>({...x,className:cls?.className||ctx.learner?.className,grade:cls?.grade||ctx.learner?.grade,stream:cls?.stream||ctx.learner?.stream,title:ctx.current?.title,examDate:ctx.current?.examDate,subjectMeans:ctx.current?.subjectMeans,classMean:ctx.current?.classMean,teacherRemark:x.teacherRemark,principalRemark:x.principalRemark,targetDelta:x.targetDelta}));const pdf=buildRichBulkPdf(pages,ctx.schoolName||'Tusome EduShelf');downloadTextFile(pdf,'Tusome_Report_Cards_'+(cls?.grade||'Class')+'_'+(cls?.stream||'Stream')+'.pdf','application/pdf');showToast?.(`Downloaded ${pages.length} enhanced stream report cards.`,'success')}catch(e){showToast?.(e.message||'Could not create stream report cards.','error')}}
+function buildGeneralResultsRankingPdf(schoolName, cls, learners, subjects, stats={}){
+  const W=842,H=595,m=24,headerH=84,bottom=28,rowH=20;
+  const usable=W-2*m;
+  const esc=v=>pdfEscapeText(String(v??''));
+  const objects=[],add=o=>(objects.push(o),objects.length),cat=add(''),po=add('');
+  const font=add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
+  const bold=add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>');
+  const refs=[];
+  const textAt=(c,x,y,size,v,b=false)=>c.push('BT',`/${b?'F2':'F1'} ${size} Tf`,`0 g`,`1 0 0 1 ${x} ${y} Tm`,'('+esc(v)+') Tj','ET');
+  const line=(c,x1,y1,x2,y2)=>c.push(`${x1} ${y1} m ${x2} ${y2} l S`);
+  const fill=(c,r,g,b)=>c.push(`${r} ${g} ${b} rg`);
+  const stroke=(c,r,g,b)=>c.push(`${r} ${g} ${b} RG`);
+  const rect=(c,x,y,w,h,filled=false)=>c.push(`${x} ${y} ${w} ${h} re ${filled?'f':'S'}`);
+  const fmtPct=v=>v==null||!Number.isFinite(Number(v))?'—':`${Number(v).toFixed(1)}%`;
+  const abbrSubject=(name)=>{
+    const s=String(name||'Subject').trim();
+    const exact={
+      'Agriculture':'AGR','Arabic':'ARB','Christian Religious Education':'CRE','CRE':'CRE',
+      'Creative Arts':'CA','English':'ENG','French':'FRE','German':'GER','Hindu Religious Education':'HRE','HRE':'HRE',
+      'Indigenous Language':'IL','Integrated Science':'IS','Islamic Religious Education':'IRE','IRE':'IRE',
+      'Kiswahili':'KIS','Mandarin':'MAN','Mathematics':'MATH','Pre-Technical Studies':'PTS','Social Studies':'SST'
+    };
+    if(exact[s]) return exact[s];
+    const words=s.replace(/[^A-Za-z0-9 ]+/g,' ').trim().split(/\s+/).filter(Boolean);
+    if(words.length>=2) return words.slice(0,4).map(w=>w[0]).join('').toUpperCase().slice(0,5);
+    return s.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,5) || 'SUBJ';
+  };
+  const manySubjects=subjects.length>8;
+  const baseCols=manySubjects?[['POS',30],['ADM.',54],['LEARNER',122]]:[['POS',34],['ADM. NO.',62],['LEARNER NAME',142]];
+  const fixed=manySubjects?[['MEAN %',52],['CBE',42]]:[['MEAN %',56],['CBE',50]];
+  const reserved=baseCols.reduce((a,b)=>a+b[1],0)+fixed.reduce((a,b)=>a+b[1],0);
+  const subjectW=Math.max(manySubjects?29:46,Math.floor((usable-reserved-2)/Math.max(1,subjects.length)));
+  const cols=[...baseCols,...subjects.map(s=>[manySubjects?abbrSubject(s):s,subjectW]),...fixed];
+  const totalW=cols.reduce((a,b)=>a+b[1],0);
+  const title=`GENERAL RESULTS — ${cls.className||'Class'}${cls.grade?' · Grade '+cls.grade:''}${cls.stream?' · Stream '+cls.stream:''}`;
+  const firstPageRows=manySubjects?13:14;
+  const laterPageRows=manySubjects?18:19;
+  const dataPages=learners.length<=firstPageRows?1:1+Math.ceil((learners.length-firstPageRows)/laterPageRows);
+  const totalPages=dataPages+1;
+  const avg=stats.averageMean==null?'—':fmtPct(stats.averageMean);
+  const highest=stats.highestMean==null?'—':fmtPct(stats.highestMean);
+  const lowest=stats.lowestMean==null?'—':fmtPct(stats.lowestMean);
+  const topName=stats.topLearner||'—';
+  const topLevel=stats.topCbe||'—';
+  const remark=stats.generalRemark||'Overall performance summary is not available.';
+  const subjectStats=subjects.map(subject=>{
+    const vals=[];
+    for(const l of learners){
+      const row=(l.marks||[]).find(x=>String(x.subjectName||'Subject')===String(subject));
+      if(row && row.markStatus!=='absent' && row.markStatus!=='irregular' && row.marks!=null && Number(row.maxMarks)>0) vals.push(Number(row.marks)/Number(row.maxMarks)*100);
+    }
+    return {subject,mean:vals.length?vals.reduce((a,b)=>a+b,0)/vals.length:null,highest:vals.length?Math.max(...vals):null,lowest:vals.length?Math.min(...vals):null,count:vals.length};
+  });
+  const intervention=learners.filter(l=>Number.isFinite(l.mean)&&l.mean<50).slice(0,10);
+
+  for(let page=0;page<dataPages;page++){
+    const start=page===0?0:firstPageRows+(page-1)*laterPageRows;
+    const count=page===0?firstPageRows:laterPageRows;
+    const chunk=learners.slice(start,start+count);
+    const c=['1 1 1 rg','0 G','0.8 w'];
+
+    // Header: high-contrast school identity and report title.
+    fill(c,0.90,0.95,0.98);rect(c,m,H-m-50,usable,50,true);
+    textAt(c,m+12,H-m-19,14,schoolName,true);
+    textAt(c,m+12,H-m-34,8.2,title,true);
+    textAt(c,m+12,H-m-45,5.8,'ACADEMIC PERFORMANCE SUMMARY  |  PUBLISHED RESULTS  |  ALL SCORES AS PERCENTAGES',true);
+    textAt(c,W-m-112,H-m-19,6.3,'TUSOMEEDUSHELF',true);
+    textAt(c,W-m-112,H-m-31,5.2,'POWERED BY',true);
+    textAt(c,W-m-112,H-m-43,5.2,`PAGE ${page+1} OF ${totalPages}`,true);
+    c.push('0 G');
+
+    let top=H-m-60;
+    if(page===0){
+      const sy=top-62;
+      stroke(c,0.45,0.62,0.72);fill(c,0.94,0.975,0.99);rect(c,m,sy,usable,52,true);c.push('0 G');
+      const boxes=[['TOTAL LEARNERS',String(stats.totalLearners??learners.length)],['HIGHEST MEAN',highest],['AVERAGE MEAN',avg],['LOWEST MEAN',lowest],['TOP CBE LEVEL',topLevel]];
+      const bw=usable/5;
+      boxes.forEach((b,i)=>{const x=m+i*bw;if(i)line(c,x,sy+8,x,sy+44);textAt(c,x+8,sy+35,6.0,b[0],true);textAt(c,x+8,sy+18,10.8,b[1],true);});
+      textAt(c,m+8,sy+5,5.2,`Highest learner: ${topName}`);
+      top=sy-8;
+      const rh=38,ry=top-rh;
+      stroke(c,0.45,0.62,0.72);fill(c,0.98,0.99,1);rect(c,m,ry,usable,rh,true);c.push('0 G');
+      textAt(c,m+8,top-11,6.0,'GENERAL REMARK',true);
+      const words=String(remark).split(/\s+/);let lineTxt='',yy=top-22;
+      for(const w of words){const test=lineTxt?lineTxt+' '+w:w;if(test.length>150){textAt(c,m+8,yy,6.2,lineTxt);yy-=9;lineTxt=w;}else lineTxt=test;}
+      if(lineTxt)textAt(c,m+8,yy,6.2,lineTxt);
+      top=ry-8;
+      if(manySubjects){
+        textAt(c,m+2,top-5,5.1,'SUBJECT KEY: '+subjects.map(s=>`${abbrSubject(s)}=${s}`).join('   |   '),false);
+        top-=13;
+      }
+    }else if(manySubjects){
+      textAt(c,m+2,top-4,5.0,'SUBJECT ABBREVIATIONS: '+subjects.map(s=>`${abbrSubject(s)}=${s}`).join('   |   '),false);
+      top-=11;
+    }
+
+    const tableTop=top;
+    // Strong header and grid for readability on phone PDF viewers.
+    fill(c,0.04,0.16,0.30);rect(c,m,tableTop-rowH,totalW,rowH,true);
+    c.push('1 1 1 rg');
+    let x=m;cols.forEach(([h,w])=>{const label=String(h);textAt(c,x+2.5,tableTop-13, manySubjects?5.4:6.0,label,true);x+=w;});
+    c.push('0 G','0.75 w');
+    for(let r=0;r<=chunk.length+1;r++)line(c,m,tableTop-r*rowH,m+totalW,tableTop-r*rowH);
+    x=m;for(let j=0;j<=cols.length;j++){line(c,x,tableTop,x,tableTop-(chunk.length+1)*rowH);if(j<cols.length)x+=cols[j][1];}
+    chunk.forEach((l,ri)=>{
+      const y=tableTop-(ri+2)*rowH;
+      if(ri%2===1){fill(c,0.94,0.95,0.96);rect(c,m,y,totalW,rowH,true);c.push('0 G');}
+      x=m;
+      const vals=[l.rank,l.admission,l.name,...subjects.map(s=>l.bySubject[s]||'—'),l.mean==null?'—':fmtPct(l.mean),l.grade||'—'];
+      vals.forEach((v,j)=>{
+        let val=String(v??'—').replace(/[\r\n]+/g,' ');
+        const max=manySubjects?Math.max(3,Math.floor(cols[j][1]/3.8)):Math.max(5,Math.floor(cols[j][1]/4.1));
+        if(val.length>max)val=val.slice(0,Math.max(1,max-1))+'…';
+        const isNumeric=j===0||j>=3;
+        textAt(c,x+3,y+6.2,manySubjects?6.8:7.2,val,isNumeric||j===2);
+        x+=cols[j][1];
+      });
+    });
+
+    const fy=18;fill(c,0.90,0.95,0.98);rect(c,m,fy,usable,22,true);c.push('1 1 1 rg');
+    textAt(c,m+7,fy+8,5.6,`${schoolName} | ${title}`,true);
+    textAt(c,W-m-165,fy+8,5.6,`PUBLISHED • RANKED BY MEAN % • PAGE ${page+1} OF ${totalPages}`,true);
+
+    const stream=c.join('\n');
+    const cr=add(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
+    refs.push(add(`<< /Type /Page /Parent ${po} 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /Font << /F1 ${font} 0 R /F2 ${bold} 0 R >> >> /Contents ${cr} 0 R >>`));
+  }
+
+  // FINAL ACADEMIC ANALYTICS PAGE.
+  {
+    const c=['1 1 1 rg','0 G','0.8 w'];
+    fill(c,0.90,0.95,0.98);rect(c,m,H-m-58,usable,58,true);
+    textAt(c,m+12,H-m-22,14,schoolName,true);
+    textAt(c,m+12,H-m-38,8.2,`${title} — ACADEMIC ANALYTICS`,true);
+    textAt(c,m+12,H-m-50,5.8,'SUBJECT PERFORMANCE • CBE DISTRIBUTION • INTERVENTION SUMMARY',true);
+    textAt(c,W-m-112,H-m-22,6.3,'TUSOMEEDUSHELF',true);
+    textAt(c,W-m-112,H-m-34,5.2,'POWERED BY',true);
+    textAt(c,W-m-112,H-m-46,5.2,`PAGE ${totalPages} OF ${totalPages}`,true);
+    c.push('0 G');
+    let top=H-m-72;
+
+    const boxH=48, bw=(usable-16)/3;
+    const statBoxes=[['CLASS MEAN',fmtPct(stats.averageMean)],['LEARNERS BELOW 50%',`${learners.filter(l=>Number.isFinite(l.mean)&&l.mean<50).length}/${learners.length}`],['TOP CBE LEVEL',topLevel]];
+    statBoxes.forEach((b,i)=>{const x=m+i*(bw+8);stroke(c,0.45,0.62,0.72);fill(c,0.97,0.985,0.995);rect(c,x,top-boxH,bw,boxH,true);c.push('0 G');textAt(c,x+9,top-16,6.2,b[0],true);textAt(c,x+9,top-36,11,b[1],true);});
+    top-=boxH+14;
+
+    const leftW=usable*0.64, rightW=usable-leftW-12;
+    const tableTop=top, row=20, tableH=Math.min(260,(subjectStats.length+1)*row+8);
+    stroke(c,0.35,0.45,0.55);fill(c,0.98,0.99,1);rect(c,m,tableTop-tableH,leftW,tableH,true);c.push('0 G');
+    textAt(c,m+8,tableTop-14,7.2,'SUBJECT PERFORMANCE',true);
+    const colX=[m+8,m+170,m+255,m+335];
+    textAt(c,colX[0],tableTop-31,5.7,'SUBJECT',true);textAt(c,colX[1],tableTop-31,5.7,'MEAN %',true);textAt(c,colX[2],tableTop-31,5.7,'HIGH',true);textAt(c,colX[3],tableTop-31,5.7,'LOW',true);
+    line(c,m+6,tableTop-37,m+leftW-6,tableTop-37);
+    subjectStats.forEach((st,i)=>{if(tableTop-42-(i*row)<tableTop-tableH+5)return;const y=tableTop-51-i*row;if(i%2){fill(c,0.94,0.95,0.96);rect(c,m+6,y-5,leftW-12,row,true);c.push('0 G');}textAt(c,colX[0],y,5.8,abbrSubject(st.subject)+' — '+String(st.subject).slice(0,25),true);textAt(c,colX[1],y,5.8,fmtPct(st.mean),true);textAt(c,colX[2],y,5.8,fmtPct(st.highest),true);textAt(c,colX[3],y,5.8,fmtPct(st.lowest),true);});
+
+    const rx=m+leftW+12;
+    stroke(c,0.35,0.45,0.55);fill(c,0.98,0.99,1);rect(c,rx,tableTop-tableH,rightW,tableH,true);c.push('0 G');
+    textAt(c,rx+8,tableTop-14,7.2,'CBE DISTRIBUTION',true);
+    const order=['EE1','EE2','ME1','ME2','AE1','AE2','BE1','BE2'];
+    order.forEach((g,i)=>{const count=learners.filter(l=>l.grade===g).length;const yy=tableTop-34-i*22;textAt(c,rx+9,yy,6.2,g,true);textAt(c,rx+42,yy,6.2,`${count} learners`,true);const barMax=rightW-110;const bwv=learners.length?barMax*count/learners.length:0;fill(c,0.12,0.35,0.58);rect(c,rx+105,yy-4,bwv,8,true);c.push('0 G');textAt(c,rx+110+bwv,yy,5.2,learners.length?`${(count/learners.length*100).toFixed(1)}%`:'0%',true);});
+
+    const iy=tableTop-tableH-14, ih=104;
+    stroke(c,0.35,0.45,0.55);fill(c,0.98,0.99,1);rect(c,m,iy-ih,usable,ih,true);c.push('0 G');
+    textAt(c,m+8,iy-14,7.2,'ACADEMIC INTERVENTION LIST',true);
+    if(!intervention.length){textAt(c,m+8,iy-31,6.2,'No learner is currently below the 50% intervention threshold.',false);}else{
+      const n=Math.min(10,intervention.length);intervention.slice(0,n).forEach((l,i)=>{const x=m+8+(i%2)*(usable/2), y=iy-31-Math.floor(i/2)*15;textAt(c,x,y,5.8,`${l.rank}. ${String(l.name).slice(0,28)} — ${fmtPct(l.mean)}`,true);});
+    }
+    const remarkY=iy-ih-14;stroke(c,0.35,0.45,0.55);fill(c,0.98,0.99,1);rect(c,m,remarkY-60,usable,60,true);c.push('0 G');textAt(c,m+8,remarkY-14,7.2,'GENERAL REMARK',true);
+    const words=String(remark).split(/\s+/);let lineTxt='',yy=remarkY-27;for(const w of words){const test=lineTxt?lineTxt+' '+w:w;if(test.length>165){textAt(c,m+8,yy,6.2,lineTxt);yy-=9;lineTxt=w;}else lineTxt=test;}if(lineTxt)textAt(c,m+8,yy,6.2,lineTxt);
+    const fy=18;fill(c,0.04,0.16,0.30);rect(c,m,fy,usable,22,true);c.push('1 1 1 rg');textAt(c,m+7,fy+8,5.6,`${schoolName} | ${title}`,true);textAt(c,W-m-165,fy+8,5.6,`PUBLISHED • ACADEMIC ANALYTICS • PAGE ${totalPages} OF ${totalPages}`,true);
+    const stream=c.join('\n');const cr=add(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);refs.push(add(`<< /Type /Page /Parent ${po} 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /Font << /F1 ${font} 0 R /F2 ${bold} 0 R >> >> /Contents ${cr} 0 R >>`));
+  }
+  objects[cat-1]=`<< /Type /Catalog /Pages ${po} 0 R >>`;
+  objects[po-1]=`<< /Type /Pages /Kids [${refs.map(x=>x+' 0 R').join(' ')}] /Count ${refs.length} >>`;
+  let pdf='%PDF-1.4\n% TusomeEduShelf\n',off=[0];
+  for(let i=0;i<objects.length;i++){off[i+1]=pdf.length;pdf+=`${i+1} 0 obj\n${objects[i]}\nendobj\n`;}
+  const xr=pdf.length;pdf+=`xref\n0 ${objects.length+1}\n0000000000 65535 f \n`;for(let i=1;i<=objects.length;i++)pdf+=String(off[i]).padStart(10,'0')+' 00000 n \n';pdf+=`trailer\n<< /Size ${objects.length+1} /Root ${cat} 0 R >>\nstartxref\n${xr}\n%%EOF\n`;
+  return new Blob([pdf],{type:'application/pdf'});
+}
+
 async function downloadAdminGeneralResultsPdf(){
   try{
     const cid=document.getElementById('reportClass')?.value||window.__selectedReportClassId||'';
     if(!cid)throw new Error('Select a class/stream first.');
-    if(!selectedSchoolId)throw new Error('No active school workspace is selected.');
-    const r=await fetch('/api/schools/general-results?classId='+encodeURIComponent(cid),{credentials:'include',cache:'no-store'});
+    let sid=selectedSchoolId;
+    const workspace=document.getElementById('schoolWorkspaceSelect'); if(workspace?.value) sid=workspace.value;
+    if(!sid && Array.isArray(schoolWorkspaces) && schoolWorkspaces.length) sid=schoolWorkspaces[0].schoolId;
+    if(!sid)throw new Error('School workspace could not be determined. Please select your school workspace and try again.');
+    selectedSchoolId=sid;
+    const r=await fetch('/api/schools/general-results?schoolId='+encodeURIComponent(sid)+'&classId='+encodeURIComponent(cid),{credentials:'include',cache:'no-store'});
     const d=await parseApiResponse(r); if(!r.ok)throw new Error(d.error||'Could not load general results.');
-    const cls=d.class||{}; const raw=d.rows||[];
+    const cls=d.class||{}; const raw=Array.isArray(d.rows)?d.rows:[];
     if(!raw.length)throw new Error('No published results are available for this stream. Approve & Publish the mark sheets first.');
     const subjects=[...new Set(raw.map(x=>x.subjectName||'Subject'))];
     const map=new Map();
-    for(const x of raw){const key=String(x.learnerEmail||'');if(!key)continue;if(!map.has(key))map.set(key,{name:x.fullName||key,admission:x.admissionNumber||'—',marks:[]});const l=map.get(key);l.marks.push(x)}
-    const learners=[...map.values()];
-    const rows=learners.map(l=>[l.name,l.admission,...subjects.map(s=>{const x=l.marks.find(y=>y.subjectName===s);if(!x)return '—';if(x.markStatus==='absent')return 'X';if(x.markStatus==='irregular')return 'Y';return x.marks==null?'—':`${x.marks}/${x.maxMarks}`}),(()=>{const vals=l.marks.filter(x=>x.markStatus==='present'&&x.marks!=null&&Number(x.maxMarks)>0).map(x=>Number(x.marks)/Number(x.maxMarks)*100);return vals.length?(vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(2)+'%':'—'})()]);
-    const subjectWidth=Math.max(28,Math.min(82,(794-145-70-55)/Math.max(subjects.length,1))); const widths=[145,70,...subjects.map(()=>subjectWidth),55];
-    const pdf=buildSimpleReportPdf('Tusome EduShelf — General Results',`${cls.className||''} · ${cls.grade||''} · ${cls.stream||'General'} · ${learners.length} learners · Official published results`,['Learner','Adm. No.',...subjects,'Mean'],rows,{widths});
+    for(const x of raw){
+      const key=String(x.learnerEmail||x.fullName||''); if(!key)continue;
+      if(!map.has(key))map.set(key,{name:x.fullName||key,admission:x.admissionNumber||'—',marks:[],bySubject:{}});
+      const l=map.get(key); l.name=x.fullName||l.name; l.admission=x.admissionNumber||l.admission;
+      const s=x.subjectName||'Subject';
+      if(!l.bySubject[s]) l.bySubject[s]=x.markStatus==='absent'?'X':x.markStatus==='irregular'?'Y':(x.marks==null?'—':`${x.marks}/${x.maxMarks}`);
+      l.marks.push(x);
+    }
+    const learners=[...map.values()].map(l=>{const vals=l.marks.filter(x=>String(x.markStatus||'present')==='present'&&x.marks!=null&&Number(x.maxMarks)>0).map(x=>Number(x.marks)/Number(x.maxMarks)*100);l.mean=vals.length?vals.reduce((a,b)=>a+b,0)/vals.length:null;l.grade=cbeGrade(l.mean);return l;}).sort((a,b)=>(b.mean??-1)-(a.mean??-1)||String(a.name).localeCompare(String(b.name)));
+    let lastMean=null,lastRank=0; learners.forEach((l,i)=>{if(l.mean===null){l.rank='—';return;}if(lastMean!==null && Math.abs(l.mean-lastMean)<0.000001)l.rank=lastRank;else{lastRank=i+1;l.rank=lastRank;}lastMean=l.mean;});
+    // Convert every subject entry to a percentage. X/Y remain explicit examination statuses.
+    for(const l of learners){for(const s of subjects){const row=l.marks.find(x=>String(x.subjectName||'Subject')===String(s));if(!row){l.bySubject[s]='—';continue;}if(row.markStatus==='absent'){l.bySubject[s]='X';continue;}if(row.markStatus==='irregular'){l.bySubject[s]='Y';continue;}l.bySubject[s]=row.marks!=null&&Number(row.maxMarks)>0?`${(Number(row.marks)/Number(row.maxMarks)*100).toFixed(1)}%`:'—';}}
+    const validMeans=learners.map(l=>l.mean).filter(v=>Number.isFinite(v));
+    const avgMean=validMeans.length?validMeans.reduce((a,b)=>a+b,0)/validMeans.length:null;
+    const highestMean=validMeans.length?Math.max(...validMeans):null;
+    const lowestMean=validMeans.length?Math.min(...validMeans):null;
+    const top=learners.find(l=>Number.isFinite(l.mean));
+    const cbeCounts={};learners.forEach(l=>{if(l.grade)cbeCounts[l.grade]=(cbeCounts[l.grade]||0)+1;});
+    const cbeOrder={EE1:8,EE2:7,ME1:6,ME2:5,AE1:4,AE2:3,BE1:2,BE2:1};
+    const topCbe=Object.entries(cbeCounts).sort((a,b)=>(cbeOrder[b[0]]||0)-(cbeOrder[a[0]]||0)||b[1]-a[1])[0]?.[0]||'—';
+    let generalRemark='Overall performance data is available.';
+    if(avgMean!=null){if(avgMean>=80)generalRemark='Overall performance is excellent. The class demonstrated very strong achievement across the assessed subjects.';else if(avgMean>=70)generalRemark='Overall performance is very good. Most learners demonstrated strong achievement, with continued practice recommended.';else if(avgMean>=60)generalRemark='Overall performance is good. Learners should maintain regular revision while strengthening weaker subjects.';else if(avgMean>=50)generalRemark='Overall performance is satisfactory. Continued revision and targeted support are recommended to improve achievement.';else generalRemark='Overall performance needs improvement. Focused revision, learner support and subject-specific intervention are recommended.';}
+    const schoolName=d.schoolName||document.querySelector('#schoolWorkspaceSelect option:checked')?.textContent||window.schoolData?.school?.schoolName||'Tusome EduShelf';
+    const stats={totalLearners:learners.length,averageMean:avgMean,highestMean,lowestMean,topLearner:top?.name||'—',topCbe,generalRemark};
+    const pdf=buildGeneralResultsRankingPdf(schoolName,cls,learners,subjects,stats);
     downloadTextFile(pdf,'Tusome_General_Results_'+(cls.grade||'Class')+'_'+(cls.stream||'Stream')+'.pdf','application/pdf');
-    showToast?.(`General Results downloaded for ${learners.length} learners.`,'success');
+    showToast?.(`General Results downloaded — ${learners.length} learners ranked from Position 1.`,'success');
   }catch(e){showToast?.(e.message||'Could not create general results PDF.','error')}
 }
 async function getCurrentLearnerPublishedBundle(){const r=await fetch('/api/learner/exams',{credentials:'include'}),d=await parseApiResponse(r);if(!r.ok)throw new Error(d.error||'Could not load published results.');return d.rows||[];}
@@ -876,7 +1079,7 @@ async function loadExamsPage(){
  const admin=document.getElementById('examAdminPanel'), teacher=document.getElementById('examTeacherPanel'), report=document.getElementById('reportAdminPanel'), learner=document.getElementById('learnerResultsPanel');
  [admin,teacher,report,learner].forEach(x=>{if(x)x.style.display='none'});
  if(!role)return;
- if(role==='learner'){learner.style.display='block';await loadLearnerResultsV44();return}
+ if(role==='learner'){learner.style.display='block';await loadLearnerResultsV44();await loadLearnerPerformanceProgress();return}
  if(isSchoolAdmin){admin.style.display='block';teacher.style.display='none';report.style.display='block';await loadExamSetupV44();await loadExamListV44();await loadTeacherExamResultsCentre();return}
  if(role==='teacher'){teacher.style.display='block';await loadTeacherExamResultsCentre();return}
 }
@@ -950,6 +1153,26 @@ async function createExamV44(){const title=document.getElementById('examTitle').
 async function loadExamMarksV44(){const id=document.getElementById('marksExam')?.value;if(!id)return;const box=document.getElementById('examMarksRows');try{const r=await fetch('/api/schools/exams/'+encodeURIComponent(id)+'/marks?schoolId='+encodeURIComponent(selectedSchoolId),{credentials:'include'}),d=await parseApiResponse(r);if(!r.ok)throw new Error(d.error||'Could not load marks.');window.v44Exam=d.exam;window.v44MarkRows=d.rows||[];box.innerHTML=window.v44MarkRows.map((x,i)=>`<tr data-i="${i}"><td>${escHtml(x.learnerEmail)}</td><td><input class="v44-mark" type="number" min="0" max="${escHtml(d.exam.max_marks)}" step="0.01" value="${escHtml(x.marks||'')}"></td><td>${escHtml(x.grade||'—')}</td></tr>`).join('')||'<tr><td colspan="3">No learners in this class.</td></tr>'}catch(e){box.innerHTML=`<tr><td colspan="3">${escHtml(e.message)}</td></tr>`}}
 async function saveExamMarksV44(){const rows=[...document.querySelectorAll('#examMarksRows tr[data-i]')].map(r=>{const x=window.v44MarkRows[Number(r.dataset.i)];return {learnerEmail:x.learnerEmail,marks:r.querySelector('.v44-mark')?.value||''}});try{const id=document.getElementById('marksExam').value;const r=await fetch('/api/schools/exams/'+encodeURIComponent(id)+'/marks?schoolId='+encodeURIComponent(selectedSchoolId),{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({rows})}),d=await parseApiResponse(r);if(!r.ok)throw new Error(d.error||'Could not save marks.');showToast?.('Marks saved.','success');loadExamMarksV44()}catch(e){showToast?.(e.message,'error')}}
 async function generateReportsV44(){try{const r=await fetch('/api/schools/report-cards/generate',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({classId:document.getElementById('reportClass').value})}),d=await parseApiResponse(r);if(!r.ok)throw new Error(d.error||'Could not generate reports.');document.getElementById('reportGenerateStatus').textContent=`Created ${d.count||0} draft report cards. Review and publish them before sharing with families.`;showToast?.('Draft report cards generated.','success')}catch(e){showToast?.(e.message,'error')}}
+function renderPerformanceProgress(rows,bodyId){
+  const box=document.getElementById(bodyId); if(!box)return;
+  if(!rows?.length){box.innerHTML='<div class="notice">No published historical results are available yet. Progress comparison will appear after another assessment period is published.</div>';return;}
+  const groups=[]; const map=new Map();
+  rows.forEach(x=>{const key=String(x.examId||((x.title||'Assessment')+'|'+(x.examDate||x.createdAt||'')));if(!map.has(key)){map.set(key,{key,title:x.title||'Assessment',date:x.examDate||x.createdAt||null,className:x.className||'',stream:x.stream||'',rows:[]});groups.push(map.get(key))}map.get(key).rows.push(x)});
+  groups.sort((a,b)=>new Date(a.date||0)-new Date(b.date||0));
+  const periods=groups.map(g=>{const vals=g.rows.filter(x=>x.marks!=null&&Number(x.maxMarks)>0).map(x=>Number(x.marks)/Number(x.maxMarks)*100);return {...g,mean:vals.length?vals.reduce((a,b)=>a+b,0)/vals.length:null}});
+  const current=periods[periods.length-1],previous=periods.length>1?periods[periods.length-2]:null;
+  const delta=current?.mean!=null&&previous?.mean!=null?current.mean-previous.mean:null;
+  const arrow=delta==null?'':delta>0?' ↑ Improving':delta<0?' ↓ Declining':' → Stable';
+  const subjectMap=new Map();
+  if(previous){for(const x of previous.rows){if(x.marks!=null&&Number(x.maxMarks)>0)subjectMap.set(String(x.subjectName),Number(x.marks)/Number(x.maxMarks)*100)}}
+  const subjectRows=current.rows.filter(x=>x.marks!=null&&Number(x.maxMarks)>0).map(x=>{const now=Number(x.marks)/Number(x.maxMarks)*100,old=subjectMap.get(String(x.subjectName));return {name:x.subjectName,now,delta:old==null?null:now-old}}).sort((a,b)=>(b.delta??-999)-(a.delta??-999));
+  const trend=periods.map((p,i)=>`<span style="display:inline-block;min-width:120px;padding:10px;border:1px solid #cbd5e1;border-radius:8px;margin:4px;background:#f8fafc"><b>${escapeHtml(p.title)}</b><br><strong>${p.mean==null?'—':p.mean.toFixed(1)+'%'}</strong><br><small>${p.date?new Date(p.date).toLocaleDateString():''}</small></span>`).join('');
+  const subjectTable=subjectRows.length?`<div style="overflow:auto;margin-top:10px"><table><thead><tr><th>Subject</th><th>Current</th><th>Change</th><th>Status</th></tr></thead><tbody>${subjectRows.map(x=>`<tr><td><b>${escapeHtml(x.name)}</b></td><td>${x.now.toFixed(1)}%</td><td>${x.delta==null?'—':(x.delta>=0?'+':'')+x.delta.toFixed(1)+'%'}</td><td>${x.delta==null?'Baseline':x.delta>0.4?'Improved':x.delta<-0.4?'Needs attention':'Stable'}</td></tr>`).join('')}</tbody></table></div>`:'<p class="small">No graded subjects in the latest published period.</p>';
+  box.innerHTML=`<div class="cards" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))"><div class="card"><small>Latest mean</small><h3>${current?.mean==null?'—':current.mean.toFixed(1)+'%'}</h3></div><div class="card"><small>Previous mean</small><h3>${previous?.mean==null?'—':previous.mean.toFixed(1)+'%'}</h3></div><div class="card"><small>Overall movement</small><h3>${delta==null?'Baseline':(delta>=0?'+':'')+delta.toFixed(1)+'%'}${escapeHtml(arrow)}</h3></div></div><div style="margin-top:10px"><b>Assessment history</b><div style="margin-top:4px">${trend}</div></div><div style="margin-top:10px"><b>Subject-by-subject movement</b>${subjectTable}</div>`;
+}
+async function loadLearnerPerformanceProgress(){try{const r=await fetch('/api/learner/performance-progress',{credentials:'include'}),d=await parseApiResponse(r);if(!r.ok)throw new Error(d.error||'Could not load performance progress.');renderPerformanceProgress(d.rows,'learnerPerformanceProgressBody')}catch(e){const b=document.getElementById('learnerPerformanceProgressBody');if(b)b.innerHTML=`<div class="notice">${escapeHtml(e.message)}</div>`}}
+async function loadParentPerformanceProgress(){const learner=document.getElementById('parentChildSelect')?.value;if(!learner)return;try{const r=await fetch('/api/parent/performance-progress?learnerEmail='+encodeURIComponent(learner),{credentials:'include'}),d=await parseApiResponse(r);if(!r.ok)throw new Error(d.error||'Could not load performance progress.');renderPerformanceProgress(d.rows,'parentPerformanceProgressBody')}catch(e){const b=document.getElementById('parentPerformanceProgressBody');if(b)b.innerHTML=`<div class="notice">${escapeHtml(e.message)}</div>`}}
+
 async function loadLearnerResultsV44(){
   try{
     const r=await fetch('/api/learner/exams',{credentials:'include'}),d=await parseApiResponse(r);if(!r.ok)throw new Error(d.error||'Could not load results.');
@@ -1234,7 +1457,7 @@ function show(id,skipHistory=false){
   if(id==='teacher'){loadServerMaterials().then(renderTeacher);loadTeacherEarnings();loadTeacherAnalytics();loadTeacherExamResultsCentre()}
   if(id==='membership'){loadMembership()} if(id==='digitalLibrary'){loadDigitalLibrary()}
   if(id==='schoolDashboard'){loadSchoolManagement()} if(id==='timetable'){loadTimetable()} if(id==='attendance'){loadAttendance()} if(id==='exams'){loadExamsPage()} if(id==='fees'){loadFeesPage()}
-  if(id==='learner'){loadLearnerAssignments();loadLearnerGradebook();loadLearnerPortfolio();loadLearnerResultsV44()}
+  if(id==='learner'){loadLearnerAssignments();loadLearnerGradebook();loadLearnerPortfolio();loadLearnerResultsV44();loadLearnerPerformanceProgress()}
   if(id==='portfolio')loadLearnerPortfolio();
   if(id==='community')loadCommunity();
   if(id==='admin'){adminRefreshAll();loadAdminAnalytics()}
@@ -1976,6 +2199,44 @@ function toggleSchoolMembersFullList(force){
     panel.scrollIntoView({behavior:'smooth',block:'start'});
   }
 }
+
+async function ensureSchoolWorkspaceReady(){
+  const role=String(getSessionRole()||'').toLowerCase();
+  const schoolAccess=sessionStorage.getItem('tusomeSchoolAccess')==='true';
+  if(role!=='school'&&role!=='admin'&&!schoolAccess){
+    showToast?.('Please sign in through the School Dashboard first.','error');
+    return false;
+  }
+  if(!document.getElementById('schoolDashboard')?.classList.contains('active'))showPageDirect('schoolDashboard',true);
+  hideSchoolAuthGate();hideSchoolNameGate();
+  ['schoolControlCentre','schoolManagementCentre','schoolWorkspaceCard','schoolGlanceCard','schoolPlanCard','schoolExecutiveOverview','schoolGeneralEssentialCards'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='block'});
+  const sel=document.getElementById('schoolWorkspaceSelect');
+  if(sel?.value)selectedSchoolId=sel.value;
+  if(!selectedSchoolId&&Array.isArray(schoolWorkspaces)&&schoolWorkspaces.length)selectedSchoolId=schoolWorkspaces[0].schoolId;
+  if(!window.schoolData||!selectedSchoolId){await loadSchoolManagement();}
+  if(!selectedSchoolId){showToast?.('No school workspace is selected. Use Refresh and check your school access.','error');return false;}
+  const workspace=document.getElementById('schoolWorkspace');
+  if(!window.schoolData||!workspace||workspace.style.display==='none')await loadSelectedSchool();
+  if(!workspace||workspace.style.display==='none'||!window.schoolData){showToast?.('The school workspace did not load. Refresh the dashboard and check the school access message.','error');return false;}
+  const memberRole=String(getCurrentSchoolMemberRole()||window.schoolData?.school?.memberRole||'').toLowerCase();
+  if(memberRole!=='admin'&&role!=='admin'){
+    showToast?.('School administrator access is required to manage registered members and bulk registration.','error');
+    return false;
+  }
+  return true;
+}
+
+async function openSchoolMembersPanel(group='learner'){
+  try{
+    if(!await ensureSchoolWorkspaceReady())return;
+    const panel=document.getElementById('schoolMembersFullList');
+    if(!panel){showToast?.('The registered members panel is missing from this page.','error');return;}
+    panel.style.display='block';
+    renderSchoolMemberGroups(window.schoolData?.members||[]);
+    await showSchoolMemberGroup(group);
+    panel.scrollIntoView({behavior:'smooth',block:'start'});
+  }catch(e){showToast?.(e.message||'Could not open School Members.','error')}
+}
 async function showSchoolMemberGroup(group){
   ['learner','parent','teacher'].forEach(role=>{
     const el=document.getElementById('school'+role.charAt(0).toUpperCase()+role.slice(1)+'MemberGroup');
@@ -1985,7 +2246,7 @@ async function showSchoolMemberGroup(group){
   });
   if(group==='parent' && !__schoolParentMembersCache){
     try{
-      const r=await fetch('/api/schools/parents/credential-report?format=json',{credentials:'include'});
+      const r=await fetch('/api/schools/parents/credential-report?format=json&schoolId='+encodeURIComponent(selectedSchoolId||''),{credentials:'include'});
       const d=await parseApiResponse(r);if(!r.ok)throw new Error(d.error||'Could not load parents.');
       __schoolParentMembersCache=d.parents||[];
     }catch(e){showToast?.(e.message,'error');__schoolParentMembersCache=[];}
@@ -2070,7 +2331,7 @@ async function loadSchoolSubmissions(){if(!selectedSchoolId||!['teacher','admin'
 async function gradeSchoolSubmission(id,current,max,feedback){const marks=prompt('Enter marks (maximum '+max+'):',current==null?'':current);if(marks===null)return;const n=Number(marks);if(!Number.isFinite(n)||n<0||n>max){showToast?.('Enter valid marks within the maximum.','error');return}const fb=prompt('Teacher feedback:',feedback||'');if(fb===null)return;try{const r=await fetch('/api/schools/submissions/'+encodeURIComponent(id)+'/grade?schoolId='+encodeURIComponent(selectedSchoolId),{method:'PATCH',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({marks:n,maxMarks:max,feedback:fb})});const d=await parseApiResponse(r);if(!r.ok)throw new Error(d.error||'Could not save grade.');showToast?.(d.message||'Grade saved.','success');loadSchoolSubmissions()}catch(e){showToast?.(e.message,'error')}}
 
 async function loadParentChildren(){const sel=document.getElementById('parentChildSelect');if(!sel||getSessionRole()!=='parent')return;try{const r=await fetch('/api/parent/children',{credentials:'include'});const d=await parseApiResponse(r);if(!r.ok)throw new Error(d.error||'Could not load linked learners.');const children=d.children||[];sel.innerHTML=children.length?children.map(x=>`<option value="${escapeHtml(x.learnerEmail)}">${escapeHtml(x.learnerEmail)} — ${escapeHtml(x.schoolName)}${x.className?' · '+escapeHtml(x.className):''}</option>`).join(''):'<option value="">No linked learners</option>';document.getElementById('parentNoLinks').style.display=children.length?'none':'block';document.getElementById('parentDashboardContent').style.display=children.length?'block':'none';if(children.length)await loadParentDashboard()}catch(e){document.getElementById('parentChildStatus').textContent=e.message;document.getElementById('parentNoLinks').style.display='block';document.getElementById('parentDashboardContent').style.display='none'}}
-async function loadParentDashboard(){const learner=document.getElementById('parentChildSelect')?.value;if(!learner)return;try{const r=await fetch('/api/parent/dashboard?learnerEmail='+encodeURIComponent(learner),{credentials:'include'});const d=await parseApiResponse(r);if(!r.ok)throw new Error(d.error||'Could not load learner progress.');document.getElementById('parentSchoolName').textContent=d.school?.schoolName||'—';document.getElementById('parentClassName').textContent=d.profile?.className||'—';document.getElementById('parentAverage').textContent=d.summary?.gradedSubjects?`${d.summary.averagePercent}%`:'—';document.getElementById('parentGradedSubjects').textContent=d.summary?.gradedSubjects||0;const gr=document.getElementById('parentGradesRows');gr.innerHTML=d.grades?.length?d.grades.map(x=>`<tr><td>${escapeHtml(x.subjectName)}</td><td>${escapeHtml(x.gradedCount)}</td><td>${Number(x.percent||0).toFixed(2)}%</td></tr>`).join(''):'<tr><td colspan="3">No graded results have been shared yet.</td></tr>';const ar=document.getElementById('parentAssignmentsRows');ar.innerHTML=d.assignments?.length?d.assignments.map(x=>`<tr><td>${escapeHtml(x.title)}</td><td>${escapeHtml(x.subjectName)}</td><td>${escapeHtml(x.status||'Not submitted')}</td><td>${x.marks!=null?escapeHtml(x.marks)+' / '+escapeHtml(x.maxMarks||100):'—'}</td></tr>`).join(''):'<tr><td colspan="4">No assignments yet.</td></tr>';document.getElementById('parentAI').textContent=`${d.grades?.length||0} subject progress record(s) and ${d.assignments?.length||0} assignment record(s) are available for this learner.`;window.parentDashboardData=d}catch(e){showToast?.(e.message,'error')}}
+async function loadParentDashboard(){const learner=document.getElementById('parentChildSelect')?.value;if(!learner)return;try{const r=await fetch('/api/parent/dashboard?learnerEmail='+encodeURIComponent(learner),{credentials:'include'});const d=await parseApiResponse(r);if(!r.ok)throw new Error(d.error||'Could not load learner progress.');document.getElementById('parentSchoolName').textContent=d.school?.schoolName||'—';document.getElementById('parentClassName').textContent=d.profile?.className||'—';document.getElementById('parentAverage').textContent=d.summary?.gradedSubjects?`${d.summary.averagePercent}%`:'—';document.getElementById('parentGradedSubjects').textContent=d.summary?.gradedSubjects||0;const gr=document.getElementById('parentGradesRows');gr.innerHTML=d.grades?.length?d.grades.map(x=>`<tr><td>${escapeHtml(x.subjectName)}</td><td>${escapeHtml(x.gradedCount)}</td><td>${Number(x.percent||0).toFixed(2)}%</td></tr>`).join(''):'<tr><td colspan="3">No graded results have been shared yet.</td></tr>';const ar=document.getElementById('parentAssignmentsRows');ar.innerHTML=d.assignments?.length?d.assignments.map(x=>`<tr><td>${escapeHtml(x.title)}</td><td>${escapeHtml(x.subjectName)}</td><td>${escapeHtml(x.status||'Not submitted')}</td><td>${x.marks!=null?escapeHtml(x.marks)+' / '+escapeHtml(x.maxMarks||100):'—'}</td></tr>`).join(''):'<tr><td colspan="4">No assignments yet.</td></tr>';document.getElementById('parentAI').textContent=`${d.grades?.length||0} subject progress record(s) and ${d.assignments?.length||0} assignment record(s) are available for this learner.`;window.parentDashboardData=d;await loadParentPerformanceProgress()}catch(e){showToast?.(e.message,'error')}}
 async function loadSchoolParentLinks(){if(!selectedSchoolId||!['admin'].includes(window.schoolData?.school?.memberRole)&&getSessionRole()!=='admin')return;try{const r=await fetch('/api/schools/parent-links?schoolId='+encodeURIComponent(selectedSchoolId),{credentials:'include'});const d=await parseApiResponse(r);if(!r.ok)throw new Error(d.error||'Could not load parent links.');const tb=document.getElementById('schoolParentLinksTable');if(tb)tb.innerHTML=d.links?.length?d.links.map(x=>`<tr><td>${escapeHtml(x.parentEmail)}</td><td>${escapeHtml(x.learnerEmail)}</td><td>${escapeHtml(x.className||'—')}</td><td><button class="btn" onclick="removeSchoolParentLink('${escapeHtml(x.linkId)}')">Remove</button></td></tr>`).join(''):'<tr><td colspan="4">No parent links yet.</td></tr>'}catch(e){const tb=document.getElementById('schoolParentLinksTable');if(tb)tb.innerHTML='<tr><td colspan="4">'+escapeHtml(e.message)+'</td></tr>'}}
 async function linkSchoolParent(){const parentEmail=document.getElementById('schoolParentEmail')?.value.trim(),learnerEmail=document.getElementById('schoolParentLearner')?.value;if(!parentEmail||!learnerEmail)return showToast?.('Enter the parent email and select a learner.','error');try{const r=await fetch('/api/schools/parent-links',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({schoolId:selectedSchoolId,parentEmail,learnerEmail})});const d=await parseApiResponse(r);if(!r.ok)throw new Error(d.error||'Could not link parent.');showToast?.('Parent linked to learner.','success');document.getElementById('schoolParentEmail').value='';loadSchoolParentLinks()}catch(e){showToast?.(e.message,'error')}}
 async function removeSchoolParentLink(id){if(!confirm('Remove this parent-learner link?'))return;try{const r=await fetch('/api/schools/parent-links/'+encodeURIComponent(id),{method:'DELETE',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({schoolId:selectedSchoolId})});const d=await parseApiResponse(r);if(!r.ok)throw new Error(d.error||'Could not remove link.');loadSchoolParentLinks()}catch(e){showToast?.(e.message,'error')}}
@@ -2107,19 +2368,13 @@ async function registerSchoolLearner(){
 let bulkLearnerRows=[];
 async function openBulkLearnerRegistration(){
   try{
-    const workspace=document.getElementById('schoolWorkspace');
-    const sel=document.getElementById('schoolWorkspaceSelect');
-    if(sel?.value) selectedSchoolId=sel.value;
-    if(workspace && workspace.style.display==='none'){
-      if(selectedSchoolId){
-        await loadSelectedSchool();
-      }else{
-        const first=schoolWorkspaces?.[0]?.schoolId||'';
-        if(first){selectedSchoolId=first;await loadSelectedSchool();}
-      }
-    }
-    const target=document.getElementById('bulkLearnerCsvFile');
-    if(target){target.scrollIntoView({behavior:'smooth',block:'center'});setTimeout(()=>target.focus({preventScroll:true}),350);}
+    if(!await ensureSchoolWorkspaceReady())return;
+    const input=document.getElementById('bulkLearnerCsvFile');
+    const card=input?.closest('.card');
+    if(!input||!card){showToast?.('The Bulk Learner Registration form is missing from this page.','error');return;}
+    card.style.display='block';
+    card.scrollIntoView({behavior:'smooth',block:'start'});
+    setTimeout(()=>input.focus({preventScroll:true}),350);
   }catch(e){showToast?.(e.message||'Could not open bulk learner registration.','error')}
 }
 function parseCsvLine(line){const out=[];let cur='',quoted=false;for(let i=0;i<line.length;i++){const ch=line[i];if(ch==='"'){if(quoted&&line[i+1]==='"'){cur+='"';i++;}else quoted=!quoted;}else if(ch===','&&!quoted){out.push(cur.trim());cur='';}else cur+=ch;}out.push(cur.trim());return out;}

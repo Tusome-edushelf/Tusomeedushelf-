@@ -835,6 +835,8 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
     <div class="school-dashboard-actions" style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn primary" type="button" onclick="openSchoolAdminSection('schoolClassesManagementCard')">🏷️ Classes & Streams</button>
       <button class="btn primary" type="button" onclick="openSchoolAdminSection('schoolAcademicManagementCard')">📘 Subjects & Teacher Allocation</button>
+      <button class="btn primary" type="button" onclick="openSchoolMembersPanel('learner')">👥 School Members</button>
+      <button class="btn primary" type="button" onclick="openBulkLearnerRegistration()">📥 Bulk Registration</button>
       <button class="btn primary" type="button" onclick="show('attendance')">📅 Attendance</button>
       <button class="btn" type="button" onclick="show('exams')">📝 Exams & Results</button>
       <button class="btn primary" type="button" onclick="openSchoolExamCreator()">➕ Create Exam</button>
@@ -850,6 +852,8 @@ nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}nav button{color:#173
       <button class="school-module" onclick="openSchoolAdminSection('schoolWorkspace')"><span class="school-module-icon">🏫</span><b>School Management</b><small>School profile, members, classes and administration.</small></button>
       <button class="school-module" onclick="openSchoolAdminSection('schoolClassesManagementCard')"><span class="school-module-icon">🏷️</span><b>Classes & Streams</b><small>Create and review classes, grades, streams and learner placement.</small></button>
       <button class="school-module" onclick="openSchoolAdminSection('schoolAcademicManagementCard')"><span class="school-module-icon">📘</span><b>Subjects & Teacher Allocation</b><small>Manage subjects, academic terms, class assignments and teacher allocations.</small></button>
+      <button class="school-module" onclick="openSchoolMembersPanel('learner')"><span class="school-module-icon">👥</span><b>School Members</b><small>View learners, parents/guardians and teachers in separate tabs, with linked learner details.</small></button>
+      <button class="school-module" onclick="openBulkLearnerRegistration()"><span class="school-module-icon">📥</span><b>Bulk Learner Registration</b><small>Upload a CSV, preview up to 500 learners, register safely, and download separate learner and parent credentials.</small></button>
       <button class="school-module" onclick="show('attendance')"><span class="school-module-icon">✅</span><b>Attendance</b><small>Record and review learner attendance.</small></button>
       <button class="school-module" onclick="show('timetable')"><span class="school-module-icon">🗓️</span><b>Timetable & Calendar</b><small>Lessons, periods, clashes and school dates.</small></button>
       <button class="school-module" onclick="show('fees')"><span class="school-module-icon">💰</span><b>School Fees</b><small>Charges, payments and learner balances.</small></button>
@@ -3464,6 +3468,44 @@ function toggleSchoolMembersFullList(force){
     panel.scrollIntoView({behavior:'smooth',block:'start'});
   }
 }
+
+async function ensureSchoolWorkspaceReady(){
+  const role=String(getSessionRole()||'').toLowerCase();
+  const schoolAccess=sessionStorage.getItem('tusomeSchoolAccess')==='true';
+  if(role!=='school'&&role!=='admin'&&!schoolAccess){
+    showToast?.('Please sign in through the School Dashboard first.','error');
+    return false;
+  }
+  if(!document.getElementById('schoolDashboard')?.classList.contains('active'))showPageDirect('schoolDashboard',true);
+  hideSchoolAuthGate();hideSchoolNameGate();
+  ['schoolControlCentre','schoolManagementCentre','schoolWorkspaceCard','schoolGlanceCard','schoolPlanCard','schoolExecutiveOverview','schoolGeneralEssentialCards'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='block'});
+  const sel=document.getElementById('schoolWorkspaceSelect');
+  if(sel?.value)selectedSchoolId=sel.value;
+  if(!selectedSchoolId&&Array.isArray(schoolWorkspaces)&&schoolWorkspaces.length)selectedSchoolId=schoolWorkspaces[0].schoolId;
+  if(!window.schoolData||!selectedSchoolId){await loadSchoolManagement();}
+  if(!selectedSchoolId){showToast?.('No school workspace is selected. Use Refresh and check your school access.','error');return false;}
+  const workspace=document.getElementById('schoolWorkspace');
+  if(!window.schoolData||!workspace||workspace.style.display==='none')await loadSelectedSchool();
+  if(!workspace||workspace.style.display==='none'||!window.schoolData){showToast?.('The school workspace did not load. Refresh the dashboard and check the school access message.','error');return false;}
+  const memberRole=String(getCurrentSchoolMemberRole()||window.schoolData?.school?.memberRole||'').toLowerCase();
+  if(memberRole!=='admin'&&role!=='admin'){
+    showToast?.('School administrator access is required to manage registered members and bulk registration.','error');
+    return false;
+  }
+  return true;
+}
+
+async function openSchoolMembersPanel(group='learner'){
+  try{
+    if(!await ensureSchoolWorkspaceReady())return;
+    const panel=document.getElementById('schoolMembersFullList');
+    if(!panel){showToast?.('The registered members panel is missing from this page.','error');return;}
+    panel.style.display='block';
+    renderSchoolMemberGroups(window.schoolData?.members||[]);
+    await showSchoolMemberGroup(group);
+    panel.scrollIntoView({behavior:'smooth',block:'start'});
+  }catch(e){showToast?.(e.message||'Could not open School Members.','error')}
+}
 async function showSchoolMemberGroup(group){
   ['learner','parent','teacher'].forEach(role=>{
     const el=document.getElementById('school'+role.charAt(0).toUpperCase()+role.slice(1)+'MemberGroup');
@@ -3473,7 +3515,7 @@ async function showSchoolMemberGroup(group){
   });
   if(group==='parent' && !__schoolParentMembersCache){
     try{
-      const r=await fetch('/api/schools/parents/credential-report?format=json',{credentials:'include'});
+      const r=await fetch('/api/schools/parents/credential-report?format=json&schoolId='+encodeURIComponent(selectedSchoolId||''),{credentials:'include'});
       const d=await parseApiResponse(r);if(!r.ok)throw new Error(d.error||'Could not load parents.');
       __schoolParentMembersCache=d.parents||[];
     }catch(e){showToast?.(e.message,'error');__schoolParentMembersCache=[];}
@@ -3595,19 +3637,13 @@ async function registerSchoolLearner(){
 let bulkLearnerRows=[];
 async function openBulkLearnerRegistration(){
   try{
-    const workspace=document.getElementById('schoolWorkspace');
-    const sel=document.getElementById('schoolWorkspaceSelect');
-    if(sel?.value) selectedSchoolId=sel.value;
-    if(workspace && workspace.style.display==='none'){
-      if(selectedSchoolId){
-        await loadSelectedSchool();
-      }else{
-        const first=schoolWorkspaces?.[0]?.schoolId||'';
-        if(first){selectedSchoolId=first;await loadSelectedSchool();}
-      }
-    }
-    const target=document.getElementById('bulkLearnerCsvFile');
-    if(target){target.scrollIntoView({behavior:'smooth',block:'center'});setTimeout(()=>target.focus({preventScroll:true}),350);}
+    if(!await ensureSchoolWorkspaceReady())return;
+    const input=document.getElementById('bulkLearnerCsvFile');
+    const card=input?.closest('.card');
+    if(!input||!card){showToast?.('The Bulk Learner Registration form is missing from this page.','error');return;}
+    card.style.display='block';
+    card.scrollIntoView({behavior:'smooth',block:'start'});
+    setTimeout(()=>input.focus({preventScroll:true}),350);
   }catch(e){showToast?.(e.message||'Could not open bulk learner registration.','error')}
 }
 function parseCsvLine(line){const out=[];let cur='',quoted=false;for(let i=0;i<line.length;i++){const ch=line[i];if(ch==='"'){if(quoted&&line[i+1]==='"'){cur+='"';i++;}else quoted=!quoted;}else if(ch===','&&!quoted){out.push(cur.trim());cur='';}else cur+=ch;}out.push(cur.trim());return out;}

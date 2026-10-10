@@ -1873,6 +1873,37 @@ function openSchoolRoleWorkspace(target){
 
 let __schoolManagementPromise=null;
 window.__schoolDashboardGeneration=window.__schoolDashboardGeneration||0;
+function hasSchoolWorkspaceSession(){
+  const role=String(getSessionRole()||'').trim().toLowerCase();
+  return role==='school'||role==='admin'||sessionStorage.getItem('tusomeSchoolAccess')==='true';
+}
+
+async function openSchoolAdminSection(targetId,focusId=''){
+  try{
+    const sel=document.getElementById('schoolWorkspaceSelect');
+    if(sel?.value)selectedSchoolId=sel.value;
+    const memberRole=String(window.schoolLoginMemberRole||getCurrentSchoolMemberRole()||sel?.selectedOptions?.[0]?.dataset?.memberRole||sessionStorage.getItem('tusomeSchoolMemberRole')||'').toLowerCase();
+    if(memberRole!=='admin'&&getSessionRole()!=='admin'&&getSessionRole()!=='school'){
+      showToast?.('School administrator access is required to manage classes, subjects and teacher allocations.','error');
+      return;
+    }
+    if(!document.getElementById('schoolDashboard')?.classList.contains('active'))showPageDirect('schoolDashboard',true);
+    hideSchoolAuthGate();
+    ['schoolManagementCentre','schoolWorkspaceCard','schoolGlanceCard','schoolPlanCard','schoolExecutiveOverview'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='block'});
+    const workspace=document.getElementById('schoolWorkspace');
+    if(!window.schoolData||!selectedSchoolId||!workspace||workspace.style.display==='none')await loadSchoolManagement();
+    if(workspace?.style.display==='none'&&selectedSchoolId)await loadSelectedSchool();
+    if(!selectedSchoolId||!workspace||workspace.style.display==='none'){
+      showToast?.('The school workspace did not load. Use Refresh on the School Dashboard and check the school access message.','error');
+      return;
+    }
+    const target=document.getElementById(targetId);
+    if(!target){showToast?.('The requested school management section could not be found.','error');return;}
+    target.scrollIntoView({behavior:'smooth',block:'start'});
+    if(focusId){const field=document.getElementById(focusId);if(field)setTimeout(()=>field.focus({preventScroll:true}),300)}
+  }catch(e){showToast?.(e.message||'Could not open the school management section.','error')}
+}
+
 async function loadSchoolManagement(){
   const role=getSessionRole();
   const schoolAccess=sessionStorage.getItem('tusomeSchoolAccess')==='true';
@@ -1888,15 +1919,15 @@ async function loadSchoolManagement(){
       const r=await fetch('/api/schools/mine',{credentials:'include'});
       const d=await parseApiResponse(r);
       if(!r.ok)throw new Error(d.error||'Could not load school access.');
-      if(generation!==window.__schoolDashboardGeneration || !getSessionRole() || sessionStorage.getItem('tusomeSchoolAccess')!=='true')return;
+      if(generation!==window.__schoolDashboardGeneration || !getSessionRole() || !hasSchoolWorkspaceSession())return;
       schoolWorkspaces=d.schools||[];updateSchoolRoleCards();
       sel.innerHTML=schoolWorkspaces.length?schoolWorkspaces.map(x=>`<option value="${escapeHtml(x.schoolId)}" data-member-role="${escapeHtml(x.memberRole)}">${escapeHtml(x.schoolName)} — ${escapeHtml(x.memberRole)}</option>`).join(''):'<option value="">No active school workspace</option>';
       if(!schoolWorkspaces.length){document.getElementById('schoolWorkspace').style.display='none';document.getElementById('schoolAccessStatus').textContent='No active school workspace is available. Request one from Premium Membership or ask your school administrator to add your account.';return;}
       selectedSchoolId=selectedSchoolId&&schoolWorkspaces.some(x=>x.schoolId===selectedSchoolId)?selectedSchoolId:schoolWorkspaces[0].schoolId;sel.value=selectedSchoolId;
       await loadSelectedSchool();
-      if(generation!==window.__schoolDashboardGeneration || !getSessionRole() || sessionStorage.getItem('tusomeSchoolAccess')!=='true')return;
+      if(generation!==window.__schoolDashboardGeneration || !getSessionRole() || !hasSchoolWorkspaceSession())return;
       await loadSchoolPlanStatus();
-      if(generation!==window.__schoolDashboardGeneration || !getSessionRole() || sessionStorage.getItem('tusomeSchoolAccess')!=='true')return;
+      if(generation!==window.__schoolDashboardGeneration || !getSessionRole() || !hasSchoolWorkspaceSession())return;
       await loadSchoolExecutiveOverview();
     }catch(e){sel.innerHTML='<option value="">Unable to load</option>';showToast?.(e.message,'error')}
   })();
@@ -2169,7 +2200,7 @@ async function loadRegisteredLearners(){
 }
 async function updateLearnerPlacement(email,classId){if(!classId)return;try{const r=await fetch('/api/schools/learners/'+email+'/placement',{method:'PATCH',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({schoolId:selectedSchoolId,classId})});const d=await parseApiResponse(r);if(!r.ok)throw new Error(d.error||'Could not update placement.');showToast?.('Learner placement updated.','success');await loadSelectedSchool();await loadRegisteredLearners();}catch(e){showToast?.(e.message,'error');await loadRegisteredLearners()}}
 
-async function openCreateSchoolClass(){try{const workspace=document.getElementById('schoolWorkspace');const sel=document.getElementById('schoolWorkspaceSelect');if(sel?.value)selectedSchoolId=sel.value;if(workspace?.style.display==='none'){if(selectedSchoolId){await loadSelectedSchool()}else{const first=schoolWorkspaces?.[0]?.schoolId||'';if(first){selectedSchoolId=first;await loadSelectedSchool()}}}const target=document.getElementById('schoolClassName');if(!target)return showToast?.('Create Class form is unavailable.','error');target.scrollIntoView({behavior:'smooth',block:'center'});setTimeout(()=>target.focus({preventScroll:true}),350)}catch(e){showToast?.(e.message||'Could not open Create Class.','error')}}
+async function openCreateSchoolClass(){return openSchoolAdminSection('schoolClassesManagementCard','schoolClassName')}
 
 async function createSchoolClass(){const sel=document.getElementById('schoolWorkspaceSelect');if(sel?.value)selectedSchoolId=sel.value;if(!selectedSchoolId&&Array.isArray(schoolWorkspaces)&&schoolWorkspaces[0]?.schoolId)selectedSchoolId=schoolWorkspaces[0].schoolId;const body={schoolId:selectedSchoolId,className:document.getElementById('schoolClassName').value.trim(),grade:document.getElementById('schoolClassGrade').value.trim(),stream:document.getElementById('schoolClassStream').value.trim(),teacherEmail:document.getElementById('schoolClassTeacher').value.trim()};if(!body.className)return showToast?.('Enter a class name.','error');try{const r=await fetch('/api/schools/classes',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(body)});const d=await parseApiResponse(r);if(!r.ok)throw new Error(d.error||'Could not create class.');showToast?.(body.stream?`Stream ${body.stream} added under ${body.className}.`:'Class created.','success');document.getElementById('schoolClassName').value='';document.getElementById('schoolClassStream').value='';document.getElementById('schoolClassTeacher').value='';await loadSelectedSchool()}catch(e){showToast?.(e.message,'error')}}
 function addStreamToClass(className,grade){const name=decodeURIComponent(className),g=decodeURIComponent(grade||'');document.getElementById('schoolClassName').value=name;document.getElementById('schoolClassGrade').value=g;document.getElementById('schoolClassStream').value='';document.getElementById('schoolClassTeacher').value='';const target=document.getElementById('schoolClassStream');target.scrollIntoView({behavior:'smooth',block:'center'});setTimeout(()=>target.focus({preventScroll:true}),350)}

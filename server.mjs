@@ -2317,6 +2317,28 @@ app.get('/api/schools/parents/credential-report', requireSchoolMembership, async
   }catch(e){console.error('parent credential report failed:',e);res.status(500).json({error:'Could not generate the parent credential report.'})}
 });
 
+app.post('/api/schools/parents/reset-passwords-bulk', requireSchoolMembership, async (req,res)=>{
+  if(req.school.memberRole!=='admin'&&req.user.role!=='admin') return res.status(403).json({error:'School admin access is required.'});
+  const schoolId=String(req.school.schoolId||'');
+  let client;
+  try{
+    // Reset only parent accounts linked to this school; the passwords are returned once for secure delivery.
+    const found=await db.query(`SELECT DISTINCT u.email,u.username,u.phone,u.display_name AS "parentName", string_agg(DISTINCT COALESCE(lu.display_name,pgl.learner_email), '; ' ORDER BY COALESCE(lu.display_name,pgl.learner_email)) AS "linkedLearners" FROM parent_guardian_links pgl JOIN users u ON lower(u.email)=lower(pgl.parent_email) AND u.role='parent' LEFT JOIN users lu ON lower(lu.email)=lower(pgl.learner_email) WHERE pgl.school_id=$1 GROUP BY u.email,u.username,u.phone,u.display_name ORDER BY u.display_name,u.email`,[schoolId]);
+    if(!found.rowCount) return res.status(404).json({error:'No parent accounts are linked to this school.'});
+    const resetRows=[];
+    for(const parent of found.rows){const temporaryPassword=crypto.randomBytes(9).toString('base64url');resetRows.push({...parent,temporaryPassword,passwordHash:await hashPasswordAsync(temporaryPassword)});}
+    client=await db.connect(); await client.query('BEGIN');
+    for(const parent of resetRows){
+      const updated=await client.query(`UPDATE users SET password_hash=$1,updated_at=NOW() WHERE lower(email)=lower($2) AND role='parent' AND EXISTS (SELECT 1 FROM parent_guardian_links p WHERE p.school_id=$3 AND lower(p.parent_email)=lower(users.email)) RETURNING email`,[parent.passwordHash,parent.email,schoolId]);
+      if(!updated.rowCount) throw new Error('A linked parent account changed during the reset. No bulk reset was committed.');
+    }
+    await client.query('COMMIT');
+    for(const parent of resetRows) void audit({user:req.user},'reset_parent_password_bulk','user',parent.email,{schoolId});
+    res.json({ok:true,count:resetRows.length,parents:resetRows.map(({passwordHash,...parent})=>parent),message:'All linked parent passwords were reset. Save the downloaded credential CSV securely and share each password privately.'});
+  }catch(e){if(client)try{await client.query('ROLLBACK')}catch{} console.error('bulk parent password reset failed:',e);res.status(500).json({error:e.message||'Could not reset parent passwords. The bulk operation was rolled back.'});}
+  finally{client?.release();}
+});
+
 app.post('/api/schools/parents/reset-password', requireSchoolMembership, async (req,res)=>{
   if(req.school.memberRole!=='admin'&&req.user.role!=='admin') return res.status(403).json({error:'School admin access is required.'});
   const parentEmail=String(req.body?.parentEmail||'').trim().toLowerCase();

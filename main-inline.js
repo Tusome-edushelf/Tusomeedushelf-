@@ -2272,6 +2272,25 @@ function renderSchoolMemberGroups(members){
   if(pr)pr.innerHTML=parents.length?parents.map(m=>`<tr><td><b>${escapeHtml(m.parentName||'—')}</b></td><td>${escapeHtml(m.parentPhone||'—')}</td><td>${escapeHtml(m.username||'—')}</td><td>${escapeHtml(m.email||'—')}</td><td>${escapeHtml(m.linkedLearners||'—')}</td><td><button class="btn primary" type="button" onclick="resetParentPassword('${encodeURIComponent(m.email||'')}')">Reset password &amp; download CSV</button></td></tr>`).join(''):'<tr><td colspan="6">No registered parents / guardians yet.</td></tr>';
 }
 
+
+async function resetAllParentPasswords(){
+  if(!selectedSchoolId)return showToast?.('Select a school workspace first.','error');
+  const parents=Array.isArray(__schoolParentMembersCache)?__schoolParentMembersCache:[];
+  if(!__schoolParentMembersCache){try{await showSchoolMemberGroup('parent');}catch{}}
+  const count=(Array.isArray(__schoolParentMembersCache)?__schoolParentMembersCache:[]).length;
+  if(!count)return showToast?.('No linked parent accounts were found. Refresh the Parents tab and try again.','error');
+  if(!confirm(`Reset passwords for ALL ${count} parent/guardian accounts linked to this school? Their current passwords will stop working. A CSV containing every new temporary password will download once. Store it securely and share each password privately. If a parent account is shared across schools, its password also changes for that account.`))return;
+  try{
+    const r=await fetch('/api/schools/parents/reset-passwords-bulk',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({schoolId:selectedSchoolId})});
+    const d=await parseApiResponse(r);if(!r.ok)throw new Error(d.error||'Could not reset all parent passwords.');
+    const cell=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
+    const rows=['Parent/Guardian Name,Parent Username,Parent Email,Phone,Temporary Password,Linked Learners,Account Status'];
+    (d.parents||[]).forEach(p=>rows.push([p.parentName,p.username||p.phone,p.email,p.phone,p.temporaryPassword,p.linkedLearners,'Password reset — share privately'].map(cell).join(',')));
+    downloadTextFile('\ufeff'+rows.join('\n'),'Tusome_ALL_Parent_Passwords_'+new Date().toISOString().slice(0,10)+'.csv','text/csv;charset=utf-8');
+    showToast?.(`Passwords reset for ${d.count||rows.length-1} parent accounts. Save the CSV securely and share passwords privately.`,'success');
+  }catch(e){showToast?.(e.message||'Could not reset all parent passwords.','error')}
+}
+
 async function resetParentPassword(encodedEmail){
   const parentEmail=decodeURIComponent(String(encodedEmail||''));
   if(!selectedSchoolId)return showToast?.('Select a school workspace first.','error');

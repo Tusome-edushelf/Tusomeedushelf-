@@ -3371,7 +3371,7 @@ function renderSchoolRoleWorkspace(role){
   if(!panel)return;
   const school=window.schoolData?.school?.schoolName || schoolWorkspaces.find(x=>x.schoolId===selectedSchoolId)?.schoolName || 'Your School';
   const configs={
-    teacher:{icon:'👩🏽‍🏫',title:'School Teacher Workspace',desc:'Only school teaching functions are shown here. Your normal Tusome Teacher Dashboard remains separate.',items:[['attendance','📅','Attendance','Record and review attendance for your authorised school classes.'],['exams','📝','Exams & Results','Enter and review school assessment results for authorised classes.'],['timetable','🗓️','Timetable','View the school timetable and your assigned lessons.'],['communication','💬','School Communication','School messages and communication relevant to you.']]},
+    teacher:{icon:'👩🏽‍🏫',title:'School Teacher Workspace',desc:'School teaching functions, including performance target sheets for your allocated classes and subjects.',items:[['attendance','📅','Attendance','Record and review attendance for your authorised school classes.'],['exams','📝','Exams & Results','Enter and review school assessment results for authorised classes.'],['targetSheets','🎯','Performance Target Sheets','Set and update learner targets for your allocated class/stream and subject.'],['timetable','🗓️','Timetable','View the school timetable and your assigned lessons.'],['communication','💬','School Communication','School messages and communication relevant to you.']]},
     learner:{icon:'🎓',title:'School Learner Workspace',desc:'Only school learning information is shown here. Use the normal Tusome sign-in for the broader learner platform.',items:[['attendance','📅','My Attendance','View your attendance records in this school.'],['exams','📊','My Results','View school examinations and published results.'],['timetable','🗓️','My Timetable','View your school lessons and timetable.'],['fees','💰','My School Fees','View school fee charges, payments and balance.']]},
     parent:{icon:'👪',title:'School Parent / Guardian Workspace',desc:'Only information connected to your authorised learner(s) and this school is shown here.',items:[['parent','📊','Learner Progress','View linked learner academic progress and assignments.'],['attendance','📅','Attendance','View attendance information for linked learners.'],['fees','💰','School Fees','View linked learner fee information and balances.'],['communication','💬','School Communication','View school communication available to parents/guardians.']]},
     bursar:{icon:'💳',title:'School Finance / Bursar Workspace',desc:'Finance users are restricted to school finance functions rather than learner or teacher dashboards.',items:[['fees','💰','Finance & Fees','Manage school fee charges, payments and balances.'],['fees','🧾','Payment Records','Review school payment records and outstanding balances.'],['fees','📈','Finance Overview','Open the school finance area for financial reporting and reconciliation.']]}};
@@ -3379,15 +3379,32 @@ function renderSchoolRoleWorkspace(role){
   if(!cfg){panel.style.display='none';return;}
   if(chooser)chooser.style.display='none';
   panel.innerHTML=`<div class="topline" style="margin:0 0 12px"><div><h3 style="margin:0">${cfg.icon} ${cfg.title}</h3><p class="small" style="margin-top:6px"><b>${escapeHtml(school)}</b> · ${escapeHtml(cfg.desc)}</p></div><span class="tag">School Space</span></div><div class="school-module-grid">${cfg.items.map(([id,icon,title,desc])=>`<button class="school-module" type="button" onclick="openSchoolModule('${id}')"><span class="school-module-icon">${icon}</span><b>${title}</b><small>${desc}</small></button>`).join('')}</div><div class="notice" style="margin-top:14px"><b>Workspace boundary:</b> This school sign-in does not open the full learner or teacher dashboard. To use the broader Tusome platform, sign out and use the normal Tusome sign-in.</div>`;
+  if(role==='teacher'){
+    // Keep the real target-sheet form in the signed-in School Teacher Workspace,
+    // not only in the separate public Tusome teacher dashboard.
+    const targetPanel=window.__schoolTeacherTargetPanel||document.getElementById('teacherPerformanceTargetsPanel');
+    if(targetPanel){
+      window.__schoolTeacherTargetPanel=targetPanel;
+      targetPanel.style.display='block';
+      targetPanel.style.marginTop='18px';
+      panel.appendChild(targetPanel);
+      loadPerformanceTargetsSetup();
+    }
+  }
   panel.style.display='block';
 }
 function openSchoolModule(id){
   const role=window.schoolLoginMemberRole||getCurrentSchoolMemberRole()||sessionStorage.getItem('tusomeSchoolMemberRole')||'';
-  const allowed={teacher:['attendance','exams','timetable','communication'],learner:['attendance','exams','timetable','fees'],parent:['parent','attendance','fees','communication'],bursar:['fees']}[role]||[];
+  const allowed={teacher:['attendance','exams','targetSheets','timetable','communication'],learner:['attendance','exams','timetable','fees'],parent:['parent','attendance','fees','communication'],bursar:['fees']}[role]||[];
   if(!allowed.includes(id)){showToast?.('This school function is not available for your role.','error');return;}
   showPageDirect('schoolDashboard',true);
   hideSchoolAuthGate();
   renderSchoolRoleWorkspace(role);
+  if(id==='targetSheets'){
+    const targetPanel=window.__schoolTeacherTargetPanel||document.getElementById('teacherPerformanceTargetsPanel');
+    targetPanel?.scrollIntoView({behavior:'smooth',block:'start'});
+    loadPerformanceTargetsSetup();
+  }
   const status=document.getElementById('schoolRoleStatus');
   if(status)status.textContent='School workspace: '+(id==='fees'?'Finance & Fees':id.charAt(0).toUpperCase()+id.slice(1));
 }

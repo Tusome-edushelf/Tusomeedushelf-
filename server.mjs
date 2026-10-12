@@ -3338,26 +3338,31 @@ app.get('/api/parent/exams', requireRole('parent'), async (req,res)=>{try{const 
 // v126.51: persistent academic targets. Targets are separate from marks and
 // can only be managed by school administrators or teachers assigned to the class/subject.
 app.get('/api/schools/performance-targets', requireSchoolMembership, async (req,res)=>{
-  if(req.school.memberRole!=='admin'&&req.school.memberRole!=='teacher'&&req.user.role!=='admin')return res.status(403).json({error:'Teacher or school administrator access is required.'});
+  const admin=req.school.memberRole==='admin'||req.user.role==='admin';
+  const teacher=req.school.memberRole==='teacher'&&req.user.role==='teacher';
+  if(!admin&&!teacher)return res.status(403).json({error:'Teacher or school administrator access is required.'});
   try{
     const classId=String(req.query.classId||'').trim();
     const termId=String(req.query.termId||'').trim()||null;
-    const classParams=[req.school.schoolId];
-    const classFilter=classId?' AND c.class_id=$2':'';
-    if(classId)classParams.push(classId);
+    const subjectId=String(req.query.subjectId||'').trim()||null;
+    const schoolId=req.school.schoolId;
+    const allocationJoin=teacher?` AND EXISTS (SELECT 1 FROM school_teacher_subjects tsa WHERE tsa.school_id=c.school_id AND tsa.class_id=c.class_id AND tsa.teacher_email=$2)` : '';
+    const allocationParams=teacher?[schoolId,req.user.email]:[schoolId];
     const [classes,subjects,terms,learners]=await Promise.all([
-      db.query(`SELECT class_id AS "classId",class_name AS "className",grade,stream FROM school_classes WHERE school_id=$1${classFilter} ORDER BY grade,class_name,stream`,classParams),
-      db.query(`SELECT subject_id AS "subjectId",subject_name AS "subjectName" FROM school_subjects WHERE school_id=$1 ORDER BY subject_name`,[req.school.schoolId]),
-      db.query(`SELECT term_id AS "termId",academic_year AS "academicYear",term_name AS "termName" FROM school_terms WHERE school_id=$1 ORDER BY academic_year DESC,term_name`,[req.school.schoolId]),
-      db.query(`SELECT sm.user_email AS "learnerEmail",COALESCE(u.display_name,u.email) AS "fullName",COALESCE(p.admission_number,'') AS "admissionNumber",sm.class_id AS "classId" FROM school_memberships sm LEFT JOIN users u ON u.email=sm.user_email LEFT JOIN school_learner_profiles p ON p.school_id=sm.school_id AND p.learner_email=sm.user_email WHERE sm.school_id=$1 AND sm.member_role='learner' AND sm.status='active' AND ($2::text IS NULL OR sm.class_id=$2) ORDER BY COALESCE(u.display_name,sm.user_email),sm.user_email`,[req.school.schoolId,classId||null])
+      db.query(`SELECT c.class_id AS "classId",c.class_name AS "className",c.grade,c.stream FROM school_classes c WHERE c.school_id=$1${classId?' AND c.class_id=$'+(teacher?3:2):''}${allocationJoin} ORDER BY c.grade,c.class_name,c.stream`,teacher?(classId?[schoolId,req.user.email,classId]:allocationParams):(classId?[schoolId,classId]:allocationParams)),
+      db.query(`SELECT s.subject_id AS "subjectId",s.subject_name AS "subjectName"${teacher?',tsa.class_id AS \"classId\"':''} FROM school_subjects s ${teacher?'JOIN school_teacher_subjects tsa ON tsa.subject_id=s.subject_id AND tsa.school_id=s.school_id AND tsa.teacher_email=$2':''} WHERE s.school_id=$1 ${teacher&&classId?'AND tsa.class_id=$3':''} ORDER BY s.subject_name`,teacher?(classId?[schoolId,req.user.email,classId]:allocationParams):[schoolId]),
+      db.query(`SELECT term_id AS "termId",academic_year AS "academicYear",term_name AS "termName" FROM school_terms WHERE school_id=$1 ORDER BY academic_year DESC,term_name`,[schoolId]),
+      db.query(`SELECT sm.user_email AS "learnerEmail",COALESCE(u.display_name,u.email) AS "fullName",COALESCE(p.admission_number,'') AS "admissionNumber",sm.class_id AS "classId" FROM school_memberships sm LEFT JOIN users u ON u.email=sm.user_email LEFT JOIN school_learner_profiles p ON p.school_id=sm.school_id AND p.learner_email=sm.user_email WHERE sm.school_id=$1 AND sm.member_role='learner' AND sm.status='active' AND ($2::text IS NULL OR sm.class_id=$2) AND ($3::text IS NULL OR EXISTS (SELECT 1 FROM school_teacher_subjects tsa WHERE tsa.school_id=sm.school_id AND tsa.class_id=sm.class_id AND tsa.teacher_email=$4)) ORDER BY COALESCE(u.display_name,sm.user_email),sm.user_email`,[schoolId,classId||null,teacher?'teacher':null,req.user.email])
     ]);
-    const targetParams=[req.school.schoolId]; let targetWhere='';
+    const targetParams=[schoolId]; let targetWhere='';
     if(classId){targetParams.push(classId);targetWhere+=' AND t.class_id=$'+targetParams.length;}
     if(termId){targetParams.push(termId);targetWhere+=' AND t.term_id=$'+targetParams.length;}
+    if(subjectId){targetParams.push(subjectId);targetWhere+=' AND t.subject_id=$'+targetParams.length;}
+    if(teacher){targetParams.push(req.user.email);targetWhere+=` AND EXISTS (SELECT 1 FROM school_teacher_subjects tsa WHERE tsa.school_id=t.school_id AND tsa.class_id=t.class_id AND tsa.subject_id=t.subject_id AND tsa.teacher_email=$${targetParams.length})`;}
     const targets=await db.query(`SELECT t.target_id AS "targetId",t.class_id AS "classId",t.learner_email AS "learnerEmail",COALESCE(u.display_name,u.email) AS "fullName",COALESCE(p.admission_number,'') AS "admissionNumber",t.subject_id AS "subjectId",COALESCE(s.subject_name,'Overall') AS "subjectName",t.term_id AS "termId",t.target_percent AS "targetPercent",t.target_grade AS "targetGrade",t.notes,t.updated_at AS "updatedAt" FROM school_performance_targets t LEFT JOIN users u ON u.email=t.learner_email LEFT JOIN school_learner_profiles p ON p.school_id=t.school_id AND p.learner_email=t.learner_email LEFT JOIN school_subjects s ON s.subject_id=t.subject_id WHERE t.school_id=$1${targetWhere} ORDER BY t.updated_at DESC LIMIT 1000`,targetParams);
     const rows=[];
     for(const t of targets.rows){
-      const actual=await db.query(`SELECT AVG(m.marks/NULLIF(e.max_marks,0)*100) AS actual_percent FROM school_exam_marks m JOIN school_exams e ON e.exam_id=m.exam_id WHERE m.school_id=$1 AND m.learner_email=$2 AND e.class_id=$3 AND e.status='published' AND e.approval_status='approved' AND m.mark_status='present' AND m.marks IS NOT NULL AND e.max_marks>0 AND ($4::text IS NULL OR e.term_id=$4) AND ($5::text IS NULL OR e.subject_id=$5)`,[req.school.schoolId,t.learnerEmail,t.classId,t.termId,t.subjectId]);
+      const actual=await db.query(`SELECT AVG(m.marks/NULLIF(e.max_marks,0)*100) AS actual_percent FROM school_exam_marks m JOIN school_exams e ON e.exam_id=m.exam_id WHERE m.school_id=$1 AND m.learner_email=$2 AND e.class_id=$3 AND e.status='published' AND e.approval_status='approved' AND m.mark_status='present' AND m.marks IS NOT NULL AND e.max_marks>0 AND ($4::text IS NULL OR e.term_id=$4) AND ($5::text IS NULL OR e.subject_id=$5)`,[schoolId,t.learnerEmail,t.classId,t.termId,t.subjectId]);
       const actualPercent=actual.rows[0]?.actual_percent==null?null:Number(actual.rows[0].actual_percent);
       rows.push({...t,targetPercent:Number(t.targetPercent),actualPercent,delta:actualPercent==null?null:Number((actualPercent-Number(t.targetPercent)).toFixed(2)),status:actualPercent==null?'Awaiting published results':actualPercent>=Number(t.targetPercent)?'Target met':'Below target'});
     }
@@ -3368,20 +3373,19 @@ app.post('/api/schools/performance-targets', requireSchoolMembership, async (req
   try{
     const classId=String(req.body?.classId||'').trim(),learnerEmail=String(req.body?.learnerEmail||'').trim().toLowerCase(),subjectId=String(req.body?.subjectId||'').trim()||null,termId=String(req.body?.termId||'').trim()||null;
     const targetPercent=Number(req.body?.targetPercent),targetGrade=String(req.body?.targetGrade||'').trim().slice(0,20)||null,notes=String(req.body?.notes||'').trim().slice(0,500)||null;
-    if(!classId||!learnerEmail||!Number.isFinite(targetPercent)||targetPercent<0||targetPercent>100)return res.status(400).json({error:'Class, learner and a target percentage from 0 to 100 are required.'});
+    if(!classId||!learnerEmail||!subjectId||!termId||!Number.isFinite(targetPercent)||targetPercent<0||targetPercent>100)return res.status(400).json({error:'Class, subject, academic term, learner and a target percentage from 0 to 100 are required.'});
     const admin=req.school.memberRole==='admin'||req.user.role==='admin';
     const learner=await db.query(`SELECT 1 FROM school_memberships WHERE school_id=$1 AND class_id=$2 AND user_email=$3 AND member_role='learner' AND status='active' LIMIT 1`,[req.school.schoolId,classId,learnerEmail]);
     if(!learner.rowCount)return res.status(400).json({error:'The learner is not actively enrolled in the selected class/stream.'});
-    if(subjectId){const subject=await db.query(`SELECT 1 FROM school_subjects WHERE school_id=$1 AND subject_id=$2 LIMIT 1`,[req.school.schoolId,subjectId]);if(!subject.rowCount)return res.status(400).json({error:'The selected subject does not belong to this school.'});}
-    if(termId){const term=await db.query(`SELECT 1 FROM school_terms WHERE school_id=$1 AND term_id=$2 LIMIT 1`,[req.school.schoolId,termId]);if(!term.rowCount)return res.status(400).json({error:'The selected term does not belong to this school.'});}
+    const subject=await db.query(`SELECT 1 FROM school_subjects WHERE school_id=$1 AND subject_id=$2 LIMIT 1`,[req.school.schoolId,subjectId]);if(!subject.rowCount)return res.status(400).json({error:'The selected subject does not belong to this school.'});
+    const term=await db.query(`SELECT 1 FROM school_terms WHERE school_id=$1 AND term_id=$2 LIMIT 1`,[req.school.schoolId,termId]);if(!term.rowCount)return res.status(400).json({error:'The selected term does not belong to this school.'});
     if(!admin){
       if(req.school.memberRole!=='teacher'||req.user.role!=='teacher')return res.status(403).json({error:'Teacher or school administrator access is required.'});
-      if(subjectId){const a=await db.query(`SELECT 1 FROM school_teacher_subjects WHERE school_id=$1 AND teacher_email=$2 AND class_id=$3 AND subject_id=$4 LIMIT 1`,[req.school.schoolId,req.user.email,classId,subjectId]);if(!a.rowCount)return res.status(403).json({error:'You are not assigned to this class and subject.'});}
-      else {const a=await db.query(`SELECT 1 FROM school_teacher_subjects WHERE school_id=$1 AND teacher_email=$2 AND class_id=$3 LIMIT 1`,[req.school.schoolId,req.user.email,classId]);if(!a.rowCount)return res.status(403).json({error:'You are not assigned to this class.'});}
+      const a=await db.query(`SELECT 1 FROM school_teacher_subjects WHERE school_id=$1 AND teacher_email=$2 AND class_id=$3 AND subject_id=$4 LIMIT 1`,[req.school.schoolId,req.user.email,classId,subjectId]);if(!a.rowCount)return res.status(403).json({error:'You are not assigned to this class and subject.'});
     }
     const id='TGT-'+Date.now().toString(36).toUpperCase()+'-'+Math.random().toString(36).slice(2,7).toUpperCase();
     const saved=await db.query(`INSERT INTO school_performance_targets(target_id,school_id,class_id,learner_email,subject_id,term_id,target_percent,target_grade,notes,set_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT (school_id,class_id,learner_email,(COALESCE(subject_id,'')),(COALESCE(term_id,''))) DO UPDATE SET target_percent=EXCLUDED.target_percent,target_grade=EXCLUDED.target_grade,notes=EXCLUDED.notes,set_by=EXCLUDED.set_by,updated_at=NOW() RETURNING target_id AS "targetId",target_percent AS "targetPercent",target_grade AS "targetGrade",notes,updated_at AS "updatedAt"`,[id,req.school.schoolId,classId,learnerEmail,subjectId,termId,targetPercent,targetGrade,notes,req.user.email]);
-    res.json({ok:true,target:saved.rows[0],message:'Performance target saved. It will not change marks or grades.'});
+    res.json({ok:true,target:saved.rows[0],message:'Target sheet saved. Targets do not change marks, grades or rankings.'});
   }catch(e){console.error('performance target save failed:',e);res.status(500).json({error:'Could not save performance target.'})}
 });
 

@@ -13,3 +13,4 @@ The supplied v126.51.0 source. Existing application files and schema retained; n
 
 ## Validation limits
 Static syntax and package checks are run locally. A live Render deployment and real school database were not available for integration testing. Test in staging before deployment.
+- Follow-up correction: mounted the teacher entry sheet inside the actual Teacher Dashboard page, separate from the administrator's Examination Dashboard review panel. The teacher dashboard now reveals its own target panel for teacher sessions.

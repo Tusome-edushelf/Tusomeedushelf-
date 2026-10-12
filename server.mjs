@@ -3129,8 +3129,24 @@ app.post('/api/schools/exams/:id/publish', requireSchoolMembership, async (req,r
 app.post('/api/schools/exams/:id/approve-publish', requireSchoolMembership, async (req,res)=>{
   try{
     if(req.school.memberRole!=='admin'&&req.user.role!=='admin')return res.status(403).json({error:'School administrator access is required.'});
+    // Never publish an empty or incomplete mark sheet. Count active learners in
+    // the exam's class/stream and require one saved result/status for each.
+    const completeness=await db.query(`
+      SELECT COUNT(sm.user_email)::int AS total,
+             COUNT(m.learner_email)::int AS marked
+      FROM school_exams e
+      JOIN school_memberships sm ON sm.school_id=e.school_id AND sm.class_id=e.class_id
+        AND sm.member_role='learner' AND sm.status='active'
+      LEFT JOIN school_exam_marks m ON m.exam_id=e.exam_id AND m.school_id=e.school_id
+        AND LOWER(m.learner_email)=LOWER(sm.user_email)
+      WHERE e.exam_id=$1 AND e.school_id=$2
+      GROUP BY e.exam_id`,[req.params.id,req.school.schoolId]);
+    if(!completeness.rowCount)return res.status(404).json({error:'Exam not found in this school.'});
+    const total=Number(completeness.rows[0].total||0),marked=Number(completeness.rows[0].marked||0);
+    if(total===0)return res.status(400).json({error:'This class/stream has no active learners. Add learners before publishing results.'});
+    if(marked<total)return res.status(400).json({error:`Mark sheet is incomplete: ${total-marked} of ${total} active learner(s) still need a mark or an X/Y status. Save the complete mark sheet before publishing.`});
     const r=await db.query(`UPDATE school_exams SET approval_status='approved',reviewed_by=$1,reviewed_at=NOW(),review_comment=$2,status='published' WHERE exam_id=$3 AND school_id=$4 AND status<>'published' AND approval_status<>'approved' RETURNING exam_id`,[req.user.email,String(req.body?.comment||'Pre-publication check completed.').slice(0,500),req.params.id,req.school.schoolId]);
-    if(!r.rowCount)return res.status(404).json({error:'Submitted exam not found or is no longer awaiting review.'});
+    if(!r.rowCount)return res.status(409).json({error:'This exam is already approved/published or is no longer available for publication.'});
     res.json({ok:true,message:'Results approved and published by the school administrator.'});
   }catch(e){console.error(e);res.status(500).json({error:'Could not approve and publish exam results.'})}
 });

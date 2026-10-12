@@ -2378,11 +2378,32 @@ async function loadPerformanceTargetsSetup(){
    trm.innerHTML='<option value="">All terms</option>'+terms.map(x=>`<option value="${escHtml(x.termId)}">${escHtml(x.academicYear+' · '+x.termName)}</option>`).join('');if([...cls.options].some(o=>o.value===oldC))cls.value=oldC;if([...trm.options].some(o=>o.value===oldT))trm.value=oldT;
    await loadAdminPerformanceTargetSheets();return;
   }
+  // Use the exact teacher allocation feed used by the exam mark-sheet workflow.
+  // This keeps target-sheet class/stream and subject options in sync with exam entry.
+  let assignedPairs=[];
+  try{
+   const ar=await fetch('/api/teacher/exam-assignments?schoolId='+encodeURIComponent(sid),{credentials:'include',cache:'no-store'});
+   const ad=await parseApiResponse(ar);
+   if(!ar.ok)throw new Error(ad.error||'Could not load your teaching allocations.');
+   assignedPairs=(ad.assignments||[]).filter(x=>x.classId&&x.subjectId);
+  }catch(assignError){
+   throw new Error(assignError.message||'Could not load your teaching allocations.');
+  }
+  const classMap=new Map();
+  assignedPairs.forEach(a=>{const id=String(a.classId);if(!classMap.has(id))classMap.set(id,{classId:id,className:a.className||'',grade:a.grade||'',stream:a.stream||''});});
+  const subjectMap=new Map();
+  assignedPairs.forEach(a=>{const key=String(a.classId)+'|'+String(a.subjectId);if(!subjectMap.has(key))subjectMap.set(key,{subjectId:String(a.subjectId),subjectName:a.subjectName||'',classId:String(a.classId)});});
   const classSel=document.getElementById('targetClass'),termSel=document.getElementById('targetTerm'),subjectSel=document.getElementById('targetSubject'),oldClass=classSel.value,oldTerm=termSel.value,oldSubject=subjectSel.value;
-  classSel.innerHTML='<option value="">Select allocated class / stream</option>'+(d.classes||[]).map(c=>`<option value="${escHtml(c.classId)}">${escHtml([c.className,c.grade,c.stream].filter(Boolean).join(' · '))}</option>`).join('');
+  classSel.innerHTML='<option value="">Select allocated class / stream</option>'+[...classMap.values()].map(c=>`<option value="${escHtml(c.classId)}">${escHtml([c.className,c.grade,c.stream].filter(Boolean).join(' · '))}</option>`).join('');
   termSel.innerHTML='<option value="">Select academic term</option>'+terms.map(x=>`<option value="${escHtml(x.termId)}">${escHtml(x.academicYear+' · '+x.termName)}</option>`).join('');
-  subjectSel.innerHTML='<option value="">Select allocated subject</option>'+(d.subjects||[]).map(x=>`<option value="${escHtml(x.subjectId)}" data-class-id="${escHtml(x.classId||'')}">${escHtml(x.subjectName)}</option>`).join('');
-  if([...classSel.options].some(o=>o.value===oldClass))classSel.value=oldClass;if([...termSel.options].some(o=>o.value===oldTerm))termSel.value=oldTerm;if([...subjectSel.options].some(o=>o.value===oldSubject))subjectSel.value=oldSubject;updateTargetSubjectOptions();
+  subjectSel.innerHTML='<option value="">Select allocated subject</option>'+[...subjectMap.values()].map(x=>`<option value="${escHtml(x.subjectId)}" data-class-id="${escHtml(x.classId)}">${escHtml(x.subjectName)}</option>`).join('');
+  if([...classSel.options].some(o=>o.value===oldClass))classSel.value=oldClass;if([...termSel.options].some(o=>o.value===oldTerm))termSel.value=oldTerm;if([...subjectSel.options].some(o=>o.value===oldSubject))subjectSel.value=oldSubject;
+  updateTargetSubjectOptions();
+  if(!assignedPairs.length){
+   const body=document.getElementById('performanceTargetEntryRows');if(body)body.innerHTML='<tr><td colspan="6">No class and subject allocations were found for this teacher in this school workspace. Ask the school administrator to check Subjects & Teacher Allocation.</td></tr>';
+   const meta=document.getElementById('targetSheetMeta');if(meta)meta.textContent='No teaching allocations found.';
+   return;
+  }
   await loadPerformanceTargets();
  }catch(e){const body=document.getElementById('performanceTargetEntryRows');if(body)body.innerHTML=`<tr><td colspan="6">${escHtml(e.message)}</td></tr>`;const adminBody=document.getElementById('adminPerformanceTargetsRows');if(adminBody)adminBody.innerHTML=`<tr><td colspan="6">${escHtml(e.message)}</td></tr>`}
 }

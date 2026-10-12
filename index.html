@@ -2357,7 +2357,15 @@ function openTeacherPerformanceTargets(){
  loadPerformanceTargetsSetup();
 }
 async function loadPerformanceTargetsSetup(){
- const sid=selectedSchoolId||document.getElementById('schoolWorkspaceSelect')?.value||'';if(!sid)return;
+ let sid=selectedSchoolId||document.getElementById('schoolWorkspaceSelect')?.value||'';
+ if(!sid){sid=await getExamSchool();}
+ if(!sid){
+  const body=document.getElementById('performanceTargetEntryRows');
+  if(body)body.innerHTML='<tr><td colspan="6">No school workspace was found for this teacher account. Ask your school administrator to confirm your teacher membership and allocations, then refresh.</td></tr>';
+  const meta=document.getElementById('targetSheetMeta');if(meta)meta.textContent='Could not find an active school workspace.';
+  return;
+ }
+ selectedSchoolId=sid;
  const role=getSessionRole(),memberRole=window.schoolData?.school?.memberRole||sessionStorage.getItem('tusomeSchoolMemberRole')||'',isAdmin=role==='admin'||memberRole==='admin';
  const panel=document.getElementById(isAdmin?'performanceTargetsPanel':'teacherPerformanceTargetsPanel');if(panel)panel.style.display='block';
  const teacherEntry=document.getElementById('teacherTargetEntryPanel'),adminSheets=document.getElementById('adminTargetSheetsPanel');if(teacherEntry)teacherEntry.style.display=isAdmin?'none':'block';if(adminSheets)adminSheets.style.display=isAdmin?'block':'none';

@@ -2554,8 +2554,40 @@ async function loadLearnerResultsV44(){
 
 let teacherUploadExamRows=[],teacherCsvRows=[];
 async function getExamSchool(){
-  if(selectedSchoolId)return selectedSchoolId;
-  try{const r=await fetch('/api/schools/mine',{credentials:'include'}),d=await parseApiResponse(r);const s=(d.schools||[]).find(x=>['teacher','admin'].includes(x.memberRole));if(s){selectedSchoolId=s.schoolId;return selectedSchoolId}}catch(e){}
+  // A teacher can belong to several school workspaces. Never assume the currently
+  // selected/first workspace is the one that contains their teaching allocations.
+  let schools=[];
+  try{
+    const r=await fetch('/api/schools/mine',{credentials:'include',cache:'no-store'});
+    const d=await parseApiResponse(r);
+    if(!r.ok)throw new Error(d.error||'Could not load school membership.');
+    schools=d.schools||[];
+  }catch(e){return selectedSchoolId||'';}
+  const eligible=schools.filter(x=>['teacher','admin'].includes(String(x.memberRole||'').toLowerCase()));
+  const role=String(getSessionRole()||'').toLowerCase();
+  if(role==='admin'){
+    const chosen=eligible.find(x=>x.schoolId===selectedSchoolId&&String(x.memberRole).toLowerCase()==='admin')
+      ||eligible.find(x=>String(x.memberRole).toLowerCase()==='admin')
+      ||eligible.find(x=>x.schoolId===selectedSchoolId);
+    if(chosen){selectedSchoolId=chosen.schoolId;return selectedSchoolId;}
+  }
+  // Prefer the teacher workspace that actually returns class/subject assignments.
+  const ordered=[...eligible].sort((a,b)=>(a.schoolId===selectedSchoolId?-1:0)-(b.schoolId===selectedSchoolId?-1:0));
+  for(const school of ordered){
+    if(String(school.memberRole||'').toLowerCase()!=='teacher')continue;
+    try{
+      const r=await fetch('/api/teacher/exam-assignments?schoolId='+encodeURIComponent(school.schoolId),{credentials:'include',cache:'no-store'});
+      const d=await parseApiResponse(r);
+      if(r.ok&&(d.assignments||[]).some(x=>x.classId&&x.subjectId)){
+        selectedSchoolId=school.schoolId;
+        return selectedSchoolId;
+      }
+    }catch(e){}
+  }
+  // Keep existing behavior as a fallback so admins/teachers without allocations
+  // still see a useful message rather than losing access to their workspace.
+  const fallback=eligible.find(x=>x.schoolId===selectedSchoolId)||eligible.find(x=>String(x.memberRole).toLowerCase()==='teacher')||eligible[0];
+  if(fallback){selectedSchoolId=fallback.schoolId;return selectedSchoolId;}
   return '';
 }
 function renderExamAdminReview(rows){renderSchoolAdminMarkSheetPanel(rows)}

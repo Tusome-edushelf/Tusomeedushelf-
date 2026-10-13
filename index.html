@@ -2514,7 +2514,29 @@ function renderSchoolAdminMarkSheetPanel(rows){
  const box=document.getElementById('schoolAdminMarkSheetRows');if(!box)return;
  const active=(rows||[]).filter(x=>String(x.status||'').toLowerCase()!=='published');
  if(!active.length){box.innerHTML='<div class="notice">No unpublished mark sheets are available.</div>';return}
- box.innerHTML='<table><thead><tr><th>Exam</th><th>Class</th><th>Subject</th><th>Status</th><th>Actions</th></tr></thead><tbody>'+active.map(x=>`<tr><td><b>${escHtml(x.title||'Exam')}</b></td><td>${escHtml(x.className||'—')}${x.stream?` — ${escHtml(x.stream)}`:''}</td><td>${escHtml(x.subjectName||'—')}</td><td>${escHtml(x.status||'open')} · ${escHtml(x.approvalStatus||'draft')}</td><td><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn" type="button" onclick="loadAdminExamPerformanceAnalysis('${escHtml(x.examId)}')">📊 Quick Analysis</button><button class="btn primary" type="button" onclick="adminEditExam('${escHtml(x.examId)}')">✏️ Edit Mark Sheet</button><button class="btn" type="button" onclick="downloadExamPrePublishPdf('${escHtml(x.examId)}')">📄 Pre-Publish PDF</button><button class="btn primary" type="button" onclick="adminApproveAndPublishExam('${escHtml(x.examId)}')">✅ Approve & Publish</button></div></td></tr>`).join('')+'</tbody></table><div id="adminExamPerformanceAnalysis" class="notice" style="margin-top:12px;display:none"></div>';
+ box.innerHTML='<table><thead><tr><th>Exam</th><th>Class</th><th>Subject</th><th>Status</th><th>Actions</th></tr></thead><tbody>'+active.map(x=>`<tr><td><b>${escHtml(x.title||'Exam')}</b></td><td>${escHtml(x.className||'—')}${x.stream?` — ${escHtml(x.stream)}`:''}</td><td>${escHtml(x.subjectName||'—')}</td><td>${escHtml(x.status||'open')} · ${escHtml(x.approvalStatus||'draft')}</td><td><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn" type="button" onclick="loadAdminExamPerformanceAnalysis('${escHtml(x.examId)}')">📊 Quick Analysis</button><button class="btn" type="button" onclick="downloadAdminExamAnalysisCsv('${escHtml(x.examId)}')">⬇️ Export Results CSV</button><button class="btn primary" type="button" onclick="adminEditExam('${escHtml(x.examId)}')">✏️ Edit Mark Sheet</button><button class="btn" type="button" onclick="downloadExamPrePublishPdf('${escHtml(x.examId)}')">📄 Pre-Publish PDF</button><button class="btn primary" type="button" onclick="adminApproveAndPublishExam('${escHtml(x.examId)}')">✅ Approve & Publish</button></div></td></tr>`).join('')+'</tbody></table><div id="adminExamPerformanceAnalysis" class="notice" style="margin-top:12px;display:none"></div>';
+}
+async function downloadAdminExamAnalysisCsv(examId){
+ try{
+  if(!examId)throw new Error('Choose an exam first.');
+  const r=await fetch('/api/schools/exams/'+encodeURIComponent(examId)+'/marks?schoolId='+encodeURIComponent(selectedSchoolId),{credentials:'include',cache:'no-store'});
+  const d=await parseApiResponse(r);if(!r.ok)throw new Error(d.error||'Could not load exam results.');
+  const ex=d.exam||{},rows=d.rows||[],max=Number(ex.max_marks??ex.maxMarks??0);
+  if(!rows.length)throw new Error('No learners are available in this exam.');
+  const csvCell=v=>{const s=String(v??'');return '"'+s.replace(/"/g,'""')+'"';};
+  const headers=['Exam','Class','Stream','Subject','Learner Name','Admission Number','Learner Email','Marking Status','Marks','Maximum Marks','Percentage','Grade','Follow-up'];
+  const lines=[headers.map(csvCell).join(',')];
+  for(const x of rows){
+   const status=x.markStatus||'present',hasMark=x.marks!==''&&x.marks!=null&&Number.isFinite(Number(x.marks));
+   const pct=status==='present'&&hasMark&&max>0?Number(x.marks)/max*100:null;
+   const follow=status==='absent'?'Absent (X)':status==='irregular'?'Irregularity (Y)':pct!==null&&pct<40?'Below 40%':!hasMark&&status==='present'?'Missing result':'';
+   lines.push([ex.title||'Exam',ex.className||'',ex.stream||'',ex.subjectName||'',x.fullName||'',x.admissionNumber||'',x.learnerEmail||'',status,hasMark?x.marks:'',max||'',pct===null?'':pct.toFixed(1)+'%',x.grade||'',follow].map(csvCell).join(','));
+  }
+  const blob=new Blob(['\uFEFF'+lines.join('\r\n')],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download=(String(ex.title||'exam').replace(/[^a-z0-9_-]+/gi,'_')+'_results.csv');document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
+  showToast?.('Exam results CSV exported.','success');
+ }catch(e){showToast?.(e.message||'Could not export exam results.','error');}
 }
 async function loadAdminExamPerformanceAnalysis(examId){
  const box=document.getElementById('adminExamPerformanceAnalysis');if(!box)return;

@@ -2514,7 +2514,60 @@ function renderSchoolAdminMarkSheetPanel(rows){
  const box=document.getElementById('schoolAdminMarkSheetRows');if(!box)return;
  const active=(rows||[]).filter(x=>String(x.status||'').toLowerCase()!=='published');
  if(!active.length){box.innerHTML='<div class="notice">No unpublished mark sheets are available.</div>';return}
- box.innerHTML='<table><thead><tr><th>Exam</th><th>Class</th><th>Subject</th><th>Status</th><th>Actions</th></tr></thead><tbody>'+active.map(x=>`<tr><td><b>${escHtml(x.title||'Exam')}</b></td><td>${escHtml(x.className||'—')}${x.stream?` — ${escHtml(x.stream)}`:''}</td><td>${escHtml(x.subjectName||'—')}</td><td>${escHtml(x.status||'open')} · ${escHtml(x.approvalStatus||'draft')}</td><td><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn" type="button" onclick="loadAdminExamPerformanceAnalysis('${escHtml(x.examId)}')">📊 Quick Analysis</button><button class="btn" type="button" onclick="downloadAdminExamAnalysisCsv('${escHtml(x.examId)}')">⬇️ Export Results CSV</button><button class="btn primary" type="button" onclick="adminEditExam('${escHtml(x.examId)}')">✏️ Edit Mark Sheet</button><button class="btn" type="button" onclick="downloadExamPrePublishPdf('${escHtml(x.examId)}')">📄 Pre-Publish PDF</button><button class="btn primary" type="button" onclick="adminApproveAndPublishExam('${escHtml(x.examId)}')">✅ Approve & Publish</button></div></td></tr>`).join('')+'</tbody></table><div id="adminExamPerformanceAnalysis" class="notice" style="margin-top:12px;display:none"></div>';
+ const classes=[...new Map((rows||[]).filter(x=>x.classId||x.className).map(x=>[String(x.classId||x.className),{id:x.classId||x.className,name:[x.className||'Class',x.stream].filter(Boolean).join(' — ')}])).values()];
+ const classOptions=classes.map(x=>`<option value="${escHtml(x.id)}">${escHtml(x.name)}</option>`).join('');
+ box.innerHTML='<div class="card" style="margin-bottom:12px"><h3 style="margin-top:0">📑 Consolidated Class Report</h3><p class="small">Combine exams for one class/stream into a learner-by-learner report. Includes totals, average percentage, subject/exam marks and missing results.</p><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><select id="consolidatedReportClass" aria-label="Class or stream">'+classOptions+'</select><button class="btn" type="button" onclick="exportConsolidatedClassReport(\'csv\')">⬇️ Export CSV</button><button class="btn primary" type="button" onclick="exportConsolidatedClassReport(\'pdf\')">📄 Export PDF</button></div></div><table><thead><tr><th>Exam</th><th>Class</th><th>Subject</th><th>Status</th><th>Actions</th></tr></thead><tbody>'+active.map(x=>`<tr><td><b>${escHtml(x.title||'Exam')}</b></td><td>${escHtml(x.className||'—')}${x.stream?` — ${escHtml(x.stream)}`:''}</td><td>${escHtml(x.subjectName||'—')}</td><td>${escHtml(x.status||'open')} · ${escHtml(x.approvalStatus||'draft')}</td><td><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn" type="button" onclick="loadAdminExamPerformanceAnalysis('${escHtml(x.examId)}')">📊 Quick Analysis</button><button class="btn" type="button" onclick="downloadAdminExamAnalysisCsv('${escHtml(x.examId)}')">⬇️ Export Results CSV</button><button class="btn primary" type="button" onclick="adminEditExam('${escHtml(x.examId)}')">✏️ Edit Mark Sheet</button><button class="btn" type="button" onclick="downloadExamPrePublishPdf('${escHtml(x.examId)}')">📄 Pre-Publish PDF</button><button class="btn primary" type="button" onclick="adminApproveAndPublishExam('${escHtml(x.examId)}')">✅ Approve & Publish</button></div></td></tr>`).join('')+'</tbody></table><div id="adminExamPerformanceAnalysis" class="notice" style="margin-top:12px;display:none"></div>';
+}
+async function exportConsolidatedClassReport(format){
+ let printWindow=null;
+ if(format==='pdf')printWindow=window.open('about:blank','_blank');
+ try{
+  const classId=document.getElementById('consolidatedReportClass')?.value;
+  if(!classId)throw new Error('Select a class or stream first.');
+  const er=await fetch('/api/schools/exams?schoolId='+encodeURIComponent(selectedSchoolId),{credentials:'include',cache:'no-store'});
+  const ed=await parseApiResponse(er);if(!er.ok)throw new Error(ed.error||'Could not load exams.');
+  const all=(ed.exams||[]).filter(x=>String(x.classId||x.className)===String(classId));
+  if(!all.length)throw new Error('No exams found for this class or stream.');
+  const results=[];
+  for(const ex of all){
+   const r=await fetch('/api/schools/exams/'+encodeURIComponent(ex.examId)+'/marks?schoolId='+encodeURIComponent(selectedSchoolId),{credentials:'include',cache:'no-store'});
+   const d=await parseApiResponse(r);if(!r.ok)throw new Error(d.error||('Could not load results for '+(ex.title||'exam')));
+   results.push({exam:d.exam||ex,rows:d.rows||[],max:Number((d.exam||ex).max_marks??(d.exam||ex).maxMarks??ex.maxMarks??0)});
+  }
+  const learners=new Map(),examCols=[];
+  for(const item of results){
+   const ex=item.exam;examCols.push({id:ex.examId,title:[ex.subjectName||'Subject',ex.title||'Exam'].join(' — '),max:item.max});
+   for(const x of item.rows){
+    const key=String(x.learnerEmail||x.admissionNumber||x.fullName||'').toLowerCase();if(!key)continue;
+    if(!learners.has(key))learners.set(key,{name:x.fullName||'Learner',admission:x.admissionNumber||'',email:x.learnerEmail||'',marks:{}});
+    const l=learners.get(key),st=x.markStatus||'present',has=st==='present'&&x.marks!==''&&x.marks!=null&&Number.isFinite(Number(x.marks));
+    l.marks[String(ex.examId)]={display:st==='absent'?'X':st==='irregular'?'Y':has?Number(x.marks):'',value:has?Number(x.marks):null,status:st};
+   }
+  }
+  const ordered=[...learners.values()].sort((a,b)=>a.name.localeCompare(b.name));
+  if(!ordered.length)throw new Error('No learner rows were returned for this class.');
+  const reportRows=ordered.map(l=>{
+   let total=0,maxTotal=0,recorded=0;
+   for(const col of examCols){const m=l.marks[String(col.id)];maxTotal+=col.max||0;if(m&&m.value!==null){total+=m.value;recorded++;}}
+   return {...l,total,maxTotal,recorded,average:maxTotal>0?total/maxTotal*100:null};
+  });
+  const classAverage=reportRows.filter(x=>x.average!==null).length?reportRows.filter(x=>x.average!==null).reduce((s,x)=>s+x.average,0)/reportRows.filter(x=>x.average!==null).length:null;
+  const cell=v=>{const s=String(v??'');return '"'+s.replace(/"/g,'""')+'"';};
+  const headers=['Class/Stream','Learner Name','Admission Number','Learner Email',...examCols.map(x=>x.title), 'Total Marks','Total Maximum','Average %','Recorded Exams','Missing Exams'];
+  const data=reportRows.map(l=>[results[0].exam.className||'',l.name,l.admission,l.email,...examCols.map(col=>l.marks[String(col.id)]?.display??''),l.total,l.maxTotal,l.average===null?'':l.average.toFixed(1)+'%',l.recorded,examCols.length-l.recorded]);
+  if(format==='csv'){
+   const lines=[headers,...data].map(row=>row.map(cell).join(','));
+   const blob=new Blob(['\uFEFF'+lines.join('\r\n')],{type:'text/csv;charset=utf-8;'}),url=URL.createObjectURL(blob),a=document.createElement('a');
+   a.href=url;a.download='consolidated_class_report.csv';document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
+   showToast?.('Consolidated class report CSV exported.','success');return;
+  }
+  if(!printWindow)throw new Error('Allow pop-ups to export the PDF report.');
+  const esc=v=>String(v??'').replace(/[&<>"]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]));
+  const tableHead=headers.map(h=>'<th>'+esc(h)+'</th>').join('');
+  const tableRows=data.map(row=>'<tr>'+row.map(v=>'<td>'+esc(v)+'</td>').join('')+'</tr>').join('');
+  printWindow.document.write('<!doctype html><html><head><title>Consolidated Class Report</title><meta charset="utf-8"><style>@page{size:landscape;margin:12mm}body{font:10px Arial,sans-serif;color:#111}h1{font-size:18px}p{font-size:11px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #777;padding:4px;text-align:left}th{background:#eee}tr{break-inside:avoid}.summary{margin:10px 0}</style></head><body><h1>Consolidated Class Report</h1><p>Class/stream: '+esc(results[0].exam.className||classId)+' · School: '+esc(results[0].exam.schoolName||'')+'</p><p>Exams included: '+examCols.length+' · Learners: '+reportRows.length+' · Class mean average: '+(classAverage===null?'—':classAverage.toFixed(1)+'%')+'</p><table><thead><tr>'+tableHead+'</tr></thead><tbody>'+tableRows+'</tbody></table><p>Missing exams are counted where no numeric mark is recorded; X and Y are shown as statuses. Use Print → Save as PDF to save this report.</p><script>window.onload=()=>window.print()<\/script></body></html>');
+  printWindow.document.close();
+ }catch(e){if(printWindow&&!printWindow.closed)printWindow.close();showToast?.(e.message||'Could not create consolidated class report.','error');}
 }
 async function downloadAdminExamAnalysisCsv(examId){
  try{

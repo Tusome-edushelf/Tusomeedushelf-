@@ -156,6 +156,31 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 input,select,textarea{border-color:#d5e3f5;background:#fff;transition:border-color .15s,box-shadow .15s}input:focus,select:focus,textarea:focus{border-color:#2c9bf3;box-shadow:0 0 0 3px #2c9bf31c}
 .notice{background:#fff7df;border:1px solid #ffe6a4}.material{border-bottom-color:#e7eff9}footer{color:#667b99}
 @media(min-width:1100px){.cards{gap:16px}.card{border-radius:18px}}@media(max-width:700px){.container{padding:20px 13px}.card{padding:17px}.hero-copy{padding:30px 22px}.btn{max-width:100%}}@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}button,.btn{transition:none}}</style>
+<style id="tusome-persistent-sidebar">
+/* Persistent app sidebar inspired by the approved TusomeEduShelf dashboard reference */
+body{background:linear-gradient(135deg,#f0f7ff 0%,#f8fbff 60%,#edfaf8 100%)}
+.tusome-app-sidebar{position:fixed;z-index:20;left:0;top:0;bottom:0;width:252px;padding:20px 14px 14px;background:linear-gradient(180deg,#082d60 0%,#07376d 62%,#05264e 100%);color:#fff;display:flex;flex-direction:column;gap:6px;overflow-y:auto;box-shadow:8px 0 28px #082d6018}
+.tusome-sidebar-brand{display:flex;align-items:center;gap:10px;padding:4px 7px 22px;margin-bottom:8px;border-bottom:1px solid #ffffff24}
+.tusome-sidebar-brand img{width:49px;height:49px;object-fit:contain;background:#fff;border-radius:13px;padding:3px}
+.tusome-sidebar-brand b{display:block;font-size:17px;letter-spacing:-.5px;white-space:nowrap}.tusome-sidebar-brand b span{color:#63d9d0}.tusome-sidebar-brand small{display:block;color:#c4ddff;font-size:11px;margin-top:4px}
+.tusome-sidebar-label{font-size:10px;font-weight:800;letter-spacing:1.5px;color:#8eb8e8;padding:13px 10px 5px}
+.tusome-side-link{width:100%;display:flex;align-items:center;gap:12px;text-align:left;padding:11px 12px;border:0;border-radius:10px;color:#e9f3ff;background:transparent;font-size:13px;font-weight:650;cursor:pointer;transition:background .15s,color .15s,transform .15s}
+.tusome-side-link span{width:22px;flex:0 0 22px;text-align:center;font-size:19px;color:#c1ddff}.tusome-side-link:hover,.tusome-side-link.active{background:linear-gradient(100deg,#1680ff,#1470e8);color:#fff;box-shadow:0 5px 15px #0877f63b}.tusome-side-link:hover{transform:translateX(2px)}.tusome-side-link:hover span,.tusome-side-link.active span{color:#fff}
+.tusome-sidebar-spacer{flex:1;min-height:18px}
+.tusome-sidebar-help{padding:15px 13px;background:linear-gradient(145deg,#164f8e,#0c3b72);border:1px solid #ffffff24;border-radius:15px;display:flex;flex-direction:column;gap:7px;margin-top:10px}
+.tusome-help-icon{width:30px;height:30px;display:grid;place-items:center;border-radius:9px;background:#ffffff20;color:#7de4d8;font-size:19px}.tusome-sidebar-help b{font-size:13px}.tusome-sidebar-help small{font-size:11px;line-height:1.5;color:#c4dcf9}.tusome-sidebar-help button{border:0;background:#fff;color:#0c4a91;border-radius:8px;padding:8px 10px;text-align:left;font-size:12px;font-weight:800;cursor:pointer;margin-top:3px}
+.tusome-sidebar-foot{font-size:10px;color:#a8c9ef;padding:15px 5px 2px;text-align:center}.tusome-sidebar-foot span{color:#65d8ce}
+body>header{margin-left:252px;padding-left:26px;padding-right:26px;min-height:76px}
+body>header .logo{display:none}body>header nav{display:flex;align-items:center;gap:5px;flex-wrap:wrap}body>header nav button{font-size:12px;margin-left:0;padding:8px 10px!important}
+#mainContent.container{max-width:none;margin-left:252px;padding:24px 26px 34px;width:auto}
+#mainContent .home-v54{max-width:1600px;margin-left:auto;margin-right:auto}
+#mainContent .page.active{animation:tusomePageIn .22s ease-out}
+@keyframes tusomePageIn{from{opacity:.75;transform:translateY(3px)}to{opacity:1;transform:translateY(0)}}
+@media(max-width:1100px){.tusome-app-sidebar{width:220px;padding-left:10px;padding-right:10px}body>header{margin-left:220px;padding:12px 14px}#mainContent.container{margin-left:220px;padding:18px 16px 28px}body>header nav button{font-size:11px;padding:7px!important}.tusome-sidebar-brand b{font-size:15px}}
+@media(max-width:760px){.tusome-app-sidebar{width:66px;padding:12px 7px;align-items:center}.tusome-sidebar-brand{padding:2px 0 14px;justify-content:center;border-bottom:1px solid #ffffff24;width:100%}.tusome-sidebar-brand img{width:43px;height:43px}.tusome-sidebar-brand>div,.tusome-sidebar-label,.tusome-side-link:not(.active){font-size:0}.tusome-sidebar-brand>div,.tusome-sidebar-label,.tusome-sidebar-help,.tusome-sidebar-foot{display:none}.tusome-side-link{justify-content:center;padding:12px 0;gap:0;font-size:0}.tusome-side-link span{font-size:21px;flex:0 0 auto;width:auto}.tusome-sidebar-spacer{min-height:8px}body>header{margin-left:66px;min-height:68px;padding:10px 10px;justify-content:flex-end}body>header nav{gap:3px}body>header nav button{font-size:10px;padding:6px 7px!important}#mainContent.container{margin-left:66px;padding:15px 10px 24px}.container{max-width:none}.hero-grid{grid-template-columns:1fr}.hero-visual{min-height:210px;max-height:260px}.hero-copy{padding:24px 20px}.hero-copy h1{font-size:30px}}
+@media(max-width:430px){body>header nav button:nth-child(n+5){display:none}#mainContent.container{padding-left:8px;padding-right:8px}.tusome-side-link{border-radius:9px}}
+@media(prefers-reduced-motion:reduce){#mainContent .page.active{animation:none}.tusome-side-link{transition:none}}
+</style>
 </head>
 <body>
 <div id="tusomeToastRegion" aria-live="polite" aria-atomic="false"></div>
@@ -171,6 +196,25 @@ input,select,textarea{border-color:#d5e3f5;background:#fff;transition:border-col
   </nav>
 </header>
 
+
+<aside id="tusomeAppSidebar" class="tusome-app-sidebar" aria-label="Main navigation">
+  <div class="tusome-sidebar-brand"><img src="tusome-logo.png" alt=""><div><b>Tusome<span>EduShelf</span></b><small>Learn · Assess · Grow</small></div></div>
+  <div class="tusome-sidebar-label">WORKSPACE</div>
+  <button class="tusome-side-link active" type="button" onclick="show('home')"><span>⌂</span> Home</button>
+  <button class="tusome-side-link" type="button" onclick="openSchoolDashboard()"><span>▦</span> School Management</button>
+  <button class="tusome-side-link" type="button" onclick="show('teacher')"><span>♙</span> Teacher Dashboard</button>
+  <button class="tusome-side-link" type="button" onclick="show('learner')"><span>♧</span> Learner Dashboard</button>
+  <button class="tusome-side-link" type="button" onclick="show('admin')"><span>▣</span> Administration</button>
+  <div class="tusome-sidebar-label">TEACHING & LEARNING</div>
+  <button class="tusome-side-link" type="button" onclick="show('exams')"><span>☷</span> Exams & Results</button>
+  <button class="tusome-side-link" type="button" onclick="show('digitalLibrary')"><span>▤</span> Learning Resources</button>
+  <button class="tusome-side-link" type="button" onclick="show('progress')"><span>◔</span> Progress & Reports</button>
+  <button class="tusome-side-link" type="button" onclick="show('timetable')"><span>▦</span> Timetable</button>
+  <button class="tusome-side-link" type="button" onclick="show('attendance')"><span>✓</span> Attendance</button>
+  <div class="tusome-sidebar-spacer"></div>
+  <div class="tusome-sidebar-help"><div class="tusome-help-icon">✦</div><b>Need a hand?</b><small>Find guidance and support.</small><button type="button" onclick="show('help')">Help & Support →</button></div>
+  <div class="tusome-sidebar-foot">TusomeEduShelf <span>•</span> Learn · Assess · Grow</div>
+</aside>
 <div id="accessibilityPanel" class="a11y-panel" role="dialog" aria-label="Accessibility and display settings">
   <button class="a11y-close" type="button" onclick="toggleAccessibilityPanel()" aria-label="Close accessibility settings">✕</button>
   <h3>Accessibility & Display</h3><p class="small">Choose settings that make Tusome EduShelf easier to read and use. Your choices are saved on this device.</p>

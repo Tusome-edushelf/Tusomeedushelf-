@@ -2357,8 +2357,10 @@ function openTeacherPerformanceTargets(){
  loadPerformanceTargetsSetup();
 }
 async function loadPerformanceTargetsSetup(){
- let sid=selectedSchoolId||document.getElementById('schoolWorkspaceSelect')?.value||'';
- if(!sid){sid=await getExamSchool();}
+ // Revalidate the workspace each time: selectedSchoolId may be stale or may point
+ // at one of the teacher's other memberships with no class/subject allocations.
+ let sid=await getExamSchool();
+ if(!sid){sid=document.getElementById('schoolWorkspaceSelect')?.value||'';}
  if(!sid){
   const body=document.getElementById('performanceTargetEntryRows');
   if(body)body.innerHTML='<tr><td colspan="6">No school workspace was found for this teacher account. Ask your school administrator to confirm your teacher membership and allocations, then refresh.</td></tr>';

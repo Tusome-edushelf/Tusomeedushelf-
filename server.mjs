@@ -3103,34 +3103,56 @@ app.get('/api/schools/exams/:id/marks', requireSchoolMembership, async (req,res)
   }catch(e){console.error(e);res.status(500).json({error:'Could not load exam marks.'})}
 });
 app.post('/api/schools/exams/:id/marks', requireSchoolMembership, async (req,res)=>{
+  let client;
   try{
     let ex=await teacherExamAssignment(req,req.params.id);if(!ex)return res.status(404).json({error:'Exam not found.'});
     const isAdmin=req.school.memberRole==='admin'||req.user.role==='admin';
     if(!isAdmin && !(await assertTeacherCanAccessExam(req,ex)))return res.status(403).json({error:'You are not assigned to this class and subject.'});
     if(ex.status==='published'||ex.approval_status==='approved')return res.status(409).json({error:'This exam is already approved or published and cannot be edited.'});
     const rows=Array.isArray(req.body?.rows)?req.body.rows:[];if(!rows.length)return res.status(400).json({error:'No learner results were supplied.'});
-    const suppliedMax=Number(req.body?.maxMarks);if(req.school.memberRole==='teacher' && (!Number.isFinite(suppliedMax)||suppliedMax<=0||suppliedMax>1000))return res.status(400).json({error:'Set the maximum marks (1–1000) before saving results.'});
-    if(Number.isFinite(suppliedMax)&&suppliedMax>0&&suppliedMax<=1000){await db.query(`UPDATE school_exams SET max_marks=$1 WHERE exam_id=$2 AND school_id=$3`,[suppliedMax,req.params.id,req.school.schoolId]);ex=await teacherExamAssignment(req,req.params.id);}
-    const maxMarks=Number(ex.max_marks);
-    const roster=await db.query(`SELECT user_email FROM school_memberships WHERE school_id=$1 AND class_id=$2 AND member_role='learner' AND status='active'`,[req.school.schoolId,ex.class_id]);
+    if(rows.length>1000)return res.status(400).json({error:'A mark sheet cannot contain more than 1,000 learners.'});
+    const hasSuppliedMax=req.body?.maxMarks!==undefined&&req.body?.maxMarks!==null&&req.body?.maxMarks!=='';
+    const suppliedMax=hasSuppliedMax?Number(req.body.maxMarks):null;
+    if(req.school.memberRole==='teacher'&&(!Number.isFinite(suppliedMax)||suppliedMax<=0||suppliedMax>1000))return res.status(400).json({error:'Set the maximum marks (1–1000) before saving results.'});
+    if(hasSuppliedMax&&(!Number.isFinite(suppliedMax)||suppliedMax<=0||suppliedMax>1000))return res.status(400).json({error:'Maximum marks must be between 1 and 1,000.'});
+    const maxMarks=hasSuppliedMax?suppliedMax:Number(ex.max_marks);
+    if(!Number.isFinite(maxMarks)||maxMarks<=0)return res.status(400).json({error:'Set a valid maximum mark before saving results.'});
+
+    client=await db.connect();
+    await client.query('BEGIN');
+    const roster=await client.query(`SELECT user_email FROM school_memberships WHERE school_id=$1 AND class_id=$2 AND member_role='learner' AND status='active'`,[req.school.schoolId,ex.class_id]);
     const allowedLearners=new Set(roster.rows.map(x=>String(x.user_email).toLowerCase()));
+    const seen=new Set();
+    const prepared=[];
     for(const x of rows){
-      const email=String(x.learnerEmail||'').trim();if(!allowedLearners.has(email.toLowerCase()))return res.status(400).json({error:`Learner ${email||'(blank)'} is not in this class/stream.`});
-      const markStatus=['present','absent','irregular'].includes(String(x.markStatus||'present'))?String(x.markStatus||'present'):'present';
+      const email=String(x.learnerEmail||'').trim(),key=email.toLowerCase();
+      if(!email||!allowedLearners.has(key)){await client.query('ROLLBACK');return res.status(400).json({error:`Learner ${email||'(blank)'} is not in this class/stream.`});}
+      if(seen.has(key)){await client.query('ROLLBACK');return res.status(400).json({error:`Learner ${email} appears more than once in this mark sheet.`});}
+      seen.add(key);
+      const markStatus=String(x.markStatus||'present');
+      if(!['present','absent','irregular'].includes(markStatus)){await client.query('ROLLBACK');return res.status(400).json({error:`Invalid marking status for ${email}. Select Present, X or Y.`});}
       const rawMarks=x.marks===''||x.marks==null?null:Number(x.marks);
-      if(markStatus!=='present' && rawMarks!==null)return res.status(400).json({error:`Do not enter marks for ${email} when X or Y is selected.`});
-      if(markStatus==='present' && rawMarks!==null&&(!Number.isFinite(rawMarks)||rawMarks<0||rawMarks>maxMarks))return res.status(400).json({error:`Marks for ${email} must be between 0 and ${ex.max_marks}.`});
-      if(markStatus==='present' && rawMarks===null)return res.status(400).json({error:`Enter marks for ${email}, or select X/Y.`});
-      const percent=markStatus==='present'&&rawMarks!==null&&Number(ex.max_marks)>0?(rawMarks/Number(ex.max_marks))*100:null;
+      if(markStatus!=='present'&&rawMarks!==null){await client.query('ROLLBACK');return res.status(400).json({error:`Do not enter marks for ${email} when X or Y is selected.`});}
+      if(markStatus==='present'&&(rawMarks===null||!Number.isFinite(rawMarks)||rawMarks<0||rawMarks>maxMarks)){await client.query('ROLLBACK');return res.status(400).json({error:`Marks for ${email} must be between 0 and ${maxMarks}, or select X/Y.`});}
+      const percent=markStatus==='present'&&rawMarks!==null?(rawMarks/maxMarks)*100:null;
       const grade=percent===null?'':(percent>=80?'EE':percent>=60?'ME':percent>=40?'AE':'BE');
       const suppliedComment=String(x.comment||'').trim();
       const autoComment=markStatus==='absent'?'Learner did not sit the examination. Follow-up is required.':markStatus==='irregular'?'Examination irregularity recorded. Follow the school examination procedure.':percent>=80?'Excellent performance. Keep up the strong work.':percent>=70?'Very good performance. Continue practising to maintain this level.':percent>=60?'Good performance. More revision can strengthen the result.':percent>=50?'Fair effort. Regular revision and practice are recommended.':percent>=40?'Developing understanding. Additional support and revision are recommended.':'Additional support and focused revision are recommended.';
-      const comment=suppliedComment||autoComment;
-      const id='mark_'+Date.now()+'_'+Math.random().toString(36).slice(2,8);
-      await db.query(`INSERT INTO school_exam_marks(mark_id,exam_id,school_id,learner_email,marks,grade,comment,mark_status,entered_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(exam_id,learner_email) DO UPDATE SET marks=EXCLUDED.marks,grade=EXCLUDED.grade,comment=EXCLUDED.comment,mark_status=EXCLUDED.mark_status,entered_by=EXCLUDED.entered_by,updated_at=NOW()`,[id,req.params.id,req.school.schoolId,email,markStatus==='present'?rawMarks:null,grade,comment,markStatus,req.user.email]);
+      prepared.push({email,markStatus,rawMarks,grade,comment:suppliedComment||autoComment});
     }
-    res.json({ok:true,message:`Saved ${rows.length} learner result(s).`});
-  }catch(e){console.error(e);res.status(500).json({error:'Could not save learner results.'})}
+    if(hasSuppliedMax){
+      await client.query(`UPDATE school_exams SET max_marks=$1 WHERE exam_id=$2 AND school_id=$3`,[maxMarks,req.params.id,req.school.schoolId]);
+    }
+    for(const x of prepared){
+      const id='mark_'+Date.now()+'_'+Math.random().toString(36).slice(2,8);
+      await client.query(`INSERT INTO school_exam_marks(mark_id,exam_id,school_id,learner_email,marks,grade,comment,mark_status,entered_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(exam_id,learner_email) DO UPDATE SET marks=EXCLUDED.marks,grade=EXCLUDED.grade,comment=EXCLUDED.comment,mark_status=EXCLUDED.mark_status,entered_by=EXCLUDED.entered_by,updated_at=NOW()`,[id,req.params.id,req.school.schoolId,x.email,x.markStatus==='present'?x.rawMarks:null,x.grade,x.comment,x.markStatus,req.user.email]);
+    }
+    await client.query('COMMIT');
+    res.json({ok:true,message:`Saved ${prepared.length} learner result(s).`});
+  }catch(e){
+    if(client)try{await client.query('ROLLBACK')}catch{}
+    console.error(e);res.status(500).json({error:'Could not save learner results.'});
+  }finally{if(client)client.release();}
 });
 app.post('/api/schools/exams/:id/submit', requireSchoolMembership, async (req,res)=>{
   res.status(410).json({error:'Submission is no longer required. Saving the mark sheet automatically makes it available for school administration.'});

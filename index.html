@@ -204,6 +204,7 @@ body.tusome-sidebar-open .tusome-sidebar-backdrop{opacity:1;visibility:visible}
 <a class="skip-link" href="#mainContent">Skip to main content</a>
 <header>
   <div class="logo"><img class="brand-logo" src="tusome-logo.png" alt="Tusome EduShelf — Learn, Manage, Succeed"></div>
+  <button id="tusomeSidebarToggle" type="button" aria-expanded="false" aria-controls="tusomeAppSidebar" onclick="toggleTusomeSidebar()"><span class="tusome-toggle-icon" aria-hidden="true">☰</span><span>Menu</span></button>
   <nav>
     <button onclick="show('home')">Home</button>
     <button class="nav-auth" onclick="show('help')">❓ Help</button><button id="notificationNav" class="nav-auth nav-notify" onclick="show('notifications')" aria-label="Notifications">🔔 <span id="notificationNavCount" class="notify-count" aria-live="polite">0</span></button><button id="schoolDashboardNav" class="nav-auth" onclick="show('schoolDashboard')" style="display:none">🏫 School Dashboard</button><button class="nav-auth" onclick="show('account')">👤 Account</button><button class="nav-auth a11y-toggle" onclick="toggleAccessibilityPanel()" aria-expanded="false" aria-controls="accessibilityPanel">⚙️ Accessibility</button>
@@ -214,8 +215,7 @@ body.tusome-sidebar-open .tusome-sidebar-backdrop{opacity:1;visibility:visible}
 </header>
 
 
-<button id="tusomeSidebarToggle" type="button" aria-expanded="false" aria-controls="tusomeAppSidebar" onclick="toggleTusomeSidebar()"><span class="tusome-toggle-icon" aria-hidden="true">☰</span><span>Menu</span></button>
-  <div id="tusomeSidebarBackdrop" class="tusome-sidebar-backdrop" aria-hidden="true" onclick="closeTusomeSidebar()"></div>
+<div id="tusomeSidebarBackdrop" class="tusome-sidebar-backdrop" aria-hidden="true" onclick="closeTusomeSidebar()"></div>
 <aside id="tusomeAppSidebar" class="tusome-app-sidebar" aria-label="Main navigation">
   <div class="tusome-sidebar-brand"><img src="tusome-logo.png" alt=""><div><b>Tusome<span>EduShelf</span></b><small>Learn · Assess · Grow</small></div></div>
   <div class="tusome-sidebar-label">WORKSPACE</div>

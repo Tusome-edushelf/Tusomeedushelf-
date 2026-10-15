@@ -2619,7 +2619,7 @@ function renderSchoolAdminMarkSheetPanel(rows){
  const active=(rows||[]).filter(x=>String(x.status||'').toLowerCase()!=='published');
  const classes=[...new Map((rows||[]).filter(x=>x.classId||x.className).map(x=>[String(x.classId||x.className),{id:x.classId||x.className,name:[x.className||'Class',x.stream].filter(Boolean).join(' — ')}])).values()];
  const classOptions=classes.map(x=>`<option value="${escHtml(x.id)}">${escHtml(x.name)}</option>`).join('');
- box.innerHTML='<div class="card" style="margin-bottom:12px"><h3 style="margin-top:0">📑 Consolidated Class Report</h3><p class="small">Combine exams for one class/stream into a learner-by-learner report. Includes totals, average percentage, subject/exam marks and missing results.</p><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><select id="consolidatedReportClass" aria-label="Class or stream">'+classOptions+'</select><button class="btn" type="button" onclick="exportConsolidatedClassReport(\'csv\')">⬇️ Export CSV</button><button class="btn primary" type="button" onclick="exportConsolidatedClassReport(\'pdf\')">📄 Export PDF</button></div></div>'+(active.length?'':'<div class="notice" style="margin-bottom:10px">No unpublished mark sheets are available.</div>')+'<table><thead><tr><th>Exam</th><th>Class</th><th>Subject</th><th>Status</th><th>Actions</th></tr></thead><tbody>'+active.map(x=>`<tr><td><b>${escHtml(x.title||'Exam')}</b></td><td>${escHtml(x.className||'—')}${x.stream?` — ${escHtml(x.stream)}`:''}</td><td>${escHtml(x.subjectName||'—')}</td><td>${escHtml(x.status||'open')} · ${escHtml(x.approvalStatus||'draft')}</td><td><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn" type="button" onclick="loadAdminExamPerformanceAnalysis('${escHtml(x.examId)}')">📊 Quick Analysis</button><button class="btn" type="button" onclick="downloadAdminExamAnalysisCsv('${escHtml(x.examId)}')">⬇️ Export Results CSV</button><button class="btn primary" type="button" onclick="adminEditExam('${escHtml(x.examId)}')">✏️ Edit Mark Sheet</button><button class="btn" type="button" onclick="downloadExamPrePublishPdf('${escHtml(x.examId)}')">📄 Pre-Publish PDF</button><button class="btn primary" type="button" onclick="adminApproveAndPublishExam('${escHtml(x.examId)}')">✅ Approve & Publish</button></div></td></tr>`).join('')+(active.length?'':'<tr><td colspan="5">No unpublished exams.</td></tr>')+'</tbody></table><div id="adminExamPerformanceAnalysis" class="notice" style="margin-top:12px;display:none"></div>';
+ box.innerHTML='<div class="card" style="margin-bottom:12px"><h3 style="margin-top:0">📑 Consolidated Class Report</h3><p class="small">Combine exams for one class/stream into a learner-by-learner report. Includes totals, average percentage, subject/exam marks and missing results.</p><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><select id="consolidatedReportClass" aria-label="Class or stream">'+classOptions+'</select><button class="btn" type="button" onclick="exportConsolidatedClassReport(\'csv\')">⬇️ Export CSV</button><button class="btn primary" type="button" onclick="exportConsolidatedClassReport(\'pdf\')">📄 Export PDF</button></div></div>'+(active.length?'':'<div class="notice" style="margin-bottom:10px">No unpublished mark sheets are available.</div>')+'<table><thead><tr><th>Exam</th><th>Class</th><th>Subject</th><th>Status</th><th>Actions</th></tr></thead><tbody>'+active.map(x=>`<tr><td><b>${escHtml(x.title||'Exam')}</b></td><td>${escHtml(x.className||'—')}${x.stream?` — ${escHtml(x.stream)}`:''}</td><td>${escHtml(x.subjectName||'—')}</td><td>${escHtml(x.status||'open')} · ${escHtml(x.approvalStatus||'draft')}</td><td><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn" type="button" onclick="loadAdminExamPerformanceAnalysis('${escHtml(x.examId)}')">📊 Quick Analysis</button><button class="btn" type="button" onclick="downloadAdminExamAnalysisCsv('${escHtml(x.examId)}')">⬇️ Export Results CSV</button><button class="btn primary" type="button" onclick="adminEditExam('${escHtml(x.examId)}')">✏️ Edit Mark Sheet</button><button class="btn" type="button" onclick="downloadExamPrePublishPdf('${escHtml(x.examId)}')">📄 Pre-Publish PDF</button><button class="btn" type="button" onclick="downloadExamConsolidatedCsv('${escHtml(x.examId)}')">📊 Export CSV</button><button class="btn primary" type="button" onclick="adminApproveAndPublishExam('${escHtml(x.examId)}')">✅ Approve & Publish</button></div></td></tr>`).join('')+(active.length?'':'<tr><td colspan="5">No unpublished exams.</td></tr>')+'</tbody></table><div id="adminExamPerformanceAnalysis" class="notice" style="margin-top:12px;display:none"></div>';
 }
 async function exportConsolidatedClassReport(format){
  let printWindow=null;
@@ -3012,6 +3012,67 @@ async function loadTeacherExamResultsCentre(){
   }catch(e){notice.textContent=e.message;notice.style.display='block';box.innerHTML=`<tr><td colspan="6">${escHtml(e.message)}</td></tr>`}
 }
 async function loadTeacherUploadExam(){const id=document.getElementById('teacherUploadExam')?.value;if(!id)return;try{const r=await fetch('/api/schools/exams/'+encodeURIComponent(id)+'/marks?schoolId='+encodeURIComponent(selectedSchoolId),{credentials:'include'}),d=await parseApiResponse(r);if(!r.ok)throw new Error(d.error||'Could not load exam learners.');window.teacherUploadExam=d.exam;window.teacherUploadRoster=d.rows||[];const maxInput=document.getElementById('teacherExamMaxMarks');if(maxInput)maxInput.value=d.exam.max_marks??d.exam.maxMarks??'';const saved=(d.rows||[]).filter(x=>(x.marks!==''&&x.marks!=null)||['absent','irregular'].includes(x.markStatus)).length;document.getElementById('teacherResultsUploadStatus').textContent=`${d.exam.title} · ${(d.rows||[]).length} learners · ${saved} saved result(s). Maximum marks are loaded from this exam; review before saving.`;renderTeacherMarksGrid(d.rows||[],d.exam)}catch(e){document.getElementById('teacherResultsUploadStatus').textContent=e.message}}
+async function downloadExamConsolidatedCsv(examId){
+ try{
+  if(!examId)throw new Error('Exam is required.');
+  const base=await fetch('/api/schools/exams/'+encodeURIComponent(examId)+'/marks?schoolId='+encodeURIComponent(selectedSchoolId),{credentials:'include',cache:'no-store'});
+  const first=await parseApiResponse(base);if(!base.ok)throw new Error(first.error||'Could not load the mark sheet.');
+  const anchor=first.exam||{};
+  const all=await fetch('/api/schools/exams?schoolId='+encodeURIComponent(selectedSchoolId),{credentials:'include',cache:'no-store'});
+  const allData=await parseApiResponse(all);if(!all.ok)throw new Error(allData.error||'Could not load examination subjects.');
+  const classId=anchor.class_id||anchor.classId;
+  const exams=(allData.exams||[]).filter(x=>String(x.classId)===String(classId));
+  const same=exams.filter(x=>String(x.title||'').trim()===String(anchor.title||'').trim());
+  const selected=(same.length?same:exams).filter(x=>String(x.status||'').toLowerCase()!=='published');
+  const unique=[...new Map(selected.map(x=>[String(x.examId),x])).values()];
+  if(!unique.length)throw new Error('No unpublished subjects were found for this class/stream.');
+  const details=new Map();
+  for(const ex of unique){
+   const response=await fetch('/api/schools/exams/'+encodeURIComponent(ex.examId)+'/marks?schoolId='+encodeURIComponent(selectedSchoolId),{credentials:'include',cache:'no-store'});
+   const data=await parseApiResponse(response);if(!response.ok)throw new Error(data.error||('Could not load '+(ex.subjectName||'subject')+' results.'));
+   details.set(String(ex.examId),data);
+  }
+  const subjects=unique.map(ex=>({id:String(ex.examId),name:ex.subjectName||details.get(String(ex.examId))?.exam?.subjectName||'Subject',max:Number(ex.maxMarks??details.get(String(ex.examId))?.exam?.max_marks??0)}));
+  const learnerMap=new Map();
+  for(const subject of subjects){
+   for(const row of details.get(subject.id)?.rows||[]){
+    const email=String(row.learnerEmail||'').trim(),key=email.toLowerCase();
+    if(!key)continue;
+    if(!learnerMap.has(key))learnerMap.set(key,{name:row.fullName||'Learner',admission:row.admissionNumber||'',email,marks:{}});
+    learnerMap.get(key).marks[subject.id]={status:row.markStatus||'present',marks:row.marks??'',grade:row.grade||''};
+   }
+  }
+  const learners=[...learnerMap.values()].sort((a,b)=>String(a.name).localeCompare(String(b.name),undefined,{sensitivity:'base'}));
+  if(!learners.length)throw new Error('No learner results are available for this class/stream.');
+  const csvCell=value=>{let s=String(value??'');if(/^[=+@]/.test(s)||/^\s*[-]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""').replace(/\r?\n/g,' ')+'"';};
+  const headers=['No.','Learner Name','Admission Number','Learner Email',...subjects.flatMap(s=>[s.name+' Mark / '+s.max,s.name+' Grade',s.name+' Status']), 'Mean Percentage'];
+  const lines=[headers.map(csvCell).join(',')];
+  learners.forEach((learner,index)=>{
+   let sum=0,count=0;
+   const subjectCells=subjects.flatMap(subject=>{
+    const result=learner.marks[subject.id]||{},status=result.status||'missing';
+    const valid=status==='present'&&result.marks!==''&&result.marks!=null&&Number.isFinite(Number(result.marks))&&subject.max>0;
+    if(valid){sum+=Number(result.marks)/subject.max*100;count++;}
+    return [valid?result.marks:'',valid?(result.grade||''):'',status==='absent'?'X':status==='irregular'?'Y':status==='present'?(valid?'Present':'Missing mark'):'Missing result'];
+   });
+   const mean=count?((sum/count).toFixed(1)+'%'):'';
+   lines.push([index+1,learner.name,learner.admission,learner.email,...subjectCells,mean].map(csvCell).join(','));
+  });
+  lines.push('');
+  lines.push(['Report','Consolidated pre-publication exam report'].map(csvCell).join(','));
+  lines.push(['Exam',anchor.title||'Examination'].map(csvCell).join(','));
+  lines.push(['Class',anchor.className||''].map(csvCell).join(','));
+  lines.push(['Stream',anchor.stream||''].map(csvCell).join(','));
+  lines.push(['Date',anchor.examDate||''].map(csvCell).join(','));
+  lines.push(['Note','Export contains saved marks only. Missing results are blank and are not treated as zero. X = absent; Y = irregularity.'].map(csvCell).join(','));
+  const blob=new Blob(['\uFEFF'+lines.join('\r\n')],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob),link=document.createElement('a');
+  const safe=(anchor.title||'exam-report').replace(/[^a-z0-9_-]+/gi,'-').replace(/^-+|-+$/g,'')||'exam-report';
+  link.href=url;link.download=safe+'-consolidated-results.csv';document.body.appendChild(link);link.click();link.remove();URL.revokeObjectURL(url);
+  showToast?.('Consolidated spreadsheet report downloaded.','success');
+ }catch(e){showToast?.(e.message||'Could not export the consolidated report.','error');}
+}
+
 function sortTeacherRoster(rows,mode){const a=[...(rows||[])];if(mode==='admission')return a.sort((x,y)=>String(x.admissionNumber||'').localeCompare(String(y.admissionNumber||''),undefined,{numeric:true,sensitivity:'base'})||String(x.fullName||'').localeCompare(String(y.fullName||''),undefined,{sensitivity:'base'}));return a.sort((x,y)=>String(x.fullName||x.learnerEmail||'').localeCompare(String(y.fullName||y.learnerEmail||''),undefined,{sensitivity:'base'})||String(x.admissionNumber||'').localeCompare(String(y.admissionNumber||''),undefined,{numeric:true,sensitivity:'base'}))}
 function renderTeacherMarksGrid(rows,exam){const box=document.getElementById('teacherResultsCsvPreview');if(!box)return;const max=Number(document.getElementById('teacherExamMaxMarks')?.value||0);const mode=document.getElementById('teacherLearnerSort')?.value||'name';const displayRows=sortTeacherRoster(rows,mode);window.teacherUploadDisplayRoster=displayRows;box.innerHTML='<h4>Online Mark Sheet</h4><p class="small">Learners are shown by name. <b>X</b> means did not do/sit the exam. <b>Y</b> means exam irregularity. Select Present to enter a mark. Automatic feedback is generated after saving.</p><table><thead><tr><th>#</th><th>Learner Name</th><th>Admission No.</th><th>Status</th><th>Marks / '+(max>0?escHtml(max):'Max')+'</th><th>Grade</th></tr></thead><tbody>'+displayRows.map((x,i)=>{const status=x.markStatus||'present';const marks=status==='present'?(x.marks??''):'';return `<tr data-mark-index="${i}"><td>${i+1}</td><td><b>${escHtml(x.fullName||'Learner')}</b></td><td>${escHtml(x.admissionNumber||'—')}</td><td><select class="tm-status" onchange="toggleTeacherMarkRow(this)"><option value="present" ${status==='present'?'selected':''}>Present</option><option value="absent" ${status==='absent'?'selected':''}>X — Did not do exam</option><option value="irregular" ${status==='irregular'?'selected':''}>Y — Exam irregularity</option></select></td><td><input type="number" min="0" max="${max>0?escHtml(max):1000}" step="0.01" value="${escHtml(marks)}" class="tm-mark" ${status!=='present'?'disabled':''} aria-label="Marks for ${escHtml(x.fullName||x.learnerEmail||'learner')}"></td><td class="tm-grade">${escHtml(x.grade||'—')}</td></tr>`}).join('')+'</tbody></table>'}
 function updateTeacherMaxMarksHint(){if(window.teacherUploadRoster&&window.teacherUploadExam)renderTeacherMarksGrid(window.teacherUploadRoster,window.teacherUploadExam);}

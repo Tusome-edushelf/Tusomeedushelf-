@@ -2650,16 +2650,23 @@ async function exportConsolidatedClassReport(format){
   const ordered=[...learners.values()].sort((a,b)=>a.name.localeCompare(b.name));
   if(!ordered.length)throw new Error('No learner rows were returned for this class.');
   const reportRows=ordered.map(l=>{
-   let total=0,maxTotal=0,recorded=0;
-   for(const col of examCols){const m=l.marks[String(col.id)];maxTotal+=col.max||0;if(m&&(m.value!==null||m.status==='absent'||m.status==='irregular'))recorded++;if(m&&m.value!==null)total+=m.value;}
-   return {...l,total,maxTotal,recorded,average:maxTotal>0?total/maxTotal*100:null};
+   let total=0,maxTotal=0,present=0,absent=0,irregular=0,missing=0;
+   for(const col of examCols){
+    const m=l.marks[String(col.id)];maxTotal+=col.max||0;
+    if(m?.status==='absent')absent++;
+    else if(m?.status==='irregular')irregular++;
+    else if(m?.status==='present'&&m.value!==null){present++;total+=m.value;}
+    else missing++;
+   }
+   return {...l,total,maxTotal,present,absent,irregular,missing,average:maxTotal>0?total/maxTotal*100:null};
   });
-  const classAverage=reportRows.filter(x=>x.average!==null).length?reportRows.filter(x=>x.average!==null).reduce((s,x)=>s+x.average,0)/reportRows.filter(x=>x.average!==null).length:null;
-  const cell=v=>{const s=String(v??'');return '"'+s.replace(/"/g,'""')+'"';};
-  const headers=['Class/Stream','Learner Name','Admission Number','Learner Email',...examCols.map(x=>x.title), 'Total Marks','Total Maximum','Average %','Recorded Exams','Missing Exams'];
-  const data=reportRows.map(l=>[results[0].exam.className||'',l.name,l.admission,l.email,...examCols.map(col=>l.marks[String(col.id)]?.display??''),l.total,l.maxTotal,l.average===null?'':l.average.toFixed(1)+'%',l.recorded,examCols.length-l.recorded]);
+  const withAverage=reportRows.filter(x=>x.average!==null);
+  const classAverage=withAverage.length?withAverage.reduce((s,x)=>s+x.average,0)/withAverage.length:null;
+  const cell=v=>{let s=String(v??'');if(/^[\\s]*[=+@-]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""').replace(/\\r?\\n/g,' ')+'"';};
+  const headers=['Class/Stream','Learner Name','Admission Number','Learner Email',...examCols.map(x=>x.title), 'Total Marks','Total Maximum','Average %','Present Exams','Absent (X)','Irregularity (Y)','Missing Exams'];
+  const data=reportRows.map(l=>[results[0].exam.className||'',l.name,l.admission,l.email,...examCols.map(col=>l.marks[String(col.id)]?.display??''),l.total,l.maxTotal,l.average===null?'':l.average.toFixed(1)+'%',l.present,l.absent,l.irregular,l.missing]);
   if(format==='csv'){
-   const lines=[headers,...data].map(row=>row.map(cell).join(','));
+   const lines=[headers,...data,[],['Report Summary','Value'],['Class/Stream',results[0].exam.className||classId],['Exams included',examCols.length],['Learners',reportRows.length],['Class mean average',classAverage===null?'—':classAverage.toFixed(1)+'%'],['Present exam entries',reportRows.reduce((n,x)=>n+x.present,0)],['Absent entries (X)',reportRows.reduce((n,x)=>n+x.absent,0)],['Irregularity entries (Y)',reportRows.reduce((n,x)=>n+x.irregular,0)],['Missing results',reportRows.reduce((n,x)=>n+x.missing,0)],['Note','Missing means no numeric mark and no X/Y status. X = absent; Y = examination irregularity. Averages use numeric marks only.']].map(row=>row.map(cell).join(','));
    const blob=new Blob(['\uFEFF'+lines.join('\r\n')],{type:'text/csv;charset=utf-8;'}),url=URL.createObjectURL(blob),a=document.createElement('a');
    a.href=url;a.download='consolidated_class_report.csv';document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
    showToast?.('Consolidated class report CSV exported.','success');return;
@@ -2668,7 +2675,7 @@ async function exportConsolidatedClassReport(format){
   const esc=v=>String(v??'').replace(/[&<>"]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]));
   const tableHead=headers.map(h=>'<th>'+esc(h)+'</th>').join('');
   const tableRows=data.map(row=>'<tr>'+row.map(v=>'<td>'+esc(v)+'</td>').join('')+'</tr>').join('');
-  printWindow.document.write('<!doctype html><html><head><title>Consolidated Class Report</title><meta charset="utf-8"><style>@page{size:landscape;margin:12mm}body{font:10px Arial,sans-serif;color:#111}h1{font-size:18px}p{font-size:11px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #777;padding:4px;text-align:left}th{background:#eee}tr{break-inside:avoid}.summary{margin:10px 0}</style></head><body><h1>Consolidated Class Report</h1><p>Class/stream: '+esc(results[0].exam.className||classId)+' · School: '+esc(results[0].exam.schoolName||'')+'</p><p>Exams included: '+examCols.length+' · Learners: '+reportRows.length+' · Class mean average: '+(classAverage===null?'—':classAverage.toFixed(1)+'%')+'</p><table><thead><tr>'+tableHead+'</tr></thead><tbody>'+tableRows+'</tbody></table><p>Missing exams are counted where no numeric mark is recorded; X and Y are shown as statuses. Use Print → Save as PDF to save this report.</p><script>window.onload=()=>window.print()<\/script></body></html>');
+  printWindow.document.write('<!doctype html><html><head><title>Consolidated Class Report</title><meta charset="utf-8"><style>@page{size:landscape;margin:12mm}body{font:10px Arial,sans-serif;color:#111}h1{font-size:18px}p{font-size:11px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #777;padding:4px;text-align:left}th{background:#eee}tr{break-inside:avoid}.summary{margin:10px 0}</style></head><body><h1>Consolidated Class Report</h1><p>Class/stream: '+esc(results[0].exam.className||classId)+' · School: '+esc(results[0].exam.schoolName||'')+'</p><p>Exams included: '+examCols.length+' · Learners: '+reportRows.length+' · Class mean average: '+(classAverage===null?'—':classAverage.toFixed(1)+'%')+'</p><table><thead><tr>'+tableHead+'</tr></thead><tbody>'+tableRows+'</tbody></table><p>Present counts numeric marks only. X = absent and Y = examination irregularity; these are reported separately from missing results. Missing means no numeric mark and no X/Y status. Averages use numeric marks only. Use Print → Save as PDF to save this report.</p><script>window.onload=()=>window.print()<\/script></body></html>');
   printWindow.document.close();
  }catch(e){if(printWindow&&!printWindow.closed)printWindow.close();showToast?.(e.message||'Could not create consolidated class report.','error');}
 }

@@ -198,6 +198,19 @@ body.tusome-sidebar-open .tusome-sidebar-backdrop{opacity:1;visibility:visible}
 @media(max-width:430px){body>header nav button:nth-child(n+5){display:none}#mainContent.container{padding-left:8px;padding-right:8px}}
 @media(prefers-reduced-motion:reduce){.tusome-app-sidebar,.tusome-sidebar-backdrop{transition:none}}
 </style>
+<style id="tusome-ai-tutorial-enhancements">
+/* Guided AI tutorial workspace */
+.tusome-ai-start{max-width:1000px;margin:22px auto 24px;padding:24px;background:linear-gradient(135deg,#f0f7ff,#f2fffc);border:1px solid #d8e9fb;border-radius:22px}
+.tusome-ai-start-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:15px;margin-bottom:18px}.tusome-ai-eyebrow{font-size:10px;letter-spacing:1.5px;font-weight:900;color:#1478c9}.tusome-ai-start-heading h3{margin:5px 0 7px;font-size:22px;color:#0b2e65}.tusome-ai-start-heading p{margin:0;color:#60728f;font-size:13px;line-height:1.55}.tusome-ai-spark{display:grid;place-items:center;flex:0 0 42px;height:42px;border-radius:14px;background:#dff7f2;color:#087e85;font-size:23px}
+.tusome-ai-quick-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.tusome-ai-quick{min-width:0;text-align:left;display:flex;flex-direction:column;align-items:flex-start;gap:8px;padding:16px 14px;border:1px solid #dceafa;border-radius:15px;background:#fff;color:#102b59;cursor:pointer;transition:transform .18s,border-color .18s,box-shadow .18s}.tusome-ai-quick:hover{transform:translateY(-3px);border-color:#81bafa;box-shadow:0 8px 20px #145ba014}.tusome-ai-quick-icon{width:39px;height:39px;display:grid;place-items:center;border-radius:12px;font-size:20px}.tusome-ai-quick-icon.explain{background:#e7f1ff}.tusome-ai-quick-icon.practice{background:#fff0df}.tusome-ai-quick-icon.revision{background:#eee8ff}.tusome-ai-quick-icon.check{background:#dcf8ed}.tusome-ai-quick b{font-size:13px;line-height:1.35}.tusome-ai-quick small{font-size:11px;color:#667b99;line-height:1.45;min-height:32px}.tusome-ai-quick-go{font-size:11px;color:#1478d4;font-weight:800;margin-top:auto}
+.tusome-ai-learning-tip{display:flex;gap:11px;align-items:flex-start;padding:13px 15px;margin-top:15px;border-radius:13px;background:#fff;border:1px solid #e0ecf8}.tusome-ai-learning-tip>span{font-size:20px}.tusome-ai-learning-tip b{font-size:12px;color:#126d67}.tusome-ai-learning-tip p{margin:3px 0 0;font-size:12px;line-height:1.5;color:#60728f}
+#tusomeAIForm{background:#fff;padding:24px;border:1px solid #e0eaf7;border-radius:18px;box-shadow:0 8px 24px #164b860c}#tusomeAIForm>label{display:block;font-weight:750;color:#193b6d;margin-top:13px}#tusomeAIForm>label:first-child{margin-top:0}#tusomeAIForm select,#tusomeAIForm textarea,#tusomeAIForm input[type=file]{margin-top:6px}#tusomeAIForm small{display:block;line-height:1.55;color:#687d98;margin-top:5px}
+.tusome-ai-result-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}.tusome-ai-result-actions .btn{margin:0}
+#aiResult{border-color:#cfe6fb;background:linear-gradient(145deg,#fff,#f8fcff)}#aiAnswer{line-height:1.75}
+@media(max-width:850px){.tusome-ai-quick-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.tusome-ai-start{padding:18px}}
+@media(max-width:520px){.tusome-ai-quick-grid{grid-template-columns:1fr 1fr;gap:8px}.tusome-ai-quick{padding:12px 10px}.tusome-ai-quick small{min-height:46px}.tusome-ai-start-heading h3{font-size:19px}#tusomeAIForm{padding:16px}.tusome-ai-result-actions .btn{flex:1}}
+@media(prefers-reduced-motion:reduce){.tusome-ai-quick{transition:none}}
+</style>
 </head>
 <body>
 <div id="tusomeToastRegion" aria-live="polite" aria-atomic="false"></div>
@@ -589,7 +602,18 @@ body.tusome-sidebar-open .tusome-sidebar-backdrop{opacity:1;visibility:visible}
   <div id="aiRoleNotice" class="notice">⚠️ <b>Verification reminder:</b> Teachers or administrators should verify curriculum-related AI content before publishing or using it.</div>
   <div id="aiFeatureCards" class="cards"></div>
 
-  <form onsubmit="askAI(event)" style="max-width:800px">
+  <div class="tusome-ai-start">
+    <div class="tusome-ai-start-heading"><div><span class="tusome-ai-eyebrow">YOUR LEARNING SPACE</span><h3>What would you like to do today?</h3><p>Choose a guided activity, then personalise it for your class or topic.</p></div><span class="tusome-ai-spark">✦</span></div>
+    <div class="tusome-ai-quick-grid">
+      <button type="button" class="tusome-ai-quick" onclick="chooseAITutorial('explain')"><span class="tusome-ai-quick-icon explain">💡</span><b>Learn a concept</b><small>Simple explanation with examples</small><span class="tusome-ai-quick-go">Start learning →</span></button>
+      <button type="button" class="tusome-ai-quick" onclick="chooseAITutorial('practice')"><span class="tusome-ai-quick-icon practice">✍️</span><b>Practise questions</b><small>Build skills step by step</small><span class="tusome-ai-quick-go">Start practice →</span></button>
+      <button type="button" class="tusome-ai-quick" onclick="chooseAITutorial('revision')"><span class="tusome-ai-quick-icon revision">📚</span><b>Revise a topic</b><small>Key points and a quick recap</small><span class="tusome-ai-quick-go">Start revision →</span></button>
+      <button type="button" class="tusome-ai-quick" onclick="chooseAITutorial('check')"><span class="tusome-ai-quick-icon check">🧩</span><b>Check my understanding</b><small>Try a question and review feedback</small><span class="tusome-ai-quick-go">Check now →</span></button>
+    </div>
+    <div class="tusome-ai-learning-tip"><span>🌱</span><div><b>Learning tip</b><p>Ask for one step at a time. If an explanation is unclear, request a simpler example or a Kiswahili explanation.</p></div></div>
+  </div>
+
+  <form id="tusomeAIForm" onsubmit="askAI(event)" style="max-width:800px" style="max-width:800px">
     <label>Subject</label>
     <select id="aiSubject">
       <option>Mathematics</option><option>English</option><option>Kiswahili</option>
@@ -651,7 +675,11 @@ body.tusome-sidebar-open .tusome-sidebar-backdrop{opacity:1;visibility:visible}
   <div id="aiResult" class="card" style="max-width:800px;margin:20px auto;display:none">
     <h3>AI Study Response</h3>
     <div id="aiAnswer" class="ai-answer"></div>
-    <button class="btn" onclick="copyAI()">Copy Response</button>
+    <div class="tusome-ai-result-actions">
+      <button class="btn" type="button" onclick="copyAI()">Copy Response</button>
+      <button class="btn" type="button" onclick="downloadAIResponse()">Download Notes</button>
+      <button class="btn" type="button" onclick="printAIResponse()">Print / Save PDF</button>
+    </div>
   </div>
 </section>
 
@@ -4322,6 +4350,25 @@ function openTusomeSidebar(){document.body.classList.add('tusome-sidebar-open');
 function closeTusomeSidebar(){document.body.classList.remove('tusome-sidebar-open');var b=document.getElementById('tusomeSidebarToggle');if(b)b.setAttribute('aria-expanded','false');var s=document.getElementById('tusomeAppSidebar');if(s)s.setAttribute('aria-hidden','true');}
 document.addEventListener('keydown',function(e){if(e.key==='Escape')closeTusomeSidebar();});
 document.addEventListener('click',function(e){if(e.target.closest&&e.target.closest('.tusome-side-link'))closeTusomeSidebar();});
+</script>
+
+<script id="tusome-ai-tutorial-actions">
+function chooseAITutorial(kind){
+ const mode=document.getElementById('aiMode'),prompt=document.getElementById('aiPrompt');
+ const presets={
+  explain:{mode:'answer',text:'Teach me this topic step by step in simple language. Start with what I should already know, explain the main idea, show two worked examples, point out a common mistake, then ask me one short check-for-understanding question. Topic: '},
+  practice:{mode:'practice',text:'Create 5 practice questions on this topic, starting easy and becoming more challenging. Give one question at a time if possible, include hints, and provide clear explanations for the answers. Topic: '},
+  revision:{mode:'summary',text:'Create learner-friendly revision notes for this topic with key terms, short explanations, examples, a memory aid, and 5 quick review questions with answers at the end. Topic: '},
+  check:{mode:'answer',text:'Check my understanding of this topic using a short Socratic tutorial. Ask one question at a time, wait for my response, then give supportive feedback and a hint before revealing an answer. Topic: '}
+ };
+ const item=presets[kind];if(!item)return;
+ if(mode)mode.value=item.mode;
+ if(prompt){prompt.value=item.text;prompt.focus();prompt.scrollIntoView({behavior:'smooth',block:'center'});}
+ const form=document.getElementById('tusomeAIForm');if(form)form.classList.add('tusome-ai-form-ready');
+}
+function getAIResponseText(){const answer=document.getElementById('aiAnswer');return answer?(answer.innerText||answer.textContent||'').trim():'';}
+function downloadAIResponse(){const text=getAIResponseText();if(!text){alert('Generate an AI response first.');return;}const blob=new Blob([text],{type:'text/plain;charset=utf-8'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='TusomeEduShelf-AI-Study-Notes.txt';document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);}
+function printAIResponse(){const text=getAIResponseText();if(!text){alert('Generate an AI response first.');return;}const w=window.open('','_blank');if(!w){alert('Please allow pop-ups to print or save your notes as PDF.');return;}const esc=text.replace(/[&<>"]/g,function(ch){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch];});w.document.write('<!doctype html><html><head><title>TusomeEduShelf AI Study Notes</title><meta charset="utf-8"><style>body{font:16px/1.7 Arial,sans-serif;max-width:850px;margin:40px auto;padding:0 24px;color:#17345b}h1{color:#0b3978;border-bottom:2px solid #cfe6fb;padding-bottom:12px}pre{white-space:pre-wrap;font:inherit}</style></head><body><h1>TusomeEduShelf — AI Study Notes</h1><pre>'+esc+'</pre></body></html>');w.document.close();w.focus();w.print();}
 </script>
 </body>
 </html>

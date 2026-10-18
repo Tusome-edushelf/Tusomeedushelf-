@@ -380,6 +380,12 @@ async function initDatabase() {
       PRIMARY KEY (learner_email, material_id)
     );
 
+    CREATE TABLE IF NOT EXISTS learner_ai_tutor_sessions (
+      learner_email TEXT PRIMARY KEY REFERENCES users(email) ON DELETE CASCADE,
+      session_data JSONB NOT NULL DEFAULT '{}'::jsonb,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
     CREATE TABLE IF NOT EXISTS notifications (
       id BIGSERIAL PRIMARY KEY,
       recipient_email TEXT NOT NULL,
@@ -1464,6 +1470,55 @@ app.post('/api/learner/materials/:id/view', requireRole('learner'), async (req, 
     await db.query(`INSERT INTO learner_material_activity(learner_email,material_id,view_count,last_viewed_at) VALUES($1,$2,1,NOW()) ON CONFLICT(learner_email,material_id) DO UPDATE SET view_count=learner_material_activity.view_count+1,last_viewed_at=NOW()`, [req.user.email,req.params.id]);
     res.json({ok:true});
   } catch(e) { res.status(500).json({error:'Could not record learning activity.'}); }
+});
+
+// Save learner-owned AI tutor progress for recovery across browsers and devices.
+app.get('/api/learner/tutor-session', requireRole('learner'), async (req, res) => {
+  if (!db || !databaseReady) return res.status(503).json({ error: 'Saved tutor progress is temporarily unavailable.' });
+  try {
+    const result = await db.query('SELECT session_data AS session, updated_at AS "updatedAt" FROM learner_ai_tutor_sessions WHERE learner_email=$1', [req.user.email]);
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ ok: true, session: result.rows[0]?.session || null, updatedAt: result.rows[0]?.updatedAt || null });
+  } catch (e) {
+    console.error('Tutor session load failed:', e.message);
+    res.status(500).json({ error: 'Could not load saved tutor progress.' });
+  }
+});
+
+app.put('/api/learner/tutor-session', requireRole('learner'), async (req, res) => {
+  if (!db || !databaseReady) return res.status(503).json({ error: 'Saved tutor progress is temporarily unavailable.' });
+  const session = req.body?.session;
+  if (session === null) {
+    try {
+      await db.query('DELETE FROM learner_ai_tutor_sessions WHERE learner_email=$1', [req.user.email]);
+      return res.json({ ok: true, cleared: true });
+    } catch (e) {
+      console.error('Tutor session clear failed:', e.message);
+      return res.status(500).json({ error: 'Could not clear saved tutor progress.' });
+    }
+  }
+  if (!session || typeof session !== 'object' || Array.isArray(session)) return res.status(400).json({ error: 'A valid tutor session is required.' });
+  const subject = String(session.subject || 'General').slice(0, 100);
+  const grade = String(session.grade || '').slice(0, 40);
+  const focus = String(session.focus || '').slice(0, 160);
+  const topic = String(session.topic || '').slice(0, 1200);
+  const completed = Number(session.completed);
+  const asked = Number(session.asked);
+  const history = Array.isArray(session.history) ? session.history.slice(-80) : [];
+  const notes = Array.isArray(session.notes) ? session.notes.slice(-100) : [];
+  if (!Number.isInteger(completed) || completed < 0 || completed > 100 || !Number.isInteger(asked) || asked < 0 || asked > 100) return res.status(400).json({ error: 'Invalid tutor progress counters.' });
+  const safeHistory = history.map(item => ({ role: String(item?.role || '').slice(0, 20), text: String(item?.text || '').slice(0, 6000) }));
+  const safeNotes = notes.map(note => String(note || '').slice(0, 6000));
+  const saved = { subject, grade, focus, topic, completed, asked, history: safeHistory, notes: safeNotes };
+  try {
+    await db.query(`INSERT INTO learner_ai_tutor_sessions(learner_email,session_data,updated_at)
+      VALUES($1,$2::jsonb,NOW())
+      ON CONFLICT(learner_email) DO UPDATE SET session_data=EXCLUDED.session_data,updated_at=NOW()`, [req.user.email, JSON.stringify(saved)]);
+    res.json({ ok: true, savedAt: new Date().toISOString() });
+  } catch (e) {
+    console.error('Tutor session save failed:', e.message);
+    res.status(500).json({ error: 'Could not save tutor progress.' });
+  }
 });
 
 app.get('/api/materials', requireAuth, async (req, res) => {
